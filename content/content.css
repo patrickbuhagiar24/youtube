@@ -1,0 +1,141 @@
+/* YT Unsub Detector */
+:root { --ytuc-color: #ff3d00; --ytuc-left: #ffd400; }
+
+/* Garis tepi: merah = belum di-subscribe, kuning = pernah di-unsubscribe (daftar di YouTube.json) */
+[data-ytuc-state="unsub"] { --ytuc-c: var(--ytuc-color); }
+[data-ytuc-state="left"] { --ytuc-c: var(--ytuc-left); }
+html.ytuc-on:is(.ytuc-mode-highlight, .ytuc-mode-dim) :is([data-ytuc-state="unsub"], [data-ytuc-state="left"]):not(ytd-video-owner-renderer) {
+  outline: 3px solid var(--ytuc-c) !important;
+  outline-offset: 3px;
+  border-radius: 14px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--ytuc-c) 45%, transparent);
+}
+
+/* Mode redupkan yang sudah di-subscribe */
+html.ytuc-on.ytuc-mode-dim [data-ytuc-state="sub"]:not(ytd-video-owner-renderer) {
+  opacity: .3;
+  filter: grayscale(.7);
+  transition: opacity .2s, filter .2s;
+}
+html.ytuc-on.ytuc-mode-dim [data-ytuc-state="sub"]:not(ytd-video-owner-renderer):hover {
+  opacity: 1;
+  filter: none;
+}
+
+/* Mode sembunyikan */
+html.ytuc-on.ytuc-mode-only-unsub [data-ytuc-state="sub"]:not(ytd-video-owner-renderer),
+html.ytuc-on.ytuc-mode-hide-unsub [data-ytuc-state="unsub"]:not(ytd-video-owner-renderer),
+html.ytuc-on.ytuc-mode-hide-unsub [data-ytuc-state="left"]:not(ytd-video-owner-renderer) {
+  display: none !important;
+}
+
+/* Urutan: belum di-subscribe -> sudah di-subscribe -> pernah di-unsubscribe (kuning).
+   Hanya memakai CSS `order`; elemen YouTube tidak dipindah.
+   Hasil pencarian: gabungkan semua kelompok hasil (termasuk yang dimuat saat menggulir) jadi satu daftar */
+html.ytuc-on.ytuc-sort ytd-search ytd-section-list-renderer > #contents {
+  display: flex !important;
+  flex-direction: column;
+}
+html.ytuc-on.ytuc-sort ytd-search ytd-section-list-renderer > #contents > ytd-item-section-renderer:not([hidden]),
+html.ytuc-on.ytuc-sort ytd-search ytd-section-list-renderer > #contents > ytd-item-section-renderer:not([hidden]) > #contents {
+  display: contents !important;
+}
+/* Daftar video di samping saat menonton */
+html.ytuc-on.ytuc-sort #related ytd-item-section-renderer > #contents {
+  display: flex !important;
+  flex-direction: column;
+}
+html.ytuc-on.ytuc-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents) > [data-ytuc-state="unsub"] { order: -1; }
+html.ytuc-on.ytuc-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents) > [data-ytuc-state="left"] { order: 1; }
+html.ytuc-on.ytuc-sort :is(ytd-showing-results-for-renderer, ytd-did-you-mean-renderer) { order: -2; }
+/* "Muat lebih banyak" harus tetap paling akhir agar gulir tak berujung tetap jalan */
+html.ytuc-on.ytuc-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-section-list-renderer > #contents, #related ytd-item-section-renderer > #contents) > ytd-continuation-item-renderer { order: 99; }
+/* Muat otomatis (kelas ytuc-autoload, diatur content.js): "muat lagi" dibuat tak terlihat tetapi selalu di layar,
+   jadi YouTube terus memuat video berikutnya tanpa digulir. Hanya di daftar yang diurutkan (bukan komentar dsb.). */
+html.ytuc-on.ytuc-sort.ytuc-autoload :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-section-list-renderer > #contents, #related ytd-item-section-renderer > #contents) > ytd-continuation-item-renderer {
+  position: fixed !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: 2px !important;
+  height: 2px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+/* Video ganda (diatur content.js bersama fitur urutan): hanya kemunculan pertama yang tampil */
+html.ytuc-on.ytuc-sort [data-ytuc-dup] { display: none !important; }
+/* Grid: jarak kiri mengikuti posisi baru (kolom pertama tiap baris) */
+html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][no-gutter-margins][data-ytuc-col="first"] {
+  margin-left: 0 !important;
+}
+html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][data-ytuc-col="rest"] {
+  margin-left: calc(var(--ytd-rich-grid-item-margin) / 2) !important;
+}
+html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][is-shorts-grid][data-ytuc-col="rest"] {
+  margin-left: calc(var(--ytd-rich-grid-shorts-item-margin) / 2) !important;
+}
+html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][is-compact-grid][data-ytuc-col="rest"] {
+  margin-left: calc(var(--ytd-rich-grid-compact-item-margin) / 2) !important;
+}
+
+/* Tombol "+" (subscribe) di pojok kiri atas thumbnail */
+.ytuc-host { position: relative !important; }
+.ytuc-subbtn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 50;
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 2.5px solid #fff;
+  border-radius: 50%;
+  background: var(--ytuc-color);
+  /* Teks "+" disembunyikan; tanda + digambar dengan CSS agar selalu tepat di tengah (tidak bergantung huruf) */
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .55), 0 3px 10px rgba(0, 0, 0, .6);
+  transition: transform .15s, filter .15s;
+}
+.ytuc-subbtn::before,
+.ytuc-subbtn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: #fff;
+  border-radius: 2px;
+}
+.ytuc-subbtn::before { width: 15px; height: 3px; } /* garis mendatar */
+.ytuc-subbtn::after { width: 3px; height: 15px; }  /* garis tegak */
+.ytuc-subbtn:hover { transform: scale(1.15); filter: brightness(1.1); }
+.ytuc-subbtn:active { transform: scale(.95); }
+/* Sedang memproses: lingkaran berputar, juga tepat di tengah */
+.ytuc-subbtn:disabled { cursor: default; transform: none; filter: none; }
+.ytuc-subbtn:disabled::before {
+  width: 15px;
+  height: 15px;
+  background: none;
+  border: 2.5px solid rgba(255, 255, 255, .35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  animation: ytuc-spin .8s linear infinite;
+}
+.ytuc-subbtn:disabled::after { display: none; }
+@keyframes ytuc-spin { to { transform: rotate(360deg); } }
+/* Tombol unsubscribe (−): biru */
+.ytuc-subbtn.ytuc-unsubbtn { background: var(--ytuc-unsub-btn, #1e88e5); }
+.ytuc-subbtn.ytuc-unsubbtn::after { display: none; } /* hanya garis mendatar = tanda minus */
+/* Tombol melayang: muncul di atas video yang ditunjuk kursor, tetap di atas pemutar pratinjau YouTube */
+.ytuc-subbtn.ytuc-float { position: fixed; z-index: 2147483000; }
+.ytuc-subbtn.ytuc-float[hidden] { display: none !important; }
+/* Tombol + yang menempel di kartu disembunyikan selama tombol melayang dipakai (agar tidak dobel) */
+[data-ytuc-hover] .ytuc-subbtn:not(.ytuc-float) { visibility: hidden; }
+html:not(.ytuc-on) .ytuc-subbtn { display: none !important; }

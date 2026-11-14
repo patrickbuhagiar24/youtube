@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>YT Unsub Detector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="../icons/icon48.png" alt="" width="28" height="28">
+    <h1>YT Unsub Detector</h1>
+    <label class="switch" title="Nyalakan / matikan">
+      <input type="checkbox" id="enabled">
+      <span></span>
+    </label>
+  </header>
+
+  <!-- Ringkasan -->
+  <section class="card">
+    <div class="stat">
+      <div><b id="total">–</b><small>channel di-subscribe</small></div>
+    </div>
+    <em id="status" class="muted">–</em>
+    <div id="channelPage" class="chan hidden"></div>
+    <div id="error" class="err hidden"></div>
+    <button id="syncBtn">🔄 Perbarui daftar</button>
+  </section>
+
+  <!-- Daftar unsubscribe + Google Drive (satu baris) -->
+  <section class="card drive">
+    <span class="dotl"></span>
+    <div class="grow">
+      <div><b id="unsubCount">0</b> channel pernah di-unsubscribe</div>
+      <small id="driveStatus" class="muted">Google Drive belum diatur</small>
+    </div>
+    <button id="driveSyncBtn" class="icon hidden" title="Sinkronkan dengan Google Drive sekarang">🔄</button>
+  </section>
+
+  <!-- Pengaturan (dilipat) -->
+  <details class="card">
+    <summary>⚙️ Pengaturan</summary>
+    <label class="field">
+      <span>Cara menandai</span>
+      <select id="mode">
+        <option value="highlight">Garis warna + tombol + (disarankan)</option>
+        <option value="badge">Tombol + saja</option>
+        <option value="dim">Buramkan yang sudah di-subscribe</option>
+        <option value="only-unsub">Tampilkan hanya yang belum di-subscribe</option>
+        <option value="hide-unsub">Sembunyikan yang belum di-subscribe</option>
+      </select>
+    </label>
+    <div class="field inline">
+      <span>Warna</span>
+      <span class="colors">
+        <label title="Belum di-subscribe"><input type="color" id="color"> belum</label>
+        <label title="Pernah di-unsubscribe"><input type="color" id="leftColor"> pernah unsub</label>
+      </span>
+    </div>
+    <label class="field inline"><span>Tombol <b class="plus">+</b> <b class="plus minus">−</b> di video</span><input type="checkbox" id="showSubButton"></label>
+    <label class="field inline"><span>Belum di-subscribe di paling atas &amp; hapus video ganda</span><input type="checkbox" id="sortUnsub"></label>
+    <label class="field inline">
+      <span>Perbarui daftar otomatis</span>
+      <select id="autoSyncHours">
+        <option value="1">1 jam</option><option value="3">3 jam</option><option value="6">6 jam</option>
+        <option value="12">12 jam</option><option value="24">1 hari</option><option value="168">1 minggu</option>
+      </select>
+    </label>
+    <div class="links">
+      <a id="exportBtn" href="#">⬇️ Unduh daftar (CSV)</a>
+      <a id="openFeedBtn" href="#">📋 Lihat di YouTube</a>
+    </div>
+  </details>
+
+  <footer>Versi <span id="ver"></span></footer>
+  <script src="../shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
