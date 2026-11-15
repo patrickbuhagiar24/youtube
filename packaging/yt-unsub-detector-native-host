@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Native messaging host: expose only the current user's Drive configuration."""
+from __future__ import annotations
+
+import json
+import struct
+import sys
+
+sys.path.insert(0, '/usr/share/yt-unsub-detector')
+from config_store import read_config  # noqa: E402
+
+MAX_MESSAGE = 1024 * 1024
+
+
+def read_message() -> dict | None:
+    header = sys.stdin.buffer.read(4)
+    if not header:
+        return None
+    if len(header) != 4:
+        raise ValueError('Incomplete native message header.')
+    length = struct.unpack('<I', header)[0]
+    if length == 0 or length > MAX_MESSAGE:
+        raise ValueError('Native message size is out of range.')
+    body = sys.stdin.buffer.read(length)
+    if len(body) != length:
+        raise ValueError('Incomplete native message body.')
+    value = json.loads(body.decode('utf-8'))
+    if not isinstance(value, dict):
+        raise ValueError('Native message must be a JSON object.')
+    return value
+
+
+def write_message(value: dict) -> None:
+    body = json.dumps(value, separators=(',', ':')).encode('utf-8')
+    if len(body) > MAX_MESSAGE:
+        raise ValueError('Native response is too large.')
+    sys.stdout.buffer.write(struct.pack('<I', len(body)) + body)
+    sys.stdout.buffer.flush()
+
+
+def main() -> int:
+    try:
+        message = read_message()
+        if message is None:
+            return 0
+        if message.get('type') != 'readConfig':
+            write_message({'ok': False, 'error': 'Unsupported native message type.'})
+            return 0
+        write_message(read_config())
+        return 0
+    except Exception:
+        # Never print configuration, credentials, or stack traces into the protocol stream.
+        try:
+            write_message({'ok': False, 'error': 'Could not read the per-user Drive configuration.'})
+        except Exception:
+            pass
+        return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

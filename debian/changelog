@@ -1,0 +1,32 @@
+yt-unsub-detector (1.21.0ubuntu1) stonking; urgency=medium
+
+  * Store per-user Google Drive configuration only in google-drive.json and service-account.json.
+  * Migrate and remove the older drive-config.json wrapper automatically.
+  * Remove non-English legacy data compatibility and keep all project text English.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 22:10:00 +0000
+
+yt-unsub-detector (1.20.0ubuntu1) stonking; urgency=medium
+
+  * Read the Google Drive file link from a separate per-user google-drive.json file.
+  * Keep inline Drive links and older configuration files readable.
+  * Document GitHub Pages enablement and audit project text for English-only prose.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 20:30:00 +0000
+
+yt-unsub-detector (1.19.0ubuntu1) stonking; urgency=medium
+
+  * Install and register the browser extension through APT only.
+  * Read Google Drive configuration from the user's XDG configuration folder.
+  * Add a native messaging host and automatic CRX registration for Chrome/Chromium.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 18:00:00 +0000
+
+yt-unsub-detector (1.18.0ubuntu1) stonking; urgency=medium
+
+  * Translate the interface, comments, messages, and exported data to English.
+  * Read legacy Google Drive files without losing unsubscribe history.
+  * Add an architecture-independent Debian package and per-user setup command.
+  * Add signed APT repository publishing for Ubuntu 26.10 (stonking).
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 14:34:00 +0000

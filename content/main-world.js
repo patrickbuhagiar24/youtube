@@ -1,8 +1,8 @@
 /*
- * Berjalan di "MAIN world" halaman YouTube (akses ke window.ytcfg & data Polymer).
- *  1. Membaca seluruh daftar subscription dari youtube.com/feed/channels (FEchannels, semua halaman).
- *  2. Menuliskan channel tiap kartu ke atribut data-ytuc-* agar bisa dibaca content.js.
- *  3. Memantau aksi Subscribe / Unsubscribe secara real-time.
+ * Runs in the YouTube page's MAIN world (access to window.ytcfg and Polymer data).
+ *  1. Reads all subscriptions from youtube.com/feed/channels (FEchannels, every page).
+ *  2. Writes each card's channel to data-ytuc-* attributes for content.js.
+ *  3. Tracks Subscribe / Unsubscribe actions in real time.
  */
 (() => {
   'use strict';
@@ -19,7 +19,7 @@
   const textOf = (t) => t?.simpleText ?? t?.runs?.map((r) => r.text).join('') ?? t?.content ?? '';
   const isObj = (v) => v && typeof v === 'object';
 
-  /** Telusuri objek secara iteratif. visit(o) mengembalikan true untuk berhenti menelusuri anak o. */
+  /** Traverse an object iteratively. visit(o) returns true to skip its children. */
   function walk(root, visit, skip, limit = 400000) {
     const stack = [root];
     let n = 0;
@@ -33,7 +33,7 @@
   }
 
   /* ================================================================== */
-  /* ytcfg & permintaan InnerTube                                       */
+  /* ytcfg and InnerTube requests                                       */
   /* ================================================================== */
   function cfg(k) {
     try { return window.ytcfg?.get?.(k) ?? window.ytcfg?.data_?.[k]; } catch { return undefined; }
@@ -66,7 +66,7 @@
   async function innertube(endpoint, body) {
     const key = cfg('INNERTUBE_API_KEY');
     const context = JSON.parse(JSON.stringify(cfg('INNERTUBE_CONTEXT') || {}));
-    // Akun Brand: wajib onBehalfOfUser, kalau tidak yang terbaca bisa akun utama
+    // Brand accounts require onBehalfOfUser; otherwise the primary account may be used
     const delegated = cfg('DELEGATED_SESSION_ID');
     const ds = String(cfg('DATASYNC_ID') || '').split('||');
     const behalf = delegated || (ds[0] && ds[1] ? ds[0] : '');
@@ -105,9 +105,9 @@
   });
 
   /* ================================================================== */
-  /* Daftar subscription: youtube.com/feed/channels                     */
+  /* Subscription list: youtube.com/feed/channels                       */
   /* ================================================================== */
-  // Bagian respons yang bukan daftar channel
+  // Response sections that are not part of the channel list
   const SUBS_SKIP = new Set(['header', 'topbar', 'sidebar', 'frameworkUpdates', 'responseContext', 'microformat',
     'metadata', 'trackingParams', 'thumbnail', 'thumbnails', 'accessibility', 'menu', 'loggingDirectives']);
 
@@ -131,7 +131,7 @@
     return { id: cr.channelId, title: textOf(cr.title), url, handle };
   }
 
-  /** continuationCommand / nextContinuationData di dalam satu node (format apa pun). */
+  /** Find continuationCommand / nextContinuationData within a node in any format. */
   function tokensIn(node) {
     const out = new Set();
     walk(node, (o) => {
@@ -141,7 +141,7 @@
     return [...out];
   }
 
-  /** Cadangan bila format token tidak dikenal: string panjang di kunci bernama token/continuation. */
+  /** Fallback for unknown formats: long strings under token/continuation keys. */
   const TOKEN_KEY = /^(token|continuation|ctoken|nextPageToken|continuationToken)$/i;
   function genericTokens(root) {
     const out = new Set();
@@ -154,7 +154,7 @@
     return [...out];
   }
 
-  /** Kumpulkan channel ke map (kunci: channelId) + token halaman berikutnya dari satu respons. */
+  /** Collect channels into a map keyed by channelId, plus next-page tokens from one response. */
   function collectChannels(root, map) {
     const tokens = [];
     let added = 0;
@@ -174,7 +174,7 @@
     return { tokens, added };
   }
 
-  /** Opsi urutan di FEchannels (Paling relevan / Aktivitas baru / A-Z). */
+  /** FEchannels sort options (Most relevant / Newest activity / A-Z). */
   function findSortOptions(root) {
     const out = new Map();
     walk(root, (o) => {
@@ -190,7 +190,7 @@
   }
 
   async function fetchSubscriptions() {
-    if (!(await waitCfg())) throw new Error('Halaman YouTube belum siap. Muat ulang halaman (F5), lalu coba lagi.');
+    if (!(await waitCfg())) throw new Error('The YouTube page is not ready. Reload it (F5), then try again.');
     const info = accountInfo();
     if (!info.loggedIn) return { ...info, list: [] };
 
@@ -205,7 +205,7 @@
       return n;
     };
 
-    /** Telusuri satu urutan sampai halaman terakhir. */
+    /** Crawl one sort order through its last page. */
     async function crawl(firstData) {
       const before = map.size;
       const queue = [];
@@ -228,10 +228,10 @@
 
     const first = await innertubeRetry('browse', { browseId: 'FEchannels' });
     stats.pages++;
-    if (first?.alerts?.some?.((x) => x.alertRenderer?.type === 'ERROR')) throw new Error('YouTube sedang menolak permintaan. Coba lagi beberapa saat lagi.');
+    if (first?.alerts?.some?.((x) => x.alertRenderer?.type === 'ERROR')) throw new Error('YouTube is rejecting requests. Please try again shortly.');
     const n1 = await crawl(first);
 
-    // YouTube kadang memotong satu urutan di ~1000 channel -> gabungkan urutan lain
+    // YouTube sometimes caps one sort order at about 1,000 channels; merge other sort orders
     const capped = n1 >= 990 && n1 <= 1010;
     if (capped) {
       for (const opt of findSortOptions(first)) {
@@ -249,28 +249,28 @@
     stats.fromFeed = map.size;
     if (failed) {
       stats.status = 'partial';
-      stats.note = 'Sebagian daftar gagal dimuat. Klik "Perbarui daftar" untuk mencoba lagi.';
+      stats.note = 'Part of the list could not be loaded. Click "Refresh list" to try again.';
     } else if (capped && map.size <= 1010) {
       stats.status = 'capped';
-      stats.note = 'YouTube hanya memberi sekitar 1.000 channel, jadi beberapa channel mungkin salah ditandai.';
+      stats.note = 'YouTube returned only about 1,000 channels, so some channels may be marked incorrectly.';
     } else if (capped) {
       stats.status = 'merged';
     }
     return { ...info, list: [...map.values()], stats };
   }
 
-  /* ---------- Subscribe / unsubscribe langsung dari ekstensi ---------- */
+  /* ---------- Subscribe / unsubscribe directly from the extension ---------- */
   const SUB_PARAMS = { subscribe: 'EgIIAhgA', unsubscribe: 'CgIIAhgA' };
   const hasError = (d) => d?.error || d?.alerts?.some?.((x) => x.alertRenderer?.type === 'ERROR');
 
-  /** Cari channelId dari link channel (mis. /@nama). */
+  /** Check whether a value is a channel ID (UC...). */
   const isUC = (x) => /^UC[\w-]{10,}$/.test(x || '');
   const cmpName = (s) => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 
   /**
-   * Cari ID channel (UC…) bila kartu tidak membawanya. Dicoba berurutan sampai ada yang berhasil:
-   * 1) link channel (/@handle, /c/, /user/) lewat resolve_url, 2) data video (player / next),
-   * 3) halaman channel, 4) pencarian nama channel (hanya bila tepat satu yang namanya sama persis).
+   * Resolve a channel ID (UC...) when the card lacks one. Try these methods in order:
+   * 1) channel URL (/@handle, /c/, /user/) via resolve_url, 2) video data (player / next),
+   * 3) channel page, 4) name search (only if exactly one name matches).
    */
   async function resolveChannelId({ url, vid, name } = {}) {
     const href = url && !/^\/?$/.test(url) ? new URL(url, ORIGIN).href : '';
@@ -294,34 +294,34 @@
     }
     if (name && !/,/.test(name)) {
       tries.push(async () => {
-        const d = await innertube('search', { query: name, params: 'EgIQAg==' }); // filter: channel
+        const d = await innertube('search', { query: name, params: 'EgIQAg==' }); // Channel filter
         const hits = new Set();
         walk(d, (o) => { const c = o.channelRenderer; if (c && cmpName(textOf(c.title)) === cmpName(name) && isUC(c.channelId)) hits.add(c.channelId); return !!c; }, null, 200000);
         return hits.size === 1 ? [...hits][0] : '';
       });
     }
     for (const t of tries) {
-      try { const id = await t(); if (isUC(id)) return id; } catch { /* coba cara berikutnya */ }
+      try { const id = await t(); if (isUC(id)) return id; } catch { /* Try the next method */ }
     }
-    throw new Error('ID channel ini tidak bisa ditemukan. Buka halaman channel-nya, lalu klik Subscribe di sana.');
+    throw new Error('Could not find this channel ID. Open the channel page and click Subscribe there.');
   }
 
-  /** Subscribe / unsubscribe satu atau beberapa channel (video kolaborasi). Mengembalikan ID yang berhasil. */
+  /** Subscribe or unsubscribe one or more channels (collaborations). Return successful IDs. */
   async function changeSubscription(action, ids, hint = {}) {
-    if (!SUB_PARAMS[action]) throw new Error('Aksi tidak dikenal');
-    if (!(await waitCfg(5000))) throw new Error('Halaman YouTube belum siap. Muat ulang halaman (F5), lalu coba lagi.');
-    if (!cfg('LOGGED_IN')) throw new Error('Silakan login YouTube dulu.');
+    if (!SUB_PARAMS[action]) throw new Error('Unknown action');
+    if (!(await waitCfg(5000))) throw new Error('The YouTube page is not ready. Reload it (F5), then try again.');
+    if (!cfg('LOGGED_IN')) throw new Error('Please sign in to YouTube first.');
     ids = (Array.isArray(ids) ? ids : [ids]).filter(isUC);
     if (!ids.length) ids = [await resolveChannelId(hint)];
     const done = [];
     let err = null;
-    for (const id of ids) { // satu per satu, seperti dialog "Kolaborator" di YouTube
+    for (const id of ids) { // One at a time, like YouTube's Collaborators dialog
       try {
         const d = await innertube(`subscription/${action}`, { channelIds: [id], params: SUB_PARAMS[action] });
         let state = null;
         walk(d, (o) => { const a = o.updateSubscribeButtonAction; if (typeof a?.subscribed === 'boolean') state = a.subscribed; });
         if (hasError(d) || (state !== null && state !== (action === 'subscribe'))) {
-          throw new Error('YouTube menolak permintaan ini. Mungkin batas subscribe harian sudah tercapai, coba lagi besok.');
+          throw new Error('YouTube rejected this request. You may have reached the daily subscription limit; try again tomorrow.');
         }
         done.push(id);
       } catch (e) { err = e; }
@@ -332,9 +332,9 @@
   }
 
   /* ================================================================== */
-  /* Channel pemilik setiap kartu                                        */
+  /* Channel owning each card                                           */
   /* ================================================================== */
-  // 'rendererContext' TIDAK dilewati: avatar pada lockup baru menyimpan browseEndpoint di dalamnya.
+  // Do NOT skip 'rendererContext': new lockup avatars store browseEndpoint inside it.
   const SKIP_KEYS = new Set(['thumbnail', 'thumbnails', 'accessibility', 'trackingParams', 'loggingDirectives',
     'thumbnailOverlays', 'menu', 'contentImage', 'richThumbnail', 'inlinePlaybackEndpoint']);
   const INDEX_SKIP = new Set([...SKIP_KEYS, 'rendererContext', 'frameworkUpdates', 'responseContext', 'playerOverlays',
@@ -346,7 +346,7 @@
     try { return el.data || el.__data?.data || el.polymerController?.data || el.inst?.data || null; } catch { return null; }
   }
 
-  /** Channel pertama yang ditemukan di data (depth-first, urutan kunci asli). */
+  /** First channel in the data, depth-first in original key order. */
   function findChannel(root) {
     const seen = new Set();
     const rec = (o, depth) => {
@@ -369,7 +369,7 @@
     return rec(root, 0);
   }
 
-  /** Daftar kolaborator dari dialog "Kolaborator" (video kolaborasi). null bila bukan kolaborasi. */
+  /** Collaborators from a collaboration video's dialog; null for non-collaborations. */
   function collaborators(root) {
     let found = null;
     walk(root, (o) => {
@@ -390,14 +390,14 @@
       }
       if (out.length > 1) found = out;
       return true;
-    }, SKIP_KEYS, 60000); // 'rendererContext' sengaja tidak dilewati: dialog sering ada di avatar
+    }, SKIP_KEYS, 60000); // Intentionally include 'rendererContext': the dialog is often attached to the avatar
     return found;
   }
 
   const lockupName = (l) =>
     (l?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content || '').trim();
 
-  /* ---------- Peta videoId -> channel (dari respons InnerTube) ---------- */
+  /* ---------- videoId -> channel map (from InnerTube responses) ---------- */
   const videoMap = new Map();
   let mapVersion = 0;
 
@@ -432,11 +432,11 @@
     const c = d && (d.contentId || d.videoId || d.content?.lockupViewModel?.contentId || d.content?.videoRenderer?.videoId);
     if (typeof c === 'string' && /^[\w-]{11}$/.test(c)) return c;
     const h = el.querySelector('a[href*="/watch?v="], a[href^="/shorts/"]')?.getAttribute('href') || '';
-    if (/[?&]list=RD|start_radio=1/.test(h)) return ''; // Mix otomatis milik YouTube
+    if (/[?&]list=RD|start_radio=1/.test(h)) return ''; // YouTube-generated Mix
     return (h.match(/[?&]v=([\w-]{11})/) || h.match(/\/shorts\/([\w-]{11})/))?.[1] || '';
   }
 
-  /* ---------- Tulis atribut data-ytuc-* ke setiap kartu ---------- */
+  /* ---------- Write data-ytuc-* attributes to each card ---------- */
   let dataCache = new WeakMap();
   let btnCache = new WeakMap();
   let containerCache = new WeakMap();
@@ -453,19 +453,19 @@
   const SCAN_SEL = [...CONTAINERS, SUB_BTN, CARD_SEL].join(',');
 
   function scan() {
-    // Satu kali telusur DOM (halaman YouTube bisa berisi puluhan ribu elemen), lalu dipilah per jenis
+    // Traverse the DOM once (pages may contain tens of thousands of elements), then group by type
     const containers = [], cards = [], buttons = [];
     for (const el of document.querySelectorAll(SCAN_SEL)) {
       (CONTAINERS.has(el.localName) ? containers : el.localName === SUB_BTN ? buttons : cards).push(el);
     }
 
-    // 1) Indeks data kontainer (sidebar tonton, grid beranda, hasil cari) bila berubah
+    // 1) Index changed container data (watch sidebar, home grid, search results)
     for (const c of containers) {
       const d = getData(c) || (c.localName === 'ytd-watch-flexy' ? c.__data?.watchNextData || c.watchNextData : null);
       if (d && containerCache.get(c) !== d) { containerCache.set(c, d); try { indexData(d); } catch { /* */ } }
     }
 
-    // 2) Channel pemilik setiap kartu
+    // 2) Channel owning each card
     for (const el of cards) {
       const d = getData(el);
       const vid = videoIdOf(el, d);
@@ -501,7 +501,7 @@
     scanButtons(buttons);
   }
 
-  /** 3) Tombol Subscribe milik YouTube: dipercaya bila awalnya "subscribed" atau berubah pada tombol yang sama (user klik). */
+  /** 3) Trust YouTube Subscribe buttons initially marked subscribed, or state changes on the same button (user click). */
   function scanButtons(buttons) {
     for (const el of buttons) {
       const d = getData(el);
@@ -518,11 +518,11 @@
   const scheduleScan = () => { if (!scanTimer) scanTimer = setTimeout(() => { scanTimer = 0; scan(); }, 250); };
 
   function start() {
-    // Perubahan di dalam pemutar video (jam, bilah progres) tidak memengaruhi kartu -> diabaikan
+    // Ignore player-only changes (time, progress bar) that do not affect cards
     new MutationObserver((muts) => { if (muts.some((m) => !m.target.closest?.('.html5-video-player'))) scheduleScan(); })
       .observe(document.documentElement, { childList: true, subtree: true });
-    // Tiap 2 detik cek tombol Subscribe YouTube (statusnya bisa berubah tanpa perubahan DOM); pindai penuh tiap 10 detik
-    // sebagai cadangan. Pemindaian biasa dipicu oleh perubahan DOM, navigasi, dan respons InnerTube.
+    // Check YouTube Subscribe buttons every 2 seconds (state can change without DOM mutations); full scan every 10 seconds
+    // as a fallback. Normal scans are triggered by DOM changes, navigation, and InnerTube responses.
     let tick = 0;
     setInterval(() => (++tick % 5 ? scanButtons(document.getElementsByTagName(SUB_BTN)) : scan()), 2000);
     for (const e of ['yt-navigate-finish', 'yt-page-data-updated', 'yt-action']) document.addEventListener(e, scheduleScan);
@@ -535,7 +535,7 @@
   else start();
 
   /* ================================================================== */
-  /* Hook jaringan: data video baru + aksi subscribe / unsubscribe      */
+  /* Network hooks: new video data and subscribe/unsubscribe actions    */
   /* ================================================================== */
   const INDEX_URL = /\/youtubei\/v1\/(next|browse|search|reel)/;
   const SUB_URL = /\/youtubei\/v1\/subscription\/(subscribe|unsubscribe)/;
@@ -561,7 +561,7 @@
     return res;
   };
 
-  // Sebagian permintaan YouTube memakai XHR
+  // Some YouTube requests use XHR
   try {
     const { open, send } = XMLHttpRequest.prototype;
     XMLHttpRequest.prototype.open = function (method, url) { this.__ytucUrl = String(url || ''); return open.apply(this, arguments); };
@@ -576,7 +576,7 @@
   } catch { /* */ }
 
   /* ================================================================== */
-  /* Komunikasi dengan content script                                    */
+  /* Communication with the content script                              */
   /* ================================================================== */
   window.addEventListener('message', async (e) => {
     if (e.source !== window || e.data?.source !== IN) return;

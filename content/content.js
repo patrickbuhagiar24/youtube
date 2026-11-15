@@ -1,7 +1,7 @@
 /*
  * Content script (isolated world).
- * Menyimpan daftar subscription, menandai kartu,
- * dan berkomunikasi dengan main-world.js, popup, serta background.
+ * Stores subscriptions, marks cards,
+ * and communicates with main-world.js, the popup, and the background worker.
  */
 (() => {
   'use strict';
@@ -13,7 +13,7 @@
   const { DEFAULTS, CARD_SEL, AUTOLOAD } = YTUC;
   const THUMB_SEL = 'ytd-thumbnail, #thumbnail, yt-thumbnail-view-model, .yt-lockup-view-model__content-image, ' +
     '[class*="lockup-view-model"][class*="content-image"], [class*="LockupViewModelContentImage"], #avatar-section, #avatar, ytd-playlist-thumbnail';
-  // Nama class lama (kebab-case) dan baru (camelCase, mis. ytContentMetadataViewModelMetadataRow)
+  // Old (kebab-case) and new (camelCase, e.g. ytContentMetadataViewModelMetadataRow) class names
   const NAME_SEL = [
     'ytd-channel-name #text', '#channel-name #text', '#channel-title #text', '#byline',
     'yt-content-metadata-view-model > div:first-child > span',
@@ -27,24 +27,24 @@
   let syncing = false, syncProgress = 0;
   let lastError = '';
   let extAlive = true;
-  // Riwayat unsubscribe (disinkron ke Google Drive oleh background): { [id]: { s: 'unsub'|'resub', at, title, url } }
+  // Unsubscribe history (synced to Google Drive by the background worker): { [id]: { s: 'unsub'|'resub', at, title, url } }
   let unsubs = {};
-  // Naik setiap daftar subscription / unsubscribe / pengaturan berubah -> hasil evaluasi kartu lama tidak dipakai lagi
+  // Increment when subscriptions, unsubscribe history, or settings change to invalidate cached card evaluations
   let gen = 0;
 
   /* ---------------- util ---------------- */
   const norm = (s) => (s || '').normalize('NFKC').replace(/[\u200b-\u200f\u2060\ufeff]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  /** Ubah pesan error teknis menjadi kalimat yang mudah dipahami. */
+  /** Turn technical errors into a readable message. */
   const friendlyError = (e) => {
     const m = String(e?.message || e || '');
-    return /InnerTube|HTTP|fetch|network/i.test(m) ? 'Gagal terhubung ke YouTube. Periksa koneksi internet, lalu coba lagi.' : m;
+    return /InnerTube|HTTP|fetch|network/i.test(m) ? 'Could not connect to YouTube. Check your internet connection and try again.' : m;
   };
   const handleKey = (h) => h.toLowerCase().replace(/^(?!@)/, '@');
-  /** Perubahan di dalam pemutar video (jam, bilah progres) tidak memengaruhi kartu -> tidak perlu memindai ulang. */
+  /** Changes inside the player (time, progress bar) do not affect cards, so skip rescanning them. */
   const inPlayer = (n) => !!n.closest?.('.html5-video-player');
 
-  /** Kunci channel dari URL: channelId, @handle, atau c/… / user/… */
+  /** Channel key from a URL: channelId, @handle, or c/... / user/... */
   function keyFromPath(p) {
     if (!p) return null;
     try { if (/^https?:/i.test(p)) p = new URL(p).pathname; } catch { /* */ }
@@ -69,13 +69,13 @@
     return () => { clearTimeout(t); t = setTimeout(safe(fn), ms); };
   }
 
-  /* ---------------- komunikasi ke main world ---------------- */
+  /* ---------------- communication with the main world ---------------- */
   const pending = new Map();
   let reqSeq = 0;
   function request(type, timeout = 180000, extra = {}) {
     return new Promise((resolve, reject) => {
       const reqId = ++reqSeq;
-      const t = setTimeout(() => { pending.delete(reqId); reject(new Error('YouTube tidak merespons. Coba lagi sebentar lagi.')); }, timeout);
+      const t = setTimeout(() => { pending.delete(reqId); reject(new Error('YouTube did not respond. Please try again shortly.')); }, timeout);
       pending.set(reqId, { resolve, reject, t });
       window.postMessage({ source: IN, type, reqId, ...extra }, location.origin);
     });
@@ -122,7 +122,7 @@
 
   const isSubKey = (k) => (k.startsWith('UC') ? subs.ids : subs.keys).has(k);
 
-  /** Tambah / hapus satu channel dari daftar tersimpan. */
+  /** Add or remove one channel from the stored subscription list. */
   function setSubscribed(id, subscribed, info) {
     if (!subs.ts || subs.ids.has(id) === subscribed) return false;
     if (subscribed) {
@@ -143,22 +143,22 @@
     if (setSubscribed(id, subscribed, info)) scheduleScan(true);
   }
 
-  /* ---------------- daftar channel yang di-unsubscribe ---------------- */
+  /* ---------------- unsubscribe history ---------------- */
   const isLeft = (id) => unsubs[id]?.s === 'unsub' && !subs.ids.has(id);
   const saveUnsubs = debounce(() => chrome.storage.local.set({ ytucUnsubs: unsubs }), 600);
 
-  /** Catat unsubscribe, atau hapus dari daftar bila di-subscribe lagi. */
+  /** Record an unsubscribe, or a resubscribe if the channel was previously left. */
   function recordEvent(id, s, info) {
     if (!/^UC[\w-]{10,}$/.test(id || '')) return;
     const cur = unsubs[id];
     if (cur?.s === s || (s === 'resub' && !cur)) return;
-    const known = subs.list.find((c) => c.id === id); // nama & link dari daftar subscription
+    const known = subs.list.find((c) => c.id === id); // Name and URL from the subscription list
     unsubs[id] = { s, at: Date.now(), title: info?.name || info?.title || cur?.title || known?.title || '', url: info?.url || cur?.url || known?.url || '' };
     gen++;
     saveUnsubs();
   }
 
-  /** Samakan daftar subscription dengan kejadian yang lebih baru (mis. dari perangkat lain lewat Google Drive). */
+  /** Reconcile subscriptions with newer events, such as changes from another device via Google Drive. */
   function reconcile() {
     if (!subs.ts) return;
     let changed = false;
@@ -170,12 +170,12 @@
     if (changed) scheduleScan(true);
   }
 
-  /* ---------------- subscribe langsung dari ekstensi ---------------- */
-  const busy = new Set(); // kunci channel yang sedang diproses
+  /* ---------------- subscribe directly from the extension ---------------- */
+  const busy = new Set(); // Channel keys currently being processed
 
   /**
-   * Subscribe / unsubscribe channel dari kartu. ch = { key, id, name, url, collab?, subCollab? }.
-   * Video kolaborasi: subscribe semua kolaborator yang belum, unsubscribe semua kolaborator yang sudah di-subscribe.
+   * Subscribe or unsubscribe from a card. ch = { key, id, name, url, collab?, subCollab? }.
+   * Collaborations: subscribe to all missing collaborators, or unsubscribe from all subscribed collaborators.
    */
   async function changeSub(ch, action = 'subscribe') {
     const k = ch.key || ch.id || ch.url;
@@ -193,11 +193,11 @@
         updateSub(id, sub, info);
         names.push(info.name || id);
       }
-      if (names.length) lockKey = k; // cegah klik ganda: tombol baru (+/−) tidak langsung muncul di bawah kursor
+      if (names.length) lockKey = k; // Prevent double clicks: do not immediately show the new button under the cursor
       safe(scan)();
       const missed = targets.length - names.length;
-      toast((sub ? '✅ Anda sekarang subscribe' : '✅ Anda berhenti subscribe') + ` <b>${names.map(esc).join(', ')}</b>` +
-        (missed > 0 ? `<br>⚠️ ${missed} channel lain gagal, coba lagi nanti.` : ''));
+      toast((sub ? '✅ You are now subscribed to' : '✅ You unsubscribed from') + ` <b>${names.map(esc).join(', ')}</b>` +
+        (missed > 0 ? `<br>⚠️ ${missed} other channel(s) failed. Try again later.` : ''));
       return true;
     } catch (e) {
       toast(`⚠️ ${esc(friendlyError(e))}`);
@@ -217,7 +217,7 @@
     }
   }
 
-  /* Pemberitahuan kecil di bawah tengah layar */
+  /* Small notification at the bottom center of the screen */
   let toastHost = null, toastTimer = 0;
   function toast(html) {
     if (!toastHost?.isConnected) {
@@ -239,24 +239,24 @@
     syncing = true; syncProgress = 0; lastError = '';
     const startedAt = Date.now();
     try {
-      // Satu-satunya sumber: youtube.com/feed/channels (semua halaman)
+      // The only source: youtube.com/feed/channels (all pages)
       const r = await request('sync', 20 * 60e3);
       subs.loggedIn = r.loggedIn;
       if (!r.loggedIn) return;
       const list = r.list || [];
 
-      // Pengaman: sinkron kosong TIDAK boleh menghapus daftar lama
+      // Safety guard: an empty sync must NOT erase the existing list
       if (!list.length && subs.list.length) {
-        lastError = 'Gagal memperbarui daftar. Daftar lama tetap dipakai, coba lagi nanti.';
+        lastError = 'Could not refresh the list. Keeping the existing list; try again later.';
         return;
       }
 
-      // Unsubscribe / subscribe di perangkat lain: bandingkan dengan daftar sebelumnya
+      // Detect unsubscribes or resubscribes on other devices by comparing with the previous list
       const okStatus = (st) => st?.status === 'complete' || st?.status === 'merged';
       const now = new Set(list.map((c) => c.id));
       if (okStatus(subs.stats) && okStatus(r.stats) && subs.accountId === r.accountId && subs.list.length) {
         const gone = subs.list.filter((c) => c.id && !now.has(c.id));
-        // Pengaman: bila terlalu banyak yang hilang sekaligus, kemungkinan gangguan dari YouTube -> jangan dicatat
+        // Safety guard: too many missing channels at once may be a YouTube outage; do not record them
         if (gone.length <= Math.max(20, subs.list.length * 0.25)) gone.forEach((c) => recordEvent(c.id, 'unsub', c));
       }
       for (const c of list) if (unsubs[c.id]?.s === 'unsub' && unsubs[c.id].at < startedAt) recordEvent(c.id, 'resub', c);
@@ -264,7 +264,7 @@
       const data = { list, ts: startedAt, accountId: r.accountId, stats: r.stats };
       loadSubs(data);
       await chrome.storage.local.set({ ytucSubs: data });
-      lastError = !list.length ? 'Anda belum subscribe channel apa pun.' : r.stats?.note || '';
+      lastError = !list.length ? 'You are not subscribed to any channels.' : r.stats?.note || '';
     } catch (e) {
       lastError = friendlyError(e);
     } finally {
@@ -273,7 +273,7 @@
     }
   }
 
-  /* ---------------- evaluasi & penandaan kartu ---------------- */
+  /* ---------------- card evaluation and marking ---------------- */
   function videoIdOfCard(card) {
     const v = card.getAttribute('data-ytuc-vid');
     if (v) return v;
@@ -281,7 +281,7 @@
     return href.match(/[?&]v=([\w-]{11})/)?.[1] || href.match(/\/shorts\/([\w-]{11})/)?.[1] || '';
   }
 
-  /** Kunci untuk mendeteksi video ganda: ID playlist (kartu playlist / Mix) atau ID video. */
+  /** Duplicate key: playlist ID for playlist/Mix cards, otherwise video ID. */
   function dupKey(card) {
     const list = card.querySelector('a[href*="list="]')?.getAttribute('href').match(/[?&]list=([\w-]+)/)?.[1];
     return list ? 'list:' + list : videoIdOfCard(card);
@@ -292,7 +292,7 @@
     let collab = null;
     try { collab = JSON.parse(card.getAttribute('data-ytuc-collab') || 'null'); } catch { /* */ }
     if (collab?.length > 1) {
-      // Video kolaborasi: dianggap sudah subscribe hanya bila SEMUA kolaborator sudah di-subscribe
+      // A collaboration is subscribed only when ALL collaborators are subscribed
       const missing = collab.filter((c) => !isSubKey(c.id));
       const first = missing[0] || collab[0];
       return {
@@ -303,7 +303,7 @@
         name: (missing.length ? missing : collab).map((c) => c.name).filter(Boolean).join(', ') || first.id,
         url: first.url || '/channel/' + first.id,
         collab: missing.filter((c) => !isLeft(c.id)),
-        subCollab: missing.length ? [] : collab.filter((c) => isSubKey(c.id)) // untuk tombol unsubscribe
+        subCollab: missing.length ? [] : collab.filter((c) => isSubKey(c.id)) // For the unsubscribe button
       };
     }
     const id = card.getAttribute('data-ytuc-cid') || '';
@@ -321,7 +321,7 @@
     if (!keys.length && !name) return null;
 
     const subscribed = keys.some(isSubKey) || (!!name && subs.titles.has(norm(name)));
-    // ID channel: dari kartu, atau (untuk channel yang sudah di-subscribe) dari daftar subscription
+    // Channel ID from the card or, for subscribed channels, from the subscription list
     const cid = id || keys.find((k) => k.startsWith('UC')) || (subscribed ? idFromList(keys, name) : leftIdFromKeys(keys)) || '';
     return {
       subscribed,
@@ -333,7 +333,7 @@
     };
   }
 
-  /** Cari ID channel yang sudah di-subscribe dari daftar subscription (lewat @handle / link / nama). */
+  /** Find a subscribed channel ID by @handle, URL, or name in the subscription list. */
   function idFromList(keys, name) {
     const n = norm(name);
     const hit = subs.list.find((c) => keys.some((k) => k === keyFromPath(c.url) || (c.handle && k === handleKey(c.handle)))) ||
@@ -341,7 +341,7 @@
     return hit?.id || '';
   }
 
-  /** ID channel di daftar unsubscribe yang link-nya cocok (kartu yang hanya membawa @handle). */
+  /** Find an unsubscribe-history channel ID by URL for cards that only provide an @handle. */
   function leftIdFromKeys(keys) {
     if (!keys.length) return '';
     for (const [id, e] of Object.entries(unsubs)) if (e.s === 'unsub' && e.url && keys.includes(keyFromPath(e.url))) return id;
@@ -349,22 +349,22 @@
   }
 
   /**
-   * Tombol di pojok kiri atas thumbnail:
-   *  kind 'sub'   -> "+" (subscribe), untuk channel yang belum di-subscribe
-   *  kind 'unsub' -> "−" biru (unsubscribe), untuk channel yang sudah di-subscribe (muncul saat kursor di atas video)
+   * Button in the top-left corner of a thumbnail:
+   *  kind 'sub'   -> "+" (subscribe), for channels not yet subscribed
+   *  kind 'unsub' -> blue "−" (unsubscribe), shown on hover for subscribed channels
    */
   const BTN = {
-    sub: { cls: 'ytuc-subbtn', text: '+', label: 'Subscribe channel ini' },
-    unsub: { cls: 'ytuc-subbtn ytuc-unsubbtn', text: '−', label: 'Unsubscribe channel ini' }
+    sub: { cls: 'ytuc-subbtn', text: '+', label: 'Subscribe to this channel' },
+    unsub: { cls: 'ytuc-subbtn ytuc-unsubbtn', text: '−', label: 'Unsubscribe from this channel' }
   };
-  /** Halaman video & kartu channel: YouTube sudah punya tombol Subscribe sendiri. */
+  /** Watch pages and channel cards already have their own YouTube Subscribe button. */
   const buttonAllowed = (card) => settings.showSubButton && !card.matches('ytd-video-owner-renderer') && !card.querySelector('ytd-subscribe-button-renderer');
 
-  /** Tombol baru. getCard() = kartu yang sedang dilayani tombol ini. */
+  /** Create a button. getCard() returns the card this button currently acts on. */
   function makeButton(getCard) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    // Jangan sampai klik tombol ikut membuka video
+    // Do not let a button click also open the video
     for (const ev of ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) btn.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -375,7 +375,7 @@
     return btn;
   }
 
-  /** Atur tampilan tombol sesuai jenisnya ('sub' = +, 'unsub' = −). */
+  /** Update the button appearance for its kind ('sub' = +, 'unsub' = −). */
   function setKind(btn, kind, card, extraCls = '') {
     if (btn.__ytucKind === kind && btn.__ytucCard === card) return;
     const d = BTN[kind];
@@ -389,7 +389,7 @@
     btn.textContent = on ? '⏳' : d.text;
   }
 
-  /** Tombol "+" yang menempel di kartu (selalu tampil). Tombol "−" memakai tombol melayang (lihat updateHover). */
+  /** The "+" button is attached to the card. The "−" button floats (see updateHover). */
   function placeButton(card, kind) {
     let btn = card.__ytucBtn;
     if (kind !== 'sub') {
@@ -412,14 +412,14 @@
     placeButton(card, null);
   }
 
-  /* ---------------- tombol melayang saat kursor di atas video ----------------
-   * Saat pratinjau video berjalan, YouTube menaruh pemutar pratinjau (ytd-video-preview) DI ATAS kartu,
-   * di luar elemen kartu. Akibatnya :hover pada kartu hilang-timbul. Karena itu kartu yang sedang ditunjuk
-   * dicari dari posisi kursor (elementsFromPoint), dan tombolnya digambar melayang di atas pratinjau.
+  /* ---------------- floating button while hovering over a video ----------------
+   * During playback, YouTube places its preview player (ytd-video-preview) ABOVE the card,
+   * outside the card element, making :hover flicker. Find the hovered card from the cursor
+   * position (elementsFromPoint), and draw a floating button above the preview.
    */
   const PREVIEW_SEL = 'ytd-video-preview, #video-preview, #inline-preview-player';
   let pointer = null, hoverCard = null, floatBtn = null, hoverQueued = false, masthead = null;
-  let lockKey = null; // kartu yang baru saja di-subscribe/unsubscribe: tombol disembunyikan sampai kursor pindah
+  let lockKey = null; // Hide the button after a subscription change until the cursor moves to another card
 
   const outerCard = (el) => {
     for (let c = el?.closest?.('[data-ytuc-state]'); c; c = c.parentElement?.closest('[data-ytuc-state]')) {
@@ -435,7 +435,7 @@
     (document.body || document.documentElement).appendChild(floatBtn);
     return floatBtn;
   }
-  /** Bawah bilah atas YouTube (tombol tidak boleh menutupinya). */
+  /** Bottom edge of the YouTube header; the button must not cover it. */
   function headerBottom() {
     if (!masthead?.isConnected) masthead = document.querySelector('#masthead-container, ytd-masthead');
     return masthead?.getBoundingClientRect().bottom || 0;
@@ -453,7 +453,7 @@
     if (floatBtn && !floatBtn.hidden) floatBtn.hidden = true;
   }
 
-  function leave() { lockKey = null; hideFloat(); } // kursor tidak di atas video mana pun
+  function leave() { lockKey = null; hideFloat(); } // The cursor is not over any video
 
   function updateHover() {
     hoverQueued = false;
@@ -461,11 +461,11 @@
     const top = document.elementFromPoint(pointer.x, pointer.y);
     if (!top) return leave();
     let card;
-    if (top === floatBtn) card = hoverCard; // kursor di atas tombol itu sendiri
+    if (top === floatBtn) card = hoverCard; // The cursor is over the button itself
     else {
       card = outerCard(top);
       if (!card) {
-        // Kursor di atas pemutar pratinjau: cari kartu di bawahnya; bila pratinjau lebih lebar dari kartu, pertahankan kartu terakhir
+        // Over a preview player: find the card beneath it; keep the last card if the preview is wider
         if (!top.closest(PREVIEW_SEL)) return leave();
         card = document.elementsFromPoint(pointer.x, pointer.y).map(outerCard).find(Boolean) || (hoverCard?.isConnected ? hoverCard : null);
       }
@@ -489,7 +489,7 @@
     if (!hoverQueued) { hoverQueued = true; requestAnimationFrame(safe(updateHover)); }
   }
   function onPointer(e) {
-    if (e.pointerType === 'touch') return; // layar sentuh: tidak ada kursor
+    if (e.pointerType === 'touch') return; // Touch screens have no hover cursor
     pointer = { x: e.clientX, y: e.clientY };
     queueHover();
   }
@@ -497,12 +497,12 @@
   function scan() {
     const ready = settings.enabled && subs.loggedIn !== false && subs.ts > 0;
     document.documentElement.classList.toggle('ytuc-on', ready);
-    // Satu kali telusur DOM (halaman YouTube bisa berisi puluhan ribu elemen): grid & jumlah video ikut dihitung di sini
+    // Traverse the DOM once (YouTube may have tens of thousands of elements), also counting grids and videos
     const grids = new Set();
-    // Jumlah video untuk muat otomatis: hanya halaman yang sedang tampil (YouTube menyimpan halaman sebelumnya, tersembunyi)
+    // Autoload counts only the visible page; YouTube keeps previous pages hidden
     const page = document.querySelector('ytd-page-manager > :not([hidden])');
     let marked = 0;
-    // Video ganda (bersama fitur urutan): kemunculan pertama di daftar dipertahankan, sisanya disembunyikan
+    // Deduplicate while sorting: keep the first occurrence in each list and hide the rest
     const dedupe = ready && !!settings.sortUnsub;
     const seen = new Set();
     const done = (card, parent) => {
@@ -518,32 +518,32 @@
     for (const card of document.querySelectorAll(CARD_SEL)) {
       const parent = card.parentElement;
       if (card.localName === 'ytd-rich-item-renderer' && parent?.id === 'contents' && parent.parentElement?.localName === 'ytd-rich-grid-renderer') grids.add(parent);
-      // Data kartu (data-ytuc-v dari main-world.js) dan daftar tidak berubah -> hasil lama masih benar
+      // Neither card data (data-ytuc-v from main-world.js) nor subscriptions changed; reuse the result
       const sig = ready ? gen + '|' + card.getAttribute('data-ytuc-v') : '';
       if (sig && card.__ytucSig === sig) { done(card, parent); continue; }
-      // Hanya kartu paling luar (hindari tanda ganda pada elemen bersarang)
+      // Only mark outermost cards to avoid duplicate marks on nested elements
       const r = ready && !parent?.closest(CARD_SEL) ? evaluate(card) : null;
       if (!r) { clearCard(card); continue; }
-      // sub = sudah subscribe · left = ada di daftar unsubscribe (bingkai kuning, tanpa tombol +) · unsub = belum
+      // sub = subscribed; left = previously unsubscribed (yellow outline, no +); unsub = not subscribed
       const state = r.subscribed ? 'sub' : r.left ? 'left' : 'unsub';
       if (card.getAttribute('data-ytuc-state') !== state) card.setAttribute('data-ytuc-state', state);
-      if (!r.id) r.vid = videoIdOfCard(card); // cadangan untuk mencari ID channel saat tombol + diklik
+      if (!r.id) r.vid = videoIdOfCard(card); // Fallback for resolving a channel ID when + is clicked
       card.__ytucCh = r;
       card.__ytucKey = dupKey(card);
-      // Tombol unsubscribe hanya bila ID channel pasti ada di daftar subscription (hindari salah channel karena nama sama)
+      // Only offer unsubscribe for a confirmed subscribed ID, avoiding mismatches from duplicate names
       const canUnsub = state === 'sub' && (r.subCollab ? r.subCollab.length > 0 : subs.ids.has(r.id));
       const kind = state === 'unsub' ? 'sub' : canUnsub ? 'unsub' : null;
       card.__ytucKind = kind && buttonAllowed(card) ? kind : null;
-      // Hanya kartu yang ID channel-nya pasti yang disimpan; sisanya (dari teks halaman) dicek ulang tiap kali
+      // Cache only confirmed channel IDs; reevaluate cards identified only by page text
       card.__ytucSig = r.id ? sig : '';
       done(card, parent);
     }
 
     fixGridColumns(grids, ready && !!settings.sortUnsub);
     updateAutoload(ready, marked);
-    queueHover(); // isi halaman berubah di bawah kursor
+    queueHover(); // Page content changed under the cursor
 
-    // Halaman channel yang sedang dibuka
+    // The currently open channel page
     channelPage = null;
     const pk = keyFromPath(location.pathname);
     if (ready && pk) {
@@ -552,16 +552,16 @@
     }
   }
 
-  /* ---------------- urutan: belum di-subscribe di paling atas ---------------- */
-  // Urutan diatur lewat CSS `order` (lihat content.css) sehingga elemen YouTube tidak dipindah.
-  // Khusus grid (Beranda, tab Video channel): tandai ulang kolom pertama tiap baris agar jarak kiri tetap rapi.
-  // Daftar video yang diurutkan & dibersihkan dari video ganda (sama dengan content.css)
+  /* ---------------- sorting: unsubscribed channels first ---------------- */
+  // CSS `order` controls sorting (see content.css) without moving YouTube elements.
+  // For grids (Home, channel Videos tab), refresh first-column markers to preserve left margins.
+  // Sorted, deduplicated video lists (keep in sync with content.css)
   const LIST_SEL = 'ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents';
   const isList = (el) => !!el && (el.__ytucList ??= el.matches(LIST_SEL));
   const SORT_RANK = { unsub: -1, sub: 0, left: 1 };
   function sortRank(el) {
     if (el.localName === 'ytd-continuation-item-renderer') return 99;
-    if (el.hasAttribute('data-ytuc-dup')) return 100; // disembunyikan: kolom grid sesudahnya ikut bergeser
+    if (el.hasAttribute('data-ytuc-dup')) return 100; // Hidden cards still shift subsequent grid columns
     return SORT_RANK[el.getAttribute('data-ytuc-state')] || 0;
   }
   function fixGridColumns(grids, active) {
@@ -572,7 +572,7 @@
       if (grid.__ytucSortSig === sig) continue;
       grid.__ytucSortSig = sig;
       const sorted = ranks.map((r, i) => ({ el: kids[i], i, r })).sort((a, b) => a.r - b.r || a.i - b.i);
-      if (!active || sorted.every((x, i) => x.i === i)) { // tidak ada yang berpindah -> biarkan YouTube yang mengatur
+      if (!active || sorted.every((x, i) => x.i === i)) { // Nothing moved; let YouTube manage the layout
         for (const el of kids) if (el.hasAttribute('data-ytuc-col')) el.removeAttribute('data-ytuc-col');
         continue;
       }
@@ -580,7 +580,7 @@
       let col = 0;
       for (const { el } of sorted) {
         const visible = el.getClientRects().length > 0;
-        if (el.localName !== 'ytd-rich-item-renderer') { if (visible) col = 0; continue; } // bagian selebar layar -> baris baru
+        if (el.localName !== 'ytd-rich-item-renderer') { if (visible) col = 0; continue; } // A full-width section starts a new row
         if (!visible) { el.removeAttribute('data-ytuc-col'); continue; }
         const v = el.hasAttribute('is-slim-media') ? '--ytd-rich-grid-slim-items-per-row'
           : el.hasAttribute('is-post') ? '--ytd-rich-grid-posts-per-row' : '--ytd-rich-grid-items-per-row';
@@ -592,18 +592,18 @@
     }
   }
 
-  /* ---------------- muat otomatis sebelum diurutkan ----------------
-   * YouTube memuat video berikutnya saat elemen "muat lagi" (ytd-continuation-item-renderer) terlihat di layar.
-   * Selama kelas ytuc-autoload aktif, elemen itu dibuat tak terlihat tetapi selalu "di layar" (lihat content.css),
-   * sehingga YouTube terus memuat tanpa halaman digulir. Berhenti di AUTOLOAD.limit video (n = kartu yang ditandai),
-   * atau bila tidak ada tambahan selama AUTOLOAD.stallMs (daftar habis / YouTube berhenti). Setelah itu gulir biasa berlaku lagi.
+  /* ---------------- autoload before sorting ----------------
+   * YouTube loads more videos when ytd-continuation-item-renderer enters the viewport.
+   * While ytuc-autoload is active, this element is invisible but stays "on screen" (see content.css),
+   * so YouTube keeps loading without scrolling. Stop at AUTOLOAD.limit marked videos (n),
+   * or after AUTOLOAD.stallMs without new items. Normal scrolling then resumes.
    */
-  const AUTOLOAD_PATH = /^\/(results|watch)?$/; // Beranda, Pencarian, halaman tonton
+  const AUTOLOAD_PATH = /^\/(results|watch)?$/; // Home, Search, and Watch pages
   let auto = { page: '', count: -1, since: 0, done: false };
 
   function updateAutoload(ready, n) {
     const page = location.pathname + location.search;
-    if (auto.page !== page) auto = { page, count: -1, since: 0, done: false }; // halaman baru -> mulai lagi
+    if (auto.page !== page) auto = { page, count: -1, since: 0, done: false }; // New page: start again
     let on = false;
     if (ready && settings.sortUnsub && !auto.done && AUTOLOAD_PATH.test(location.pathname)) {
       if (n !== auto.count) { auto.count = n; auto.since = Date.now(); }
@@ -649,7 +649,7 @@
     if (area !== 'local') return;
     if (changes.ytucSubs && !syncing) { loadSubs(changes.ytucSubs.newValue); reconcile(); scheduleScan(); }
     if (changes.ytucUnsubs) {
-      // Gabungkan (kejadian terbaru menang) agar catatan yang belum sempat disimpan tidak tertimpa
+      // Merge with newest-event-wins so pending local records are not overwritten
       const inc = changes.ytucUnsubs.newValue || {};
       const merged = { ...inc };
       for (const [id, e] of Object.entries(unsubs)) if (!merged[id] || e.at > merged[id].at) merged[id] = e;
@@ -665,7 +665,7 @@
       chrome.storage.sync.get('ytucSettings'), chrome.storage.local.get(['ytucSubs', 'ytucUnsubs'])
     ]);
     unsubs = ytucUnsubs || {};
-    safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // ambil perubahan dari perangkat lain
+    safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // Pull changes from other devices
     settings = { ...DEFAULTS, ...ytucSettings };
     loadSubs(ytucSubs);
     reconcile();
@@ -674,7 +674,7 @@
     new MutationObserver((muts) => {
       if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target))) scheduleScan();
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-ytuc-v', 'hidden'] });
-    // Cadangan tiap 10 detik; selama muat otomatis tiap 2,5 detik (untuk mendeteksi daftar yang sudah habis)
+    // Fallback every 10 seconds, or 2.5 seconds during autoload to detect an exhausted list
     let tick = 0;
     setInterval(() => extAlive && (++tick % 4 === 0 || document.documentElement.classList.contains('ytuc-autoload')) && scheduleScan(), 2500);
     for (const ev of ['pointermove', 'pointerover']) document.addEventListener(ev, onPointer, { capture: true, passive: true });
@@ -692,7 +692,7 @@
 
     const stale = Date.now() - subs.ts > settings.autoSyncHours * 3600e3;
     const otherAccount = hello.accountId && subs.accountId && hello.accountId !== subs.accountId;
-    const oldFormat = subs.ts && !subs.stats?.status; // data versi lama -> perbarui sekali
+    const oldFormat = subs.ts && !subs.stats?.status; // Legacy data: refresh once
     if (stale || otherAccount || oldFormat || !subs.list.length) await doSync();
     else scheduleScan();
   }

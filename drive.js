@@ -1,18 +1,20 @@
 /*
- * Sinkronisasi daftar channel yang di-unsubscribe ke Google Drive (berkas YTUC.DRIVE_FILE)
- * memakai service account. Dimuat oleh service worker (background.js).
+ * Sync the unsubscribe history to Google Drive (YTUC.DRIVE_FILE) using a service account.
+ * Loaded by the service worker (background.js).
  *
- * Pengaturan dibaca dari FOLDER EKSTENSI (bukan dari halaman pengaturan):
- *   drive-config.json    -> { "link": "<link berkas YouTube.json yang dibagikan>", "serviceAccount": "service-account.json" }
- *   service-account.json -> file kunci JSON yang diunduh dari Google Cloud (boleh juga ditempel langsung di drive-config.json)
+ * Configuration is read from the USER'S CONFIGURATION FOLDER through the APT-installed
+ * native messaging host, never from the extension package. The folder contains only:
+ *   ~/.config/yt-unsub-detector/google-drive.json    -> { "link": "<shared YouTube.json file link>" }
+ *   ~/.config/yt-unsub-detector/service-account.json -> JSON key downloaded from Google Cloud
  *
- * Hanya LINK BERKAS yang dipakai: pengguna mengunggah YouTube.json ke Drive-nya sendiri, membagikannya
- * ke email service account sebagai Editor, lalu menempel link berkas itu. Ekstensi tidak pernah membuat
- * berkas dan tidak mencari berkas lain (service account baru juga tidak punya kuota penyimpanan).
+ * Only a FILE LINK is used: upload YouTube.json to your own Drive, share it with the service account
+ * as an Editor, and paste its file link. The extension never creates or searches for files
+ * (new service accounts also have no storage quota).
  *
- * Data lokal (chrome.storage.local.ytucUnsubs):
+ * Local data (chrome.storage.local.ytucUnsubs):
  *   { [channelId]: { s: 'unsub' | 'resub', at: timestamp, title, url } }
- * Penggabungan antar-perangkat: per channel, kejadian dengan waktu terbaru yang menang.
+ * Cross-device merge: the most recent event wins for each channel.
+ * Only the English Drive file format is read and written.
  */
 // eslint-disable-next-line no-unused-vars, no-var
 var Drive = (() => {
@@ -20,60 +22,68 @@ var Drive = (() => {
   const API = 'https://www.googleapis.com/drive/v3/files';
   const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
   const SCOPE = 'https://www.googleapis.com/auth/drive';
-  const RESUB_KEEP_MS = 180 * 864e5; // riwayat "subscribe lagi" disimpan 180 hari agar sinkron antar-perangkat tetap benar
+  const RESUB_KEEP_MS = 180 * 864e5; // Keep resubscribe events for 180 days so cross-device syncing remains correct
 
-  /* ---------------- pengaturan dari folder ekstensi ---------------- */
-  const CONFIG_FILE = 'drive-config.json';
+  /* ---------------- configuration from the user's XDG config folder ---------------- */
+  const CONFIG_FILE = 'google-drive.json';
+  const KEY_FILE = 'service-account.json';
+  const NATIVE_HOST = 'io.github.patrickbuhagiar24.yt_unsub_detector';
 
-  async function readExtFile(name) {
-    try {
-      const res = await fetch(chrome.runtime.getURL(name));
-      return res.ok ? await res.text() : null;
-    } catch { return null; } // file tidak ada
+  function readUserConfig() {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendNativeMessage(NATIVE_HOST, { type: 'readConfig' }, (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          reject(new Error('The YT Unsub Detector configuration host is unavailable. Install the yt-unsub-detector APT package and restart your browser.'));
+          return;
+        }
+        resolve(response);
+      });
+    });
   }
 
-  /** Ambil ID berkas dari link berkas Google Drive. '' = link belum diisi. */
-  function fileIdOf(v) {
+  /** Extract a file ID from a Google Drive file link. '' means no link is configured. */
+  function fileIdOf(v, source = CONFIG_FILE) {
     v = String(v || '').trim();
-    if (!v || /^(PASTE|TEMPEL|ISI)/i.test(v)) return '';
+    if (!v || /^[A-Z]+(?:_[A-Z]+)+$/.test(v)) return '';
     if (/\/folders\//.test(v)) {
-      throw new Error(`Link di ${CONFIG_FILE} adalah link folder. Gunakan link berkas: klik kanan ${YTUC.DRIVE_FILE} → Bagikan → Salin link.`);
+      throw new Error(`The link in ${source} points to a folder. Use a file link: right-click ${YTUC.DRIVE_FILE} → Share → Copy link.`);
     }
     const m = v.match(/\/file\/d\/([\w-]+)/) || v.match(/[?&]id=([\w-]{10,})/) || v.match(/^([\w-]{10,})$/);
     if (m) return m[1];
-    throw new Error(`Link di ${CONFIG_FILE} bukan link berkas Google Drive. Klik kanan ${YTUC.DRIVE_FILE} → Bagikan → Salin link.`);
+    throw new Error(`The link in ${source} is not a Google Drive file link. Right-click ${YTUC.DRIVE_FILE} → Share → Copy link.`);
   }
 
-  /** Baca drive-config.json + kunci service account. null = Google Drive tidak dipakai. */
+  /** Read google-drive.json and the service account key through the native host. */
   async function loadConfig() {
-    const text = await readExtFile(CONFIG_FILE);
-    if (text === null) return null;
-    let cfg;
-    try { cfg = JSON.parse(text); } catch { throw new Error(`${CONFIG_FILE} rusak (format JSON salah). Periksa tanda kutip dan koma.`); }
-    const fileId = fileIdOf(cfg.link || cfg.file);
-    let sa = cfg.serviceAccount ?? 'service-account.json';
-    if (typeof sa === 'string') {
-      const keyText = await readExtFile(sa);
-      // Belum diisi sama sekali (tanpa link & tanpa kunci) -> Google Drive dianggap tidak dipakai
-      if (keyText === null) return fileId ? { missingKey: sa } : null;
-      sa = keyText;
+    const response = await readUserConfig();
+    if (!response || response.ok !== true) {
+      throw new Error(response?.error || `${CONFIG_FILE} could not be read from your user configuration folder.`);
+    }
+    const configPath = response.configPath || CONFIG_FILE;
+    if (!response.configured) return { disabled: true, configPath };
+    const fileId = fileIdOf(response.link, configPath);
+    const sa = response.key;
+    // An absent or empty key is unconfigured; never try to authenticate with the placeholder.
+    if (sa === null || sa === undefined) {
+      return fileId ? { missingKey: response.keyPath || KEY_FILE, configPath } : { disabled: true, configPath };
     }
     const key = parseKey(sa);
-    if (!fileId) return { missingLink: true, key };
-    return { key, fileId };
+    if (!fileId) return { missingLink: true, key, configPath };
+    return { key, fileId, configPath };
   }
 
-  /** Validasi isi file kunci JSON service account. Mengembalikan objek kunci yang dipakai saja. */
+  /** Validate a service account JSON key and return only the fields we use. */
   function parseKey(text) {
     let k;
-    try { k = typeof text === 'string' ? JSON.parse(text) : text; } catch { throw new Error('File ini bukan file kunci JSON yang benar.'); }
+    try { k = typeof text === 'string' ? JSON.parse(text) : text; } catch { throw new Error('This file is not a valid JSON key file.'); }
     if (k?.type !== 'service_account' || !k.client_email || !/BEGIN PRIVATE KEY/.test(k.private_key || '')) {
-      throw new Error('File ini bukan kunci service account. Unduh kunci tipe JSON dari Google Cloud → IAM → Service Accounts → Keys.');
+      throw new Error('This is not a service account key. Download a JSON key from Google Cloud → IAM → Service Accounts → Keys.');
     }
     return { client_email: k.client_email, private_key: k.private_key, token_uri: k.token_uri || TOKEN_URL, project_id: k.project_id || '' };
   }
 
-  /* ---------------- autentikasi service account (JWT RS256) ---------------- */
+  /* ---------------- service account authentication (JWT RS256) ---------------- */
   let tokenCache = { email: '', token: '', exp: 0 };
   const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64urlText = (s) => b64url(new TextEncoder().encode(s));
@@ -97,8 +107,8 @@ var Drive = (() => {
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.access_token) {
       throw new Error(/invalid_grant|invalid_client|account not found/i.test(JSON.stringify(j))
-        ? 'Kunci service account tidak berlaku (mungkin sudah dihapus). Buat kunci baru, simpan sebagai service-account.json di folder ekstensi, lalu klik Reload di chrome://extensions.'
-        : 'Gagal masuk ke Google dengan service account. Periksa koneksi internet.');
+        ? 'The service account key is invalid or has been revoked. Create a new key, save it in your YT Unsub Detector user configuration folder, then click the extension sync button.'
+        : 'Could not sign in to Google with the service account. Check your internet connection.');
     }
     tokenCache = { email: key.client_email, token: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
     return j.access_token;
@@ -110,35 +120,35 @@ var Drive = (() => {
     if (res.ok) return res;
     const body = await res.text().catch(() => '');
     if (/SERVICE_DISABLED|accessNotConfigured|has not been used/i.test(body)) {
-      throw new Error('Google Drive API belum diaktifkan. Buka Google Cloud Console → APIs & Services → aktifkan "Google Drive API".');
+      throw new Error('The Google Drive API is not enabled. Open Google Cloud Console → APIs & Services and enable "Google Drive API".');
     }
     if (/storageQuotaExceeded|do not have storage quota/i.test(body)) {
-      throw new Error('Service account tidak punya kuota penyimpanan.');
+      throw new Error('The service account has no storage quota.');
     }
-    if (res.status === 404) throw Object.assign(new Error('Berkas tidak ditemukan.'), { code: 404 });
-    if (res.status === 403) throw new Error(`Service account tidak punya izin. Pastikan ${YTUC.DRIVE_FILE} dibagikan sebagai "Editor".`);
-    throw new Error(`Google Drive menolak permintaan (kode ${res.status}). Coba lagi nanti.`);
+    if (res.status === 404) throw Object.assign(new Error('File not found.'), { code: 404 });
+    if (res.status === 403) throw new Error(`The service account does not have permission. Share ${YTUC.DRIVE_FILE} with it as an "Editor".`);
+    throw new Error(`Google Drive rejected the request (status ${res.status}). Try again later.`);
   }
 
-  /** Periksa berkas dari link: harus bisa diakses, bukan folder/Google Dokumen, dan boleh diubah (Editor). */
+  /** Check that the linked file is accessible, editable, and not a folder or Google document. */
   async function checkFile(key, fileId) {
     let f;
     try {
       f = await (await call(key, `${API}/${fileId}?fields=${encodeURIComponent('id,name,mimeType,trashed,capabilities(canEdit)')}&supportsAllDrives=true`)).json();
     } catch (e) {
       if (e.code === 404) {
-        throw new Error(`Berkas di link itu belum dibagikan. Di Google Drive, klik kanan ${YTUC.DRIVE_FILE} → Bagikan → tambahkan ${key.client_email} sebagai Editor.`);
+        throw new Error(`The linked file has not been shared. In Google Drive, right-click ${YTUC.DRIVE_FILE} → Share → add ${key.client_email} as an Editor.`);
       }
       throw e;
     }
     if (f.mimeType === 'application/vnd.google-apps.folder') {
-      throw new Error(`Link di ${CONFIG_FILE} adalah link folder. Gunakan link berkas: klik kanan ${YTUC.DRIVE_FILE} → Bagikan → Salin link.`);
+      throw new Error(`The configured link points to a folder. Use a file link: right-click ${YTUC.DRIVE_FILE} → Share → Copy link.`);
     }
-    if (f.trashed) throw new Error(`${f.name || YTUC.DRIVE_FILE} ada di Sampah Google Drive. Pulihkan dulu berkasnya.`);
+    if (f.trashed) throw new Error(`${f.name || YTUC.DRIVE_FILE} is in Google Drive Trash. Restore the file first.`);
     if (/^application\/vnd\.google-apps\./.test(f.mimeType || '')) {
-      throw new Error(`"${f.name}" adalah Google Dokumen/Spreadsheet, bukan berkas ${YTUC.DRIVE_FILE}. Unggah ${YTUC.DRIVE_FILE} dari folder ekstensi, lalu bagikan berkas itu.`);
+      throw new Error(`"${f.name}" is a Google document or spreadsheet, not ${YTUC.DRIVE_FILE}. Upload a JSON copy of ${YTUC.DRIVE_FILE} to your own Drive, then share that file.`);
     }
-    if (!f.capabilities?.canEdit) throw new Error(`${f.name || YTUC.DRIVE_FILE} hanya bisa dilihat. Ubah akses ${key.client_email} menjadi "Editor".`);
+    if (!f.capabilities?.canEdit) throw new Error(`${f.name || YTUC.DRIVE_FILE} is view-only. Change ${key.client_email} to "Editor".`);
     return f;
   }
 
@@ -147,36 +157,36 @@ var Drive = (() => {
     method: 'PATCH', headers: { 'Content-Type': 'application/json; charset=UTF-8' }, body: text
   });
 
-  /* ---------------- format berkas & penggabungan ---------------- */
-  const LABEL = { unsub: 'unsubscribe', resub: 'subscribe lagi' };
+  /* ---------------- file format and merging ---------------- */
+  const LABEL = { unsub: 'unsubscribed', resub: 'resubscribed' };
 
-  /** Isi berkas -> peta kejadian. Berkas kosong / rusak dianggap kosong. */
+  /** Parse an English-format file into an event map. Empty or invalid JSON is treated as an empty file. */
   function fromFile(text) {
     const out = {};
     let j;
     try { j = JSON.parse(text || '{}'); } catch { return out; }
     for (const c of Array.isArray(j?.channels) ? j.channels : []) {
-      const at = Date.parse(c?.tanggal);
+      const at = Date.parse(c?.date);
       if (!/^UC[\w-]{10,}$/.test(c?.id || '') || !at) continue;
-      out[c.id] = { s: c.status === LABEL.resub ? 'resub' : 'unsub', at, title: c.nama || '', url: c.link || '' };
+      out[c.id] = { s: c.status === LABEL.resub ? 'resub' : 'unsub', at, title: c.name ?? '', url: c.url ?? '' };
     }
     return out;
   }
 
   function toFile(events) {
     const rows = Object.entries(events)
-      .map(([id, e]) => ({ id, nama: e.title || '', link: e.url ? new URL(e.url, 'https://www.youtube.com').href : `https://www.youtube.com/channel/${id}`, status: LABEL[e.s], tanggal: new Date(e.at).toISOString() }))
-      .sort((a, b) => (a.status === b.status ? b.tanggal.localeCompare(a.tanggal) : a.status === LABEL.unsub ? -1 : 1));
+      .map(([id, e]) => ({ id, name: e.title || '', url: e.url ? new URL(e.url, 'https://www.youtube.com').href : `https://www.youtube.com/channel/${id}`, status: LABEL[e.s], date: new Date(e.at).toISOString() }))
+      .sort((a, b) => (a.status === b.status ? b.date.localeCompare(a.date) : a.status === LABEL.unsub ? -1 : 1));
     return JSON.stringify({
-      aplikasi: 'YT Unsub Detector',
-      keterangan: 'Daftar channel YouTube yang sudah di-unsubscribe. Diperbarui otomatis oleh ekstensi; sebaiknya jangan diubah manual.',
-      diperbarui: new Date().toISOString(),
-      jumlah_unsubscribe: rows.filter((r) => r.status === LABEL.unsub).length,
+      application: 'YT Unsub Detector',
+      description: 'YouTube channels you have unsubscribed from. Updated automatically by the extension; avoid editing this file manually.',
+      updatedAt: new Date().toISOString(),
+      unsubscribeCount: rows.filter((r) => r.status === LABEL.unsub).length,
       channels: rows
     }, null, 2);
   }
 
-  /** Gabungkan beberapa peta kejadian: per channel, kejadian terbaru yang menang. */
+  /** Merge event maps: the most recent event wins for each channel. */
   function merge(...maps) {
     const out = {};
     for (const m of maps) {
@@ -193,56 +203,63 @@ var Drive = (() => {
 
   const same = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
 
-  /* ---------------- sinkronisasi ---------------- */
+  /* ---------------- synchronization ---------------- */
   let running = null;
   const save = async (patch) => {
     const { ytucDrive: cur = {} } = await chrome.storage.local.get('ytucDrive');
     await chrome.storage.local.set({ ytucDrive: { ...cur, ...patch } });
   };
 
-  /** Tarik isi Drive, gabungkan dengan data lokal, tulis balik bila berbeda. */
+  /** Pull from Drive, merge with local data, and write back if anything changed. */
   function sync() {
     running ||= (async () => {
-      let cfg;
-      try { cfg = await loadConfig(); } catch (e) {
-        await save({ configured: true, syncing: false, lastError: e.message });
-        return { ok: false, error: e.message };
-      }
-      if (!cfg) { await chrome.storage.local.set({ ytucDrive: { configured: false } }); return { ok: false, configured: false }; }
-      if (cfg.missingKey || cfg.missingLink) {
-        const msg = cfg.missingKey ? `File kunci "${cfg.missingKey}" belum ada di folder ekstensi.`
-          : `Tempel link berkas ${YTUC.DRIVE_FILE} di ${CONFIG_FILE} (klik kanan berkas → Bagikan → Salin link).`;
-        await chrome.storage.local.set({ ytucDrive: { configured: true, syncing: false, email: cfg.key?.client_email || '', lastError: msg } });
-        return { ok: false, error: msg };
-      }
-      const { key, fileId: id } = cfg;
-      const { ytucDrive: prev = {}, ytucUnsubs = {} } = await chrome.storage.local.get(['ytucDrive', 'ytucUnsubs']);
-      const status = { configured: true, email: key.client_email, fileId: id, fileName: prev.fileId === id ? prev.fileName || '' : '', checked: false };
       try {
-        await save({ ...status, syncing: true });
-        // Berkas dicek sekali per link (atau bila sebelumnya gagal); setelah itu langsung dibaca/ditulis
-        if (prev.fileId !== id || prev.email !== key.client_email || !prev.checked || prev.lastError) {
-          status.fileName = (await checkFile(key, id)).name || '';
+        let cfg;
+        try { cfg = await loadConfig(); } catch (e) {
+          await save({ configured: true, syncing: false, lastError: e.message });
+          return { ok: false, error: e.message };
         }
-        status.checked = true;
-        let text;
-        try { text = await readFile(key, id); } catch (e) {
-          if (e.code === 404) { status.checked = false; await checkFile(key, id); }
-          throw e;
+        if (!cfg || cfg.disabled) {
+          await chrome.storage.local.set({ ytucDrive: { configured: false, configPath: cfg?.configPath || '' } });
+          return { ok: false, configured: false };
         }
-        const remote = fromFile(text);
-        const merged = merge(remote, ytucUnsubs);
-        if (!same(merged, remote) || !/"channels"/.test(text)) await writeFile(key, id, toFile(merged));
-        const latest = (await chrome.storage.local.get('ytucUnsubs')).ytucUnsubs || {};
-        const finalMap = merge(merged, latest); // perubahan lokal yang terjadi selama sinkron tetap dipakai
-        if (!same(finalMap, latest)) await chrome.storage.local.set({ ytucUnsubs: finalMap });
-        Object.assign(status, { lastSync: Date.now(), lastError: '', count: Object.values(finalMap).filter((e) => e.s === 'unsub').length });
-        return { ok: true };
-      } catch (e) {
-        status.lastError = e.message || String(e);
-        return { ok: false, error: status.lastError };
+        if (cfg.missingKey || cfg.missingLink) {
+          const msg = cfg.missingKey ? `The key file "${cfg.missingKey}" is missing. Save the service account key as ${KEY_FILE} in your user configuration folder.`
+            : `Paste the ${YTUC.DRIVE_FILE} file link into ${cfg.configPath} (right-click the file → Share → Copy link).`;
+          await chrome.storage.local.set({ ytucDrive: { configured: true, syncing: false, email: cfg.key?.client_email || '', lastError: msg } });
+          return { ok: false, error: msg };
+        }
+        const { key, fileId: id } = cfg;
+        const { ytucDrive: prev = {}, ytucUnsubs = {} } = await chrome.storage.local.get(['ytucDrive', 'ytucUnsubs']);
+        const status = { configured: true, email: key.client_email, fileId: id, fileName: prev.fileId === id ? prev.fileName || '' : '', checked: false };
+        try {
+          await save({ ...status, syncing: true });
+          // Validate once per link (or after a failure); subsequent syncs read and write directly
+          if (prev.fileId !== id || prev.email !== key.client_email || !prev.checked || prev.lastError) {
+            status.fileName = (await checkFile(key, id)).name || '';
+          }
+          status.checked = true;
+          let text;
+          try { text = await readFile(key, id); } catch (e) {
+            if (e.code === 404) { status.checked = false; await checkFile(key, id); }
+            throw e;
+          }
+          const remote = fromFile(text);
+          const merged = merge(remote, ytucUnsubs);
+          if (!same(merged, remote) || !/"channels"/.test(text)) await writeFile(key, id, toFile(merged));
+          const latest = (await chrome.storage.local.get('ytucUnsubs')).ytucUnsubs || {};
+          const finalMap = merge(merged, latest); // Preserve local changes made while the sync was running
+          if (!same(finalMap, latest)) await chrome.storage.local.set({ ytucUnsubs: finalMap });
+          Object.assign(status, { lastSync: Date.now(), lastError: '', count: Object.values(finalMap).filter((e) => e.s === 'unsub').length });
+          return { ok: true };
+        } catch (e) {
+          status.lastError = e.message || String(e);
+          return { ok: false, error: status.lastError };
+        } finally {
+          await save({ ...status, syncing: false });
+        }
       } finally {
-        await save({ ...status, syncing: false });
+        // Always allow a later sync to re-read user configuration after edits or errors.
         running = null;
       }
     })();

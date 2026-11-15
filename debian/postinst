@@ -1,0 +1,21 @@
+#!/bin/sh
+# Register the extension for Chrome/Chromium after APT installs the files.
+set -eu
+
+STATE=/var/lib/yt-unsub-detector
+KEY="$STATE/crx-private.pem"
+
+case "${1:-}" in
+  configure)
+    install -d -m 0700 "$STATE"
+    if [ ! -f "$KEY" ]; then
+      umask 077
+      openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEY.tmp"
+      mv "$KEY.tmp" "$KEY"
+    fi
+    chmod 0600 "$KEY"
+    python3 /usr/share/yt-unsub-detector/browser_setup.py
+    ;;
+esac
+
+exit 0

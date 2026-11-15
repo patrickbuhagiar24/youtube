@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YT Unsub Detector APT repository</title>
+  <style>body{max-width:850px;margin:40px auto;padding:0 20px;font:16px/1.6 system-ui,sans-serif;color:#202124}pre{overflow:auto;padding:18px;background:#f1f3f4;border-radius:8px}a{color:#174ea6}code{font-family:ui-monospace,monospace}</style>
+</head>
+<body>
+  <h1>YT Unsub Detector APT repository</h1>
+  <p>This repository provides the <code>yt-unsub-detector</code> package for Ubuntu 26.10 (<code>stonking</code>). Its packages are architecture-independent.</p>
+  <p>Verify <a href="archive-keyring.fingerprint.txt">the signing-key fingerprint</a> against the fingerprint published by the maintainer before installing the key. Do not use <code>trusted=yes</code> or disable signature verification.</p>
+  <pre>sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://patrickbuhagiar24.github.io/youtube/archive-keyring.gpg | sudo tee /etc/apt/keyrings/yt-unsub-detector.gpg &gt; /dev/null
+sudo chmod 0644 /etc/apt/keyrings/yt-unsub-detector.gpg
+curl -fsSL https://patrickbuhagiar24.github.io/youtube/yt-unsub-detector.sources | sudo tee /etc/apt/sources.list.d/yt-unsub-detector.sources &gt; /dev/null
+sudo apt update
+sudo apt install yt-unsub-detector</pre>
+  <p>APT registers the extension for Chrome/Chromium automatically. Restart the browser after installation. Optional Google Drive configuration is stored per user under <code>~/.config/yt-unsub-detector</code>, outside the extension package, using only <code>google-drive.json</code> (file link) and <code>service-account.json</code> (key).</p>
+  <p><a href="https://github.com/patrickbuhagiar24/youtube">Source code, documentation, and license</a> · <a href="dists/stonking/InRelease">Signed release metadata</a></p>
+</body>
+</html>

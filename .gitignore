@@ -1,0 +1,19 @@
+# Local credentials must never be committed or included in binary packages.
+/service-account.json
+*.private.asc
+*.pem
+*.key
+.env
+.env.*
+
+# Build outputs and local tooling.
+/.cache/
+/dist/
+/artifacts/
+/node_modules/
+/.venv/
+__pycache__/
+*.pyc
+/debian/yt-unsub-detector/
+/debian/files
+/debian/*.substvars
