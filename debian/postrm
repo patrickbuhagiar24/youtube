@@ -1,0 +1,34 @@
+#!/bin/sh
+# Remove browser registration when the package is removed; purge local CRX state.
+set -eu
+
+STATE=/var/lib/yt-unsub-detector
+
+case "${1:-}" in
+  remove|purge)
+    python3 - <<'PY'
+import json
+from pathlib import Path
+crx = '/usr/share/yt-unsub-detector/yt-unsub-detector.crx'
+for directory in ('/usr/share/google-chrome/extensions', '/usr/share/chromium/extensions'):
+    base = Path(directory)
+    if not base.is_dir():
+        continue
+    for path in base.glob('*.json'):
+        try:
+            if json.loads(path.read_text()).get('external_crx') == crx:
+                path.unlink(missing_ok=True)
+        except (OSError, ValueError, AttributeError):
+            continue
+for directory in ('/etc/opt/chrome/native-messaging-hosts', '/etc/chromium/native-messaging-hosts'):
+    path = Path(directory) / 'io.github.patrickbuhagiar24.yt_unsub_detector.json'
+    path.unlink(missing_ok=True)
+PY
+    rm -f /usr/share/yt-unsub-detector/yt-unsub-detector.crx
+    if [ "$1" = purge ]; then
+      rm -rf "$STATE"
+    fi
+    ;;
+esac
+
+exit 0

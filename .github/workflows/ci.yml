@@ -1,0 +1,65 @@
+name: Test and build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-26-10:
+    name: Ubuntu 26.10 package
+    runs-on: ubuntu-latest
+    container: ubuntu:26.10
+    steps:
+      - name: Install build and test tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git nodejs python3 openssl build-essential dpkg-dev make gzip xz-utils util-linux
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check source and build package
+        run: |
+          dpkg-checkbuilddeps
+          make test
+          make package
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb
+      - name: Test APT installation and browser registration
+        run: |
+          apt-get install -y ./dist/*.deb
+          useradd --create-home extension-test
+          runuser -u extension-test -- yt-unsub-detector config
+          runuser -u extension-test -- yt-unsub-detector status
+          runuser -u extension-test -- yt-unsub-detector --version
+          test -f /usr/share/yt-unsub-detector/yt-unsub-detector.crx
+          test -f /etc/opt/chrome/native-messaging-hosts/io.github.patrickbuhagiar24.yt_unsub_detector.json
+          test -f /etc/chromium/native-messaging-hosts/io.github.patrickbuhagiar24.yt_unsub_detector.json
+          test -f /home/extension-test/.config/yt-unsub-detector/google-drive.json
+          test -f /home/extension-test/.config/yt-unsub-detector/service-account.json
+          test ! -e /home/extension-test/.config/yt-unsub-detector/drive-config.json
+          test "$(stat -c '%a' /home/extension-test/.config/yt-unsub-detector/google-drive.json)" = 600
+          test "$(stat -c '%a' /home/extension-test/.config/yt-unsub-detector/service-account.json)" = 600
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(Path('/var/lib/yt-unsub-detector/state.json').read_text())
+          extension = state['extensionId']
+          version = json.loads(Path('/usr/share/yt-unsub-detector/extension/manifest.json').read_text())['version']
+          for directory in ('/usr/share/google-chrome/extensions', '/usr/share/chromium/extensions'):
+              pref = json.loads((Path(directory) / f'{extension}.json').read_text())
+              assert pref['external_version'] == version
+              assert Path(pref['external_crx']).is_file()
+          for directory in ('/etc/opt/chrome/native-messaging-hosts', '/etc/chromium/native-messaging-hosts'):
+              host = json.loads((Path(directory) / 'io.github.patrickbuhagiar24.yt_unsub_detector.json').read_text())
+              assert host['allowed_origins'] == [f'chrome-extension://{extension}/']
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: yt-unsub-detector-deb
+          path: |
+            dist/*.deb
+            dist/SHA256SUMS
+          if-no-files-found: error

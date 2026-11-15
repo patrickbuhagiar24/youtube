@@ -2,12 +2,13 @@
   "manifest_version": 3,
   "name": "YT Unsub Detector",
   "short_name": "YT Unsub",
-  "version": "1.17.1",
-  "description": "Menandai video dan channel YouTube yang belum Anda subscribe, di semua halaman YouTube.",
+  "version": "1.21.0",
+  "description": "Marks videos and channels you are not subscribed to across YouTube.",
   "minimum_chrome_version": "111",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",

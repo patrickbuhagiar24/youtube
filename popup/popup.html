@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>YT Unsub Detector</title>
@@ -9,69 +9,69 @@
   <header>
     <img src="../icons/icon48.png" alt="" width="28" height="28">
     <h1>YT Unsub Detector</h1>
-    <label class="switch" title="Nyalakan / matikan">
-      <input type="checkbox" id="enabled">
+    <label class="switch" title="Enable or disable the extension" aria-label="Enable or disable the extension">
+      <input type="checkbox" id="enabled" aria-label="Enable or disable the extension">
       <span></span>
     </label>
   </header>
 
-  <!-- Ringkasan -->
+  <!-- Summary -->
   <section class="card">
     <div class="stat">
-      <div><b id="total">–</b><small>channel di-subscribe</small></div>
+      <div><b id="total">–</b><small>subscribed channels</small></div>
     </div>
-    <em id="status" class="muted">–</em>
+    <em id="status" class="muted" aria-live="polite">–</em>
     <div id="channelPage" class="chan hidden"></div>
-    <div id="error" class="err hidden"></div>
-    <button id="syncBtn">🔄 Perbarui daftar</button>
+    <div id="error" class="err hidden" role="alert"></div>
+    <button id="syncBtn">🔄 Refresh list</button>
   </section>
 
-  <!-- Daftar unsubscribe + Google Drive (satu baris) -->
+  <!-- Unsubscribe history + Google Drive (one row) -->
   <section class="card drive">
     <span class="dotl"></span>
     <div class="grow">
-      <div><b id="unsubCount">0</b> channel pernah di-unsubscribe</div>
-      <small id="driveStatus" class="muted">Google Drive belum diatur</small>
+      <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
+      <small id="driveStatus" class="muted" aria-live="polite">Google Drive is not configured</small>
     </div>
-    <button id="driveSyncBtn" class="icon hidden" title="Sinkronkan dengan Google Drive sekarang">🔄</button>
+    <button id="driveSyncBtn" class="icon hidden" title="Sync with Google Drive now" aria-label="Sync with Google Drive now">🔄</button>
   </section>
 
-  <!-- Pengaturan (dilipat) -->
+  <!-- Collapsible settings -->
   <details class="card">
-    <summary>⚙️ Pengaturan</summary>
+    <summary>⚙️ Settings</summary>
     <label class="field">
-      <span>Cara menandai</span>
+      <span>Display mode</span>
       <select id="mode">
-        <option value="highlight">Garis warna + tombol + (disarankan)</option>
-        <option value="badge">Tombol + saja</option>
-        <option value="dim">Buramkan yang sudah di-subscribe</option>
-        <option value="only-unsub">Tampilkan hanya yang belum di-subscribe</option>
-        <option value="hide-unsub">Sembunyikan yang belum di-subscribe</option>
+        <option value="highlight">Colored outline + subscribe button (recommended)</option>
+        <option value="badge">Subscribe button only</option>
+        <option value="dim">Dim subscribed channels</option>
+        <option value="only-unsub">Show unsubscribed channels only</option>
+        <option value="hide-unsub">Hide unsubscribed channels</option>
       </select>
     </label>
     <div class="field inline">
-      <span>Warna</span>
+      <span>Colors</span>
       <span class="colors">
-        <label title="Belum di-subscribe"><input type="color" id="color"> belum</label>
-        <label title="Pernah di-unsubscribe"><input type="color" id="leftColor"> pernah unsub</label>
+        <label title="Not subscribed"><input type="color" id="color" aria-label="Not subscribed color"> not subscribed</label>
+        <label title="Previously unsubscribed"><input type="color" id="leftColor" aria-label="Previously unsubscribed color"> previously left</label>
       </span>
     </div>
-    <label class="field inline"><span>Tombol <b class="plus">+</b> <b class="plus minus">−</b> di video</span><input type="checkbox" id="showSubButton"></label>
-    <label class="field inline"><span>Belum di-subscribe di paling atas &amp; hapus video ganda</span><input type="checkbox" id="sortUnsub"></label>
+    <label class="field inline"><span>Subscribe <b class="plus">+</b> / unsubscribe <b class="plus minus">−</b> buttons on videos</span><input type="checkbox" id="showSubButton"></label>
+    <label class="field inline"><span>Unsubscribed channels first &amp; hide duplicate videos</span><input type="checkbox" id="sortUnsub"></label>
     <label class="field inline">
-      <span>Perbarui daftar otomatis</span>
+      <span>Automatically refresh the list</span>
       <select id="autoSyncHours">
-        <option value="1">1 jam</option><option value="3">3 jam</option><option value="6">6 jam</option>
-        <option value="12">12 jam</option><option value="24">1 hari</option><option value="168">1 minggu</option>
+        <option value="1">Every hour</option><option value="3">Every 3 hours</option><option value="6">Every 6 hours</option>
+        <option value="12">Every 12 hours</option><option value="24">Every day</option><option value="168">Every week</option>
       </select>
     </label>
     <div class="links">
-      <a id="exportBtn" href="#">⬇️ Unduh daftar (CSV)</a>
-      <a id="openFeedBtn" href="#">📋 Lihat di YouTube</a>
+      <a id="exportBtn" href="#">⬇️ Export list (CSV)</a>
+      <a id="openFeedBtn" href="#">📋 View on YouTube</a>
     </div>
   </details>
 
-  <footer>Versi <span id="ver"></span></footer>
+  <footer>Version <span id="ver"></span></footer>
   <script src="../shared.js"></script>
   <script src="popup.js"></script>
 </body>

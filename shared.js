@@ -1,5 +1,6 @@
 /*
- * Konstanta bersama. Dimuat oleh: content script (MAIN & isolated world), popup, dan service worker.
+ * Shared constants. Loaded by the content scripts (MAIN and isolated worlds),
+ * the popup, and the service worker.
  */
 // eslint-disable-next-line no-unused-vars, no-var
 var YTUC = Object.freeze({
@@ -8,12 +9,12 @@ var YTUC = Object.freeze({
     mode: 'highlight', // highlight | badge | dim | only-unsub | hide-unsub
     color: '#ff3d00',
     showSubButton: true,
-    sortUnsub: true, // urutkan video yang belum di-subscribe ke paling atas
-    leftColor: '#ffd400', // bingkai channel yang pernah di-unsubscribe
+    sortUnsub: true, // Move videos from unsubscribed channels to the top
+    leftColor: '#ffd400', // Outline for previously unsubscribed channels
     autoSyncHours: 6
   }),
 
-  // Elemen kartu yang diberi tanda
+  // Card elements to mark
   CARD_SEL: [
     'ytd-rich-item-renderer', 'ytd-video-renderer', 'ytd-compact-video-renderer',
     'ytd-grid-video-renderer', 'ytd-playlist-renderer', 'ytd-compact-playlist-renderer',
@@ -22,20 +23,20 @@ var YTUC = Object.freeze({
     'ytd-video-owner-renderer', 'yt-lockup-view-model'
   ].join(','),
 
-  // Muat otomatis sebelum diurutkan (Beranda, Pencarian, samping tonton): berhenti di jumlah ini, atau bila tak ada tambahan
+  // Autoload before sorting (Home, Search, watch sidebar): stop at this count or when no more items arrive
   AUTOLOAD: Object.freeze({ limit: 500, stallMs: 15000 }),
 
-  // Kunci penyimpanan lokal yang dipakai (selain ini dibersihkan saat update)
+  // Local storage keys in use (other keys are removed on update)
   STORE_KEYS: Object.freeze(['ytucSubs', 'ytucUnsubs', 'ytucDrive']),
 
-  // Berkas Google Drive untuk daftar channel yang di-unsubscribe (dikonfirmasi pengguna)
+  // Google Drive file for the user-confirmed unsubscribe history
   DRIVE_FILE: 'YouTube.json',
 
-  // Status daftar subscription (bahasa sederhana)
+  // Subscription list status in plain English
   STATUS: Object.freeze({
-    complete: '✅ Daftar lengkap',
-    merged: '✅ Daftar lengkap',
-    capped: '⚠️ Daftar belum lengkap',
-    partial: '⚠️ Daftar belum lengkap'
+    complete: '✅ Complete list',
+    merged: '✅ Complete list',
+    capped: '⚠️ Incomplete list',
+    partial: '⚠️ Incomplete list'
   })
 });

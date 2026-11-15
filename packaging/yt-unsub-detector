@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec python3 /usr/share/yt-unsub-detector/cli.py "$@"
