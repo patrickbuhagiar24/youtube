@@ -34,8 +34,6 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    env:
-      GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
     permissions:
       contents: read
       pages: write
@@ -56,6 +54,7 @@ jobs:
       - name: Import repository GPG key
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
         run: |
           set -euo pipefail
           test -n "$GPG_PRIVATE_KEY" || { echo 'Configure the GPG_PRIVATE_KEY repository secret first.'; exit 1; }
@@ -75,9 +74,12 @@ jobs:
       - name: Sign and verify archive
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
         run: bash scripts/sign-apt-repository.sh site stonking
       - name: Remove temporary GPG keyring
         if: always()
+        env:
+          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
         run: |
           if [ -d "$GNUPGHOME" ]; then
             gpgconf --kill gpg-agent || true

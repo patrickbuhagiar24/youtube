@@ -51,6 +51,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertNotIn('secrets.APT_SIGNING_', text)
         self.assertNotIn('echo "$GPG_PRIVATE_KEY"', text)
         self.assertNotIn('echo "$GPG_PASSPHRASE"', text)
+        # GitHub rejects runner.temp in job-level env; keep it on the steps.
+        self.assertNotIn('    env:\n      GNUPGHOME: ${{ runner.temp }}', text)
+        self.assertEqual(text.count('          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg'), 3)
 
 
 if __name__ == '__main__':
