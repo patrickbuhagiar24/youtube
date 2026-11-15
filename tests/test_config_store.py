@@ -1,11 +1,15 @@
+import contextlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).parents[1]
 
@@ -151,17 +155,40 @@ class ConfigStoreTests(unittest.TestCase):
         config_store.ensure_config()
         self.assertEqual(path.read_text(), '{"link":"new"}')
 
+    def load_cli(self):
+        packaging = str(ROOT / 'packaging')
+        sys.path.insert(0, packaging)
+        self.addCleanup(sys.path.remove, packaging)
+        return load('cli', 'packaging/cli.py')
+
     def test_cli_prints_two_paths_and_status(self):
-        env = dict(os.environ)
-        config = subprocess.run(['python3', str(ROOT / 'packaging' / 'cli.py'), 'config'], capture_output=True, text=True, env=env, check=True)
-        self.assertIn('Google Drive configuration:', config.stdout)
-        self.assertIn('google-drive.json', config.stdout)
-        self.assertIn('service-account.json', config.stdout)
-        self.assertNotIn('drive-config.json', config.stdout)
-        status = subprocess.run(['python3', str(ROOT / 'packaging' / 'cli.py'), 'status'], capture_output=True, text=True, env=env, check=True)
-        self.assertIn('Configuration file:', status.stdout)
-        self.assertIn('Drive link configured: no', status.stdout)
-        self.assertNotIn('drive-config.json', status.stdout)
+        # The CI container runs as root. Test the desktop-user path in process;
+        # the workflow separately runs the installed CLI through runuser.
+        cli = self.load_cli()
+        stdout = io.StringIO()
+        with mock.patch.object(cli.os, 'geteuid', return_value=1000), contextlib.redirect_stdout(stdout):
+            self.assertEqual(cli.main(['config']), 0)
+        text = stdout.getvalue()
+        self.assertIn('Google Drive configuration:', text)
+        self.assertIn('google-drive.json', text)
+        self.assertIn('service-account.json', text)
+        self.assertNotIn('drive-config.json', text)
+
+        stdout = io.StringIO()
+        with mock.patch.object(cli.os, 'geteuid', return_value=1000), contextlib.redirect_stdout(stdout):
+            self.assertEqual(cli.main(['status']), 0)
+        text = stdout.getvalue()
+        self.assertIn('Configuration file:', text)
+        self.assertIn('Drive link configured: no', text)
+        self.assertNotIn('drive-config.json', text)
+
+    def test_cli_refuses_root(self):
+        cli = self.load_cli()
+        stderr = io.StringIO()
+        with mock.patch.object(cli.os, 'geteuid', return_value=0), contextlib.redirect_stderr(stderr):
+            self.assertEqual(cli.main(['config']), 1)
+        self.assertIn('without sudo', stderr.getvalue())
+        self.assertFalse((self.root / '.config').exists())
 
 
 class BrowserSetupTests(unittest.TestCase):
