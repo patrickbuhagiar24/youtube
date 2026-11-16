@@ -18,7 +18,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates git nodejs python3 openssl build-essential dpkg-dev make gzip xz-utils util-linux
+            ca-certificates git nodejs python3 openssl build-essential dpkg-dev make gzip xz-utils util-linux passwd
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check source and build package
         run: |
