@@ -9,11 +9,14 @@ case "${1:-}" in
   configure)
     install -d -m 0700 "$STATE"
     if [ ! -f "$KEY" ]; then
-      umask 077
-      openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEY.tmp"
-      mv "$KEY.tmp" "$KEY"
+      ( umask 077
+        openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEY.tmp"
+        mv "$KEY.tmp" "$KEY"
+      )
     fi
     chmod 0600 "$KEY"
+    # Browser registration and host directories must be accessible to desktop users.
+    umask 022
     python3 /usr/share/yt-unsub-detector/browser_setup.py
     ;;
 esac

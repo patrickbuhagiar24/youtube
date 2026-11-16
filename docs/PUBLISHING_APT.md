@@ -84,8 +84,8 @@ bash scripts/sign-apt-repository.sh dist/apt stonking
 Commit and push the reviewed changes through your normal review process. After merging, publish a version tag matching the extension release:
 
 ```bash
-git tag v1.21.0
-git push origin v1.21.0
+git tag v1.21.0ubuntu2
+git push origin v1.21.0ubuntu2
 ```
 
 Alternatively, run **Publish signed APT repository** manually from the Actions tab. The workflow refuses to publish without signing secrets. Each publication replaces the archive with the packages from that release; it is not an accumulating mirror. Keep previous release artifacts elsewhere if rollback is required.

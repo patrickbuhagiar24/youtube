@@ -207,6 +207,22 @@ class BrowserSetupTests(unittest.TestCase):
         self.key = self.root / 'key.pem'
         subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048', '-out', str(self.key)], check=True, capture_output=True)
 
+    def test_repairs_only_private_owned_shared_directories(self):
+        private = self.root / 'private'
+        private.mkdir(mode=0o700)
+        already_public = self.root / 'public'
+        already_public.mkdir(mode=0o750)
+        link = self.root / 'link'
+        link.symlink_to(private, target_is_directory=True)
+        nested = private / 'nested'
+        nested.mkdir(mode=0o700)
+        self.browser_setup.repair_private_shared_dirs(
+            (link, link / 'nested', private, already_public, self.root / 'missing'), owner=os.geteuid()
+        )
+        self.assertEqual(private.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(nested.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(already_public.stat().st_mode & 0o777, 0o750)
+
     def test_crx3_signature_id_and_registration(self):
         crx = self.root / 'test.crx'
         extension_id, version = self.browser_setup.build_crx(self.source, self.key, crx)

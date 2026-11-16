@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import struct
 import subprocess
 import tempfile
@@ -24,6 +25,27 @@ NATIVE_DIRS = (
     Path('/etc/chromium/native-messaging-hosts'),
 )
 EXCLUDED = {'drive-config.json', 'google-drive.json', 'service-account.json'}
+# Previous versions could create these shared browser directories with mode 0700.
+SHARED_DIRS = (
+    Path('/usr/share/google-chrome'), *EXTERNAL_DIRS[:1],
+    Path('/usr/share/chromium'), *EXTERNAL_DIRS[1:],
+    Path('/etc/opt'), Path('/etc/opt/chrome'), NATIVE_DIRS[0],
+    Path('/etc/chromium'), NATIVE_DIRS[1],
+)
+
+
+def repair_private_shared_dirs(directories=SHARED_DIRS, owner=0) -> None:
+    """Repair only root-owned 0700 browser directories, never following symlinks."""
+    for path in directories:
+        try:
+            # Do not alter paths reached through a symlink in any ancestor.
+            if any(part.is_symlink() for part in (path, *path.parents)):
+                continue
+            info = path.lstat()
+            if stat.S_ISDIR(info.st_mode) and info.st_uid == owner and stat.S_IMODE(info.st_mode) == 0o700:
+                path.chmod(0o755)
+        except FileNotFoundError:
+            continue
 
 
 def _varint(value: int) -> bytes:
@@ -117,6 +139,7 @@ def main() -> int:
     key = STATE / 'crx-private.pem'
     crx = SHARE / 'yt-unsub-detector.crx'
     extension, version = build_crx(SHARE / 'extension', key, crx)
+    repair_private_shared_dirs()
     register(extension, version, crx)
     _write_json(STATE / 'state.json', {'extensionId': extension, 'version': version})
     print(f'Registered YT Unsub Detector {version} ({extension}) for Chrome/Chromium.')

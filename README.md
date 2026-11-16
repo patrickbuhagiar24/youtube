@@ -62,7 +62,7 @@ Restart the browser so it notices the removed registration. User configuration u
 If you have a built package instead of a published repository:
 
 ```bash
-sudo apt install ./dist/yt-unsub-detector_1.21.0ubuntu1_all.deb
+sudo apt install ./dist/yt-unsub-detector_1.21.0ubuntu2_all.deb
 ```
 
 Restart the browser afterward.
