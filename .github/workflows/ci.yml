@@ -31,9 +31,29 @@ jobs:
         run: |
           apt-get install -y ./dist/*.deb
           useradd --create-home extension-test
+          extension=$(python3 -c "import json; print(json.load(open('/var/lib/yt-unsub-detector/state.json'))['extensionId'])")
+          for directory in /usr/share/google-chrome/extensions /usr/share/chromium/extensions; do
+            runuser -u extension-test -- test -r "$directory/$extension.json"
+          done
+          for directory in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts; do
+            runuser -u extension-test -- test -r "$directory/io.github.patrickbuhagiar24.yt_unsub_detector.json"
+          done
           runuser -u extension-test -- yt-unsub-detector config
           runuser -u extension-test -- yt-unsub-detector status
           runuser -u extension-test -- yt-unsub-detector --version
+          # Simulate directories left private by the previous package, then reconfigure.
+          chmod 700 /usr/share/google-chrome /usr/share/google-chrome/extensions \
+            /usr/share/chromium /usr/share/chromium/extensions \
+            /etc/opt/chrome /etc/opt/chrome/native-messaging-hosts \
+            /etc/chromium /etc/chromium/native-messaging-hosts
+          /var/lib/dpkg/info/yt-unsub-detector.postinst configure
+          test "$extension" = "$(python3 -c "import json; print(json.load(open('/var/lib/yt-unsub-detector/state.json'))['extensionId'])")"
+          for directory in /usr/share/google-chrome/extensions /usr/share/chromium/extensions; do
+            runuser -u extension-test -- test -r "$directory/$extension.json"
+          done
+          for directory in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts; do
+            runuser -u extension-test -- test -r "$directory/io.github.patrickbuhagiar24.yt_unsub_detector.json"
+          done
           test -f /usr/share/yt-unsub-detector/yt-unsub-detector.crx
           test -f /etc/opt/chrome/native-messaging-hosts/io.github.patrickbuhagiar24.yt_unsub_detector.json
           test -f /etc/chromium/native-messaging-hosts/io.github.patrickbuhagiar24.yt_unsub_detector.json

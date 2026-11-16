@@ -1,3 +1,10 @@
+yt-unsub-detector (1.21.0ubuntu2) stonking; urgency=medium
+
+  * Fix browser registration directories created with restrictive permissions.
+  * Repair affected shared directories during package upgrades and test user access.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Mon, 16 Nov 2026 04:00:00 +0000
+
 yt-unsub-detector (1.21.0ubuntu1) stonking; urgency=medium
 
   * Store per-user Google Drive configuration only in google-drive.json and service-account.json.
