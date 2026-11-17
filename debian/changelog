@@ -1,3 +1,10 @@
+yt-unsub-detector (1.21.0ubuntu3) stonking; urgency=medium
+
+  * Publish the signed GitHub Pages APT archive on pushes to main.
+  * Update publication and installation documentation.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Tue, 17 Nov 2026 06:52:44 +0000
+
 yt-unsub-detector (1.21.0ubuntu2) stonking; urgency=medium
 
   * Fix browser registration directories created with restrictive permissions.
