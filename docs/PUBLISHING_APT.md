@@ -56,8 +56,8 @@ GitHub Pages must be enabled once by a repository administrator; the publish wor
 1. Open `https://github.com/patrickbuhagiar24/youtube/settings/pages`.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions** (not **Deploy from a branch**).
 3. Save/confirm the selection. The expected URL is `https://patrickbuhagiar24.github.io/youtube/`.
-4. Open **Settings → Environments → github-pages**. If **Deployment branches and tags** has protection rules, allow the release tags used by this workflow (for example `v*`) or choose **No restriction**. A tag-triggered deployment can otherwise be rejected even though the build succeeded.
-5. Run the publish workflow manually from **Actions → Publish signed APT repository → Run workflow**, or push a matching version tag after the changes are merged.
+4. Open **Settings → Environments → github-pages**. If **Deployment branches and tags** has protection rules, allow the `main` branch or choose **No restriction**. A deployment can otherwise be rejected even though the build succeeded.
+5. A push to `main` automatically runs the publish workflow. Alternatively, run **Actions → Publish signed APT repository → Run workflow** and select `main`.
 
 If you fork or rename the repository, update `packaging/yt-unsub-detector.sources`, `packaging/apt-index.html`, and the installation commands in `README.md` before publishing.
 
@@ -81,14 +81,9 @@ Do not publish `dist/apt` while it is unsigned. For a local signed test, import 
 bash scripts/sign-apt-repository.sh dist/apt stonking
 ```
 
-Commit and push the reviewed changes through your normal review process. After merging, publish a version tag matching the extension release:
+Commit and push the reviewed changes through your normal review process. A push to `main`, including a pull request merge, automatically builds, tests, signs, and deploys the APT archive to GitHub Pages. Version tags may still be used for releases, but they do not trigger this workflow. Alternatively, run **Publish signed APT repository** manually from the Actions tab and select `main`.
 
-```bash
-git tag v1.21.0ubuntu2
-git push origin v1.21.0ubuntu2
-```
-
-Alternatively, run **Publish signed APT repository** manually from the Actions tab. The workflow refuses to publish without signing secrets. Each publication replaces the archive with the packages from that release; it is not an accumulating mirror. Keep previous release artifacts elsewhere if rollback is required.
+The workflow refuses to publish without signing secrets. Each publication replaces the archive with the packages from that build; it is not an accumulating mirror. Keep previous release artifacts elsewhere if rollback is required. Increment the Debian package version whenever package contents change: APT will not automatically upgrade an installed package to a different build with the same version.
 
 Publish the full signing-key fingerprint through a trusted maintainer channel so users can verify `archive-keyring.fingerprint.txt` before trusting the downloaded key. HTTPS alone is not a substitute for APT signatures. Do not use `[trusted=yes]`, `--allow-unauthenticated`, or the deprecated global `apt-key` store.
 
@@ -113,14 +108,14 @@ The CRX signing key is machine-local, created under `/var/lib/yt-unsub-detector`
 
 ## Upgrades and removal
 
-Bump `manifest.json` and add a matching `debian/changelog` entry before tagging a new version. APT upgrades rebuild the registered CRX with the same machine-local key and update the external-extension version. Users restart the browser; browser extension storage and user Drive configuration are preserved.
+Before merging changes to package contents, add a newer version to `debian/changelog`. Also bump `manifest.json` when the extension itself changes; its version must change for browser extension upgrades. APT upgrades rebuild the registered CRX with the same machine-local key. Users restart the browser; browser extension storage and user Drive configuration are preserved.
 
 `apt remove` deletes the browser registration and native-host manifests. `apt purge` also deletes the machine-local CRX key, so a later reinstall creates a new extension ID. User configuration under `~/.config/yt-unsub-detector` is not removed by either command.
 
 ## Troubleshooting
 
 - **404 for `InRelease`:** Pages has not been published yet, or the workflow failed. Check Actions and confirm **Settings → Pages → Source** is **GitHub Actions**.
-- **Pages deployment rejected for a tag:** check **Settings → Environments → github-pages → Deployment branches and tags** and allow the tag ref (for example `v*`).
+- **Pages deployment rejected for `main`:** check **Settings → Environments → github-pages → Deployment branches and tags** and allow the `main` branch.
 - **Missing public key / unsigned repository:** configure the signing secrets and rerun publication. Never work around this by disabling verification.
 - **Wrong suite:** Ubuntu 26.10 must use `stonking`, not `26.10`, `stable`, or another Ubuntu codename.
 - **Package installed but no browser toolbar icon:** restart Chrome/Chromium. This packaging supports `.deb` browser installs, not Snap/Flatpak builds.

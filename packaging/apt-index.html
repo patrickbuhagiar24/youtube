@@ -9,13 +9,38 @@
 <body>
   <h1>YT Unsub Detector APT repository</h1>
   <p>This repository provides the <code>yt-unsub-detector</code> package for Ubuntu 26.10 (<code>stonking</code>). Its packages are architecture-independent.</p>
-  <p>Verify <a href="archive-keyring.fingerprint.txt">the signing-key fingerprint</a> against the fingerprint published by the maintainer before installing the key. Do not use <code>trusted=yes</code> or disable signature verification.</p>
-  <pre>sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://patrickbuhagiar24.github.io/youtube/archive-keyring.gpg | sudo tee /etc/apt/keyrings/yt-unsub-detector.gpg &gt; /dev/null
-sudo chmod 0644 /etc/apt/keyrings/yt-unsub-detector.gpg
-curl -fsSL https://patrickbuhagiar24.github.io/youtube/yt-unsub-detector.sources | sudo tee /etc/apt/sources.list.d/yt-unsub-detector.sources &gt; /dev/null
-sudo apt update
-sudo apt install yt-unsub-detector</pre>
+  <p>Obtain the full 40-character signing-key fingerprint through a trusted maintainer channel independent of this website. The commands require Bash, curl, and gpg (gnupg). They download the key into a private temporary directory and ask for the trusted fingerprint before changing system files. If it is unavailable or does not match, stop and contact the maintainer. Do not use <code>trusted=yes</code> or disable signature verification.</p>
+  <pre>(
+  set -euo pipefail
+  tmpdir=$(mktemp -d)
+  trap &#x27;rm -rf &quot;$tmpdir&quot;&#x27; EXIT
+  curl --fail --silent --show-error --location --proto &#x27;=https&#x27; --proto-redir &#x27;=https&#x27; \
+    -o &quot;$tmpdir/archive-keyring.gpg&quot; \
+    https://patrickbuhagiar24.github.io/youtube/archive-keyring.gpg
+  fingerprint=$(gpg --batch --with-colons --show-keys &quot;$tmpdir/archive-keyring.gpg&quot; |
+    awk -F: &#x27;$1 == &quot;pub&quot; { count++; want = 1; next }
+      want &amp;&amp; $1 == &quot;fpr&quot; { print $10; want = 0 }
+      END { if (count != 1) exit 1 }&#x27;)
+  [[ &quot;$fingerprint&quot; =~ ^[A-F0-9]{40}$ ]] || { echo &#x27;Invalid key fingerprint.&#x27; &gt;&amp;2; exit 1; }
+  printf &#x27;Downloaded key fingerprint: %s\n&#x27; &quot;$fingerprint&quot;
+  read -r -p &#x27;Enter the independently verified fingerprint: &#x27; expected
+  expected=${expected//[[:space:]]/}
+  [[ &quot;${expected^^}&quot; == &quot;$fingerprint&quot; ]] || { echo &#x27;Fingerprint mismatch; nothing installed.&#x27; &gt;&amp;2; exit 1; }
+  cat &gt; &quot;$tmpdir/yt-unsub-detector.sources&quot; &lt;&lt;&#x27;EOF&#x27;
+Types: deb
+URIs: https://patrickbuhagiar24.github.io/youtube/
+Suites: stonking
+Components: main
+Architectures: all
+Signed-By: /etc/apt/keyrings/yt-unsub-detector.gpg
+EOF
+  sudo install -d -m 0755 /etc/apt/keyrings
+  sudo install -m 0644 &quot;$tmpdir/archive-keyring.gpg&quot; /etc/apt/keyrings/yt-unsub-detector.gpg
+  sudo install -m 0644 &quot;$tmpdir/yt-unsub-detector.sources&quot; /etc/apt/sources.list.d/yt-unsub-detector.sources
+  sudo apt update
+  sudo apt install yt-unsub-detector
+)</pre>
+  <p>The source configuration is generated locally and scopes the verified key to this repository. The temporary directory is removed when the commands finish or fail.</p>
   <p>APT registers the extension for Chrome/Chromium automatically. Restart the browser after installation. Optional Google Drive configuration is stored per user under <code>~/.config/yt-unsub-detector</code>, outside the extension package, using only <code>google-drive.json</code> (file link) and <code>service-account.json</code> (key).</p>
   <p><a href="https://github.com/patrickbuhagiar24/youtube">Source code, documentation, and license</a> · <a href="dists/stonking/InRelease">Signed release metadata</a></p>
 </body>
