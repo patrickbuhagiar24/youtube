@@ -71,6 +71,60 @@ Restart **all** Chrome windows, then open <https://www.youtube.com> and sign in.
 
 The package only places the signed CRX under `/usr/share/yousub` and registers it for Chrome and Chromium. It installs **no CLI command, native messaging host, or per-user configuration files**. Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
 
+### If the extension is not added automatically
+
+Chrome reads the registration file **only at browser startup** and only in the Chrome build that uses the system paths. Check the browser first:
+
+```bash
+google-chrome --version
+readlink -f "$(command -v google-chrome)"
+pgrep -a chrome
+```
+
+The path must be the Google Chrome `.deb` binary (normally `/opt/google/chrome/chrome`). Snap/Flatpak Chrome and Chromium do not read the Google Chrome registration path. If several Chrome processes are still listed, close them all before starting the browser again.
+
+To confirm that the package registration itself works, start Chrome with a new, empty profile:
+
+```bash
+mkdir -p /tmp/yousub-chrome-profile
+google-chrome --user-data-dir=/tmp/yousub-chrome-profile --no-first-run --no-default-browser-check
+```
+
+Open `chrome://extensions` in that window. If YOUSUB appears there, the package is fine and the regular profile has blocked the external installation. Chrome does this when an externally installed extension was previously removed through the Extensions page; it stores the ID in `extensions.external_uninstalls` and never re-adds it automatically.
+
+Close **all** Chrome windows, back up the profile preferences, and remove only that ID from the blocklist:
+
+```bash
+python3 - <<'PY'
+import json
+import pathlib
+import shutil
+
+root = pathlib.Path.home() / '.config/google-chrome'
+ident = 'bjcloclfnfkohlbefpdiaohakphaobff'
+for pref in [root / 'Default/Preferences', *root.glob('Profile */Preferences')]:
+    if not pref.exists():
+        continue
+    data = json.loads(pref.read_text())
+    ext = data.get('extensions', {})
+    entries = ext.get('external_uninstalls')
+    if isinstance(entries, dict):
+        changed = entries.pop(ident, None) is not None
+    elif isinstance(entries, list):
+        kept = [x for x in entries if (x.get('id') if isinstance(x, dict) else x) != ident]
+        changed = len(kept) != len(entries)
+        ext['external_uninstalls'] = kept
+    else:
+        continue
+    if changed:
+        shutil.copy2(pref, str(pref) + '.yousub-backup')
+        pref.write_text(json.dumps(data, separators=(',', ':')))
+        print(f'Unblocked YOUSUB in {pref}')
+PY
+```
+
+Start Chrome again and check `chrome://extensions`. The preferences backup can be restored while Chrome is closed if needed. A fresh Chrome profile is a supported alternative if you do not want to edit preferences.
+
 ## Extension ID and the CRX key
 
 A Chrome extension ID is derived from its **public signing key**: Chrome takes the first 16 bytes of the SHA-256 hash of the DER-encoded public key and maps each nibble to `a`–`p`. The ID therefore stays the same when the extension is reinstalled **as long as the same key is used**. If the key changes or is lost, the ID changes and Chrome treats it as a different extension, so its browser storage (settings, subscription list, and local unsubscribe history) does not carry over.
