@@ -49,8 +49,6 @@ test('the Debian package only registers the signed CRX', () => {
   assert.match(workflow, /dpkg-deb --root-owner-group/);
   assert.match(workflow, /yousub_\${VERSION}_all\.deb/);
   assert.match(workflow, /yousub_\*\.deb/);
-  assert.match(workflow, /Publish GitHub Release/);
-  assert.match(workflow, /permissions:\n      contents: write/);
 });
 
 test('manifest describes the Chrome extension and declares every asset', () => {
@@ -95,9 +93,13 @@ test('the APT repository workflow is signed and deployed through Pages', () => {
   const readme = fs.readFileSync('README.md', 'utf8');
   assert.match(readme, /^## Install from the APT repository$/m);
   assert.match(readme, /patrickbuhagiar24\.github\.io\/youtube\/yousub\.sources/);
+  assert.doesNotMatch(readme, /github\.com\/patrickbuhagiar24\/youtube\/releases/);
+  assert.match(text, /gh run download/);
+  assert.match(text, /sha256sum -c checksums\.txt/);
+  assert.doesNotMatch(text, /gh release/);
 });
 
-test('the release workflow signs CRX builds with the repository secret', () => {
+test('the build workflow signs the CRX and does not publish a GitHub Release', () => {
   const text = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.match(text, /CRX_PRIVATE_KEY: \$\{\{ secrets\.CRX_PRIVATE_KEY \}\}/);
   assert.match(text, /'dgst', '-sha256', '-sign'/);

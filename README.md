@@ -25,13 +25,13 @@ This project is **only a browser extension**: there is no CLI command, native me
 3. Click **Load unpacked** and select this repository's root folder (the folder that contains `manifest.json`).
 4. Pin **YOUSUB** to the toolbar, open <https://www.youtube.com>, and sign in.
 
-A source checkout needs no installer. Released builds also include an optional `.deb` package (below).
+A source checkout needs no installer. Signed packages are distributed only through the APT repository below; no GitHub Releases are published.
 
-## Signed release builds
+## Signed builds
 
-The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch, on `v*` tags, and when a release is published. It uses the repository secret **`CRX_PRIVATE_KEY`** — an RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact.
+The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch and on `v*` tags. It uses the repository secret **`CRX_PRIVATE_KEY`** — an RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact; the APT publisher consumes that artifact directly.
 
-Because every release uses the same secret key, all users get the **same extension ID**, and reinstalling or upgrading keeps that ID and the browser storage that belongs to it. This also holds when the CRX is distributed through APT. The private key is written only to a temporary runner file with `0600` permissions; it is never printed, committed, or included in an artifact.
+Because every build uses the same secret key, all users get the **same extension ID**, and reinstalling or upgrading keeps that ID and the browser storage that belongs to it. The private key is written only to a temporary runner file with `0600` permissions; it is never printed, committed, or included in an artifact.
 
 ## Install from the APT repository
 
@@ -71,21 +71,11 @@ Restart Chrome, then open <https://www.youtube.com> and sign in. To remove the r
 
 The package only places the signed CRX under `/usr/share/yousub` and registers it in `/etc/opt/chrome/extensions` and `/etc/chromium/extensions`. It installs **no CLI command, native messaging host, or per-user configuration files**. Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
 
-### Install a downloaded .deb directly
-
-If you prefer the artifact from a GitHub Release instead of the repository:
-
-```bash
-sudo apt install ./yousub_2.0.0_all.deb
-```
-
-Restart Chrome afterward.
-
 ## Extension ID and the CRX key
 
 A Chrome extension ID is derived from its **public signing key**: Chrome takes the first 16 bytes of the SHA-256 hash of the DER-encoded public key and maps each nibble to `a`–`p`. The ID therefore stays the same when the extension is reinstalled **as long as the same key is used**. If the key changes or is lost, the ID changes and Chrome treats it as a different extension, so its browser storage (settings, subscription list, and local unsubscribe history) does not carry over.
 
-- **Unpacked installation (as above):** the signed ZIP from the release workflow already contains the `key` field, so it keeps the release ID wherever it is extracted. A raw source checkout has no `key`: Chrome then derives the ID from the folder path, and moving or renaming the folder can change it. To pin the ID of a source build, generate a key pair once and add the public key to the manifest:
+- **Unpacked installation (as above):** the signed ZIP built by the workflow already contains the `key` field, so it keeps the build ID wherever it is extracted. A raw source checkout has no `key`: Chrome then derives the ID from the folder path, and moving or renaming the folder can change it. To pin the ID of a source build, generate a key pair once and add the public key to the manifest:
 
   ```bash
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out yousub.pem

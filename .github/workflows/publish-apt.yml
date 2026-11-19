@@ -5,9 +5,12 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      run_id:
+        description: ID of a successful "Build signed YOUSUB extension" run
+        required: false
       tag:
-        description: Release tag whose yousub .deb package should be published
-        required: true
+        description: Tag to wait for when no build run ID is given
+        required: false
         default: v2.0.0
 
 permissions:
@@ -30,40 +33,45 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv
 
-      - name: Determine release tag
-        id: release
-        env:
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
-        run: echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for the signed release asset
+      - name: Find the signed build run
+        id: build
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ steps.release.outputs.tag }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
+          if [ -n "$RUN_ID" ]; then
+            echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           for attempt in $(seq 1 12); do
-            if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -q '^yousub_.*_all\.deb$'; then
-              echo "Release asset is available for $TAG"
-              exit 0
+            id=$(gh api "repos/$GH_REPO/actions/workflows/build-extension.yml/runs?per_page=20" \
+              --jq ".workflow_runs[] | select(.head_branch == \"$TAG\" and .event == \"push\") | .id" | head -n 1 || true)
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/$GH_REPO/actions/runs/$id" --jq '.status + " " + (.conclusion // "")')
+              case "$state" in
+                "completed success") echo "run_id=$id" >> "$GITHUB_OUTPUT"; exit 0 ;;
+                "completed failure") echo "Build run $id failed." >&2; exit 1 ;;
+              esac
             fi
-            echo "Waiting for the .deb asset in release $TAG ($attempt/12)..."
+            echo "Waiting for the build run for $TAG ($attempt/12)..."
             sleep 10
           done
-          echo "Release $TAG has no yousub .deb asset." >&2
+          echo "No successful build run found for $TAG." >&2
           exit 1
 
-      - name: Download the package
+      - name: Download the signed package
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p release
-          gh release download "$TAG" --pattern 'yousub_*.deb' --dir release
+          gh run download "${{ steps.build.outputs.run_id }}" --name yousub-extension --dir release
           test -n "$(find release -name 'yousub_*.deb' -print -quit)"
+          (cd release && sha256sum -c checksums.txt)
 
       - name: Build repository metadata
         run: |
