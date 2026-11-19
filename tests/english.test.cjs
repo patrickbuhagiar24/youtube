@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.2.0');
+  assert.equal(manifest.version, '2.2.1');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -71,28 +71,25 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   for (const asset of assets) assert.ok(fs.existsSync(asset), `Missing asset: ${asset}`);
 });
 
-test('Google Drive settings are edited in the popup, not in configuration files', () => {
+test('Google Drive settings are selected from a folder, not typed or read per file', () => {
   const popup = fs.readFileSync('popup/popup.html', 'utf8');
   assert.match(popup, /id="driveSetupBtn"/);
-  assert.match(fs.readFileSync('setup.html', 'utf8'), /<input class="fileinput" type="file" id="driveLinkFile"/);
-  assert.match(fs.readFileSync('setup.js', 'utf8'), /chrome\.storage\.local\.set/);
   assert.doesNotMatch(popup, /id="driveLink"/);
-  assert.doesNotMatch(popup, /id="driveKey"/);
-  assert.doesNotMatch(popup, /id="driveSaveBtn"/);
   const setup = fs.readFileSync('setup.html', 'utf8');
-  assert.match(setup, /id="yousub-google-drive|for="driveLinkFile">yousub-google-drive\.json/);
+  assert.doesNotMatch(setup, /type="file"/);
+  assert.match(setup, /yousub-google-drive\.json/);
+  assert.match(setup, /service-account\.json/);
   assert.match(setup, /id="folderBtn"/);
-  assert.match(fs.readFileSync('setup.js', 'utf8'), /showDirectoryPicker/);
-  assert.match(setup, /id="driveKeyFile"[^>]*accept="\.json,application\/json"/);
-  const popupJs = fs.readFileSync('popup/popup.js', 'utf8');
   const setupJs = fs.readFileSync('setup.js', 'utf8');
-  assert.match(popupJs, /YOUSUB\.CONFIG_KEY/);
-  assert.match(setupJs, /Drive\.linkFromConfig/);
-  assert.match(setupJs, /YOUSUB|CONFIG_KEY/);
+  assert.match(setupJs, /showDirectoryPicker/);
+  assert.match(setupJs, /findConfigFiles/);
+  assert.match(setupJs, /chrome\.storage\.local\.set/);
   assert.match(setupJs, /yousub-google-drive\.json/);
-  assert.doesNotMatch(setupJs, /readFile\(\$('driveLinkFile'), 'google-drive\.json'/);
+  assert.doesNotMatch(setupJs, /driveLinkFile/);
+  assert.match(fs.readFileSync('popup/popup.js', 'utf8'), /YOUSUB\.CONFIG_KEY/);
   assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
 });
+
 
 test('the APT repository workflow is signed and deployed through Pages', () => {
   const text = fs.readFileSync('.github/workflows/publish-apt.yml', 'utf8');

@@ -1,3 +1,9 @@
+yousub (2.2.1) unstable; urgency=medium
+
+  * Remove per-file pickers; configuration is selected by folder only.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:45:00 +0000
+
 yousub (2.2.0) unstable; urgency=medium
 
   * Add a one-time folder picker that finds yousub-google-drive.json and

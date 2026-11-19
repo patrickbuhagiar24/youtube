@@ -148,12 +148,12 @@ Reinstalling with the same key keeps the ID and browser storage. Clearing the Ch
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until both settings are provided in the extension popup. The `yousub-google-drive.json` and `service-account.json` files can be loaded with the file pickers on the **Drive file setup** page, opened from **☁️ Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a file chooser opens; their contents are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
+Google Drive sync is disabled until both settings are provided in the extension popup. The `yousub-google-drive.json` and `service-account.json` files are discovered by choosing their folder once on the **Drive file setup** page, opened from **☁️ Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a folder/file chooser opens; the files are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
 3. Upload `YouTube.json` to **your own** Google Drive. Share that file with the service account's `client_email` as an **Editor**. A new service account cannot create files using its own storage quota.
-4. Open the extension popup → **☁️ Google Drive sync** → **Open Drive file setup**, then either choose the folder once (YOUSUB will find `yousub-google-drive.json` and `service-account.json` in it automatically) or select `yousub-google-drive.json` (the file containing the shared **file** link, not a folder link) and `service-account.json` with the two file pickers. Click a file once and press **Open**; double-clicking can cancel on Linux. These are the only inputs: when both files are valid, their settings are saved and synced automatically. A folder configuration such as `{"folder_url": "..."}` from another project is **not** accepted; YOUSUB reads and writes one specific file. Use:
+4. Open the extension popup → **☁️ Google Drive sync** → **Open Drive file setup**, then click **Choose configuration folder** and select the folder containing `yousub-google-drive.json` (the file with the shared **file** link, not a folder link) and `service-account.json`. YOUSUB finds them automatically and saves/syncs their settings. There is no per-file picker and no manual text entry. A folder configuration such as `{"folder_url": "..."}` from another project is **not** accepted; YOUSUB reads and writes one specific file. Use:
 
    ```json
    {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}

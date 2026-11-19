@@ -4,14 +4,10 @@ $('ver').textContent = chrome.runtime.getManifest().version;
 
 const LINK_NAME = 'yousub-google-drive.json';
 const KEY_NAME = 'service-account.json';
-const OLD_LINK_NAME = 'google-drive.json';
-const FILE_HINT = 'Select both files to save and sync automatically.';
+const FILE_HINT = 'Choose the folder containing your YOUSUB configuration files.';
 const DB_NAME = 'yousub-config';
 const STORE = 'folders';
 const HANDLE_KEY = 'setupFolder';
-
-let pendingLink = '';
-let pendingKey = '';
 
 const showError = (message) => {
   $('driveFormError').classList.toggle('hidden', !message);
@@ -146,51 +142,9 @@ async function renderSaved() {
   }
 }
 
-async function readFile(input, expectedName, parse) {
-  const file = input.files?.[0];
-  if (!file) return null;
-  if (file.name !== expectedName) {
-    showError(file.name === OLD_LINK_NAME
-      ? `The old name ${OLD_LINK_NAME} is no longer accepted. Rename it to ${LINK_NAME}.`
-      : `Expected ${expectedName}, got ${file.name}.`);
-    input.value = '';
-    return null;
-  }
-  $('fileStatus').textContent = `Reading ${file.name}…`;
-  try {
-    const value = parse((await file.text()).trim());
-    return { value, name: file.name };
-  } catch (e) {
-    showError(e.message || String(e));
-    return null;
-  } finally {
-    input.value = '';
-  }
-}
-
-$('driveLinkFile').addEventListener('change', async () => {
-  const result = await readFile($('driveLinkFile'), LINK_NAME, Drive.linkFromConfig);
-  if (!result) return;
-  pendingLink = result.value;
-  showError('');
-  $('fileStatus').textContent = `${result.name} loaded. Select ${KEY_NAME}.`;
-  if (pendingKey) await saveConfig(pendingLink, pendingKey);
-});
-
-$('driveKeyFile').addEventListener('change', async () => {
-  const result = await readFile($('driveKeyFile'), KEY_NAME, (text) => { Drive.parseKey(text); return text; });
-  if (!result) return;
-  pendingKey = result.value;
-  showError('');
-  $('fileStatus').textContent = `${result.name} loaded. Select ${LINK_NAME}.`;
-  if (pendingLink) await saveConfig(pendingLink, pendingKey);
-});
-
 $('setupClearBtn').addEventListener('click', async () => {
   await chrome.storage.local.remove([CONFIG_KEY, 'yousubDrive']);
   await clearFolderHandle();
-  pendingLink = '';
-  pendingKey = '';
   $('fileStatus').textContent = FILE_HINT;
   $('folderStatus').textContent = 'No folder selected.';
   showError('');
