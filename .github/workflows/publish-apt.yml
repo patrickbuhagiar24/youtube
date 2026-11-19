@@ -35,15 +35,16 @@ jobs:
       - name: Wait for the signed release asset
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 12); do
             if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -q '^yousub_.*_all\.deb$'; then
               echo "Release asset is available for $TAG"
               exit 0
             fi
-            echo "Waiting for the .deb asset in release $TAG ($attempt/30)..."
+            echo "Waiting for the .deb asset in release $TAG ($attempt/12)..."
             sleep 10
           done
           echo "Release $TAG has no yousub .deb asset." >&2
@@ -52,6 +53,7 @@ jobs:
       - name: Download the package
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
