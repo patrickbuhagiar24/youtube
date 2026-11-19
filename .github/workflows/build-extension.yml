@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -171,3 +169,40 @@ jobs:
             ${{ runner.temp }}/yousub_*.deb
             ${{ runner.temp }}/checksums.txt
           if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: yousub-extension
+          path: release
+      - name: Attach assets to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "## YOUSUB ${TAG#v}"
+            echo
+            echo "Marks YouTube channels you are not subscribed to. This release is a browser extension only: no CLI, native messaging host, or helper program."
+            echo
+            echo "Install on Linux: \`sudo apt install ./yousub_${TAG#v}_all.deb\`, then restart Chrome. Alternatively load the unpacked ZIP through \`chrome://extensions\` → Developer mode, or drag the CRX there."
+            echo
+            echo "The CRX is signed with the repository key, so the extension ID stays the same across installs and upgrades. Google Drive sync is configured by selecting \`google-drive.json\` and \`service-account.json\` in the popup."
+            echo
+            echo "Verify downloads with \`sha256sum -c checksums.txt\`."
+          } > "$notes"
+          files=(release/yousub-*.crx release/yousub-*-unpacked.zip release/yousub_*.deb release/yousub-public.pem release/checksums.txt)
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            gh release create "$TAG" "${files[@]}" --title "YOUSUB ${TAG#v}" --notes-file "$notes"
+          fi
