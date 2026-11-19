@@ -1,3 +1,10 @@
+yousub (2.1.1) unstable; urgency=medium
+
+  * Explain why a Pastex-style folder_url configuration is rejected and require
+    a direct YouTube.json file link in google-drive.json.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:20:00 +0000
+
 yousub (2.1.0) unstable; urgency=medium
 
   * Sign the CRX with a dedicated YOUSUB_CRX_PRIVATE_KEY so the extension ID

@@ -92,8 +92,15 @@ test('google-drive.json accepts a link object or a bare JSON string', () => {
   const { Drive } = load();
   assert.equal(Drive.linkFromConfig(JSON.stringify({ link })), link);
   assert.equal(Drive.linkFromConfig(JSON.stringify(link)), link);
-  assert.equal(Drive.linkFromConfig('{"link": 42}'), '');
+  assert.equal(Drive.linkFromConfig(JSON.stringify({ file_url: link })), link);
+  assert.throws(() => Drive.linkFromConfig('{"link": 42}'), /must contain a "link" field/);
   assert.throws(() => Drive.linkFromConfig('not json'), /not valid JSON/);
+});
+
+test('google-drive.json rejects folder and placeholder links with a clear error', () => {
+  const { Drive } = load();
+  assert.throws(() => Drive.linkFromConfig('{"folder_url": "https://drive.google.com/drive/folders/abc"}'), /points to a folder.*direct file link/);
+  assert.throws(() => Drive.linkFromConfig('{"link": "PASTE_FILE_LINK_HERE"}'), /still contains the placeholder/);
 });
 
 test('service account keys are validated without a helper program', () => {

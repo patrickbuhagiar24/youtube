@@ -151,7 +151,11 @@ Google Drive sync is disabled until both settings are provided in the extension 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
 3. Upload `YouTube.json` to **your own** Google Drive. Share that file with the service account's `client_email` as an **Editor**. A new service account cannot create files using its own storage quota.
-4. Open the extension popup → **☁️ Google Drive sync** and select `google-drive.json` (the file containing the shared **file** link, not a folder link) and `service-account.json` with the two file pickers. These are the only inputs: when both files are valid, their settings are saved and synced automatically.
+4. Open the extension popup → **☁️ Google Drive sync** and select `google-drive.json` (the file containing the shared **file** link, not a folder link) and `service-account.json` with the two file pickers. These are the only inputs: when both files are valid, their settings are saved and synced automatically. A folder configuration such as `{"folder_url": "..."}` from another project is **not** accepted; YOUSUB reads and writes one specific file. Use:
+
+   ```json
+   {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}
+   ```
 
 Both values are saved in `chrome.storage.local` for this browser profile only; the key is never placed in `chrome.storage.sync`, in source code, or in the extension archive. **Local extension storage is not encrypted**: keep your Chrome profile private, remove personal keys before sharing a profile, and never commit a real key to a repository. **Remove saved configuration** in the popup deletes both values.
 

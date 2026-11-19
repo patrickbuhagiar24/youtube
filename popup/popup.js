@@ -188,6 +188,7 @@ async function saveWhenBothFilesLoaded() {
 $('driveLinkFile').addEventListener('change', async () => {
   const result = await readConfigFile($('driveLinkFile'), Drive.linkFromConfig);
   if (!result) return;
+  if (!result.value) { driveError('google-drive.json has no file link.'); return; }
   pendingLink = result.value;
   driveError('');
   $('fileStatus').textContent = `${result.name} loaded. Select service-account.json.`;
