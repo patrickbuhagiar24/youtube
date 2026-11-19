@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>YT Unsub Detector</title>
+  <title>YOUSUB</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
     <img src="../icons/icon48.png" alt="" width="28" height="28">
-    <h1>YT Unsub Detector</h1>
+    <h1>YOUSUB</h1>
     <label class="switch" title="Enable or disable the extension" aria-label="Enable or disable the extension">
       <input type="checkbox" id="enabled" aria-label="Enable or disable the extension">
       <span></span>
@@ -35,6 +35,23 @@
     </div>
     <button id="driveSyncBtn" class="icon hidden" title="Sync with Google Drive now" aria-label="Sync with Google Drive now">🔄</button>
   </section>
+
+  <!-- Drive settings live inside the extension: only local JSON files are accepted -->
+  <details class="card" id="driveDetails">
+    <summary>☁️ Google Drive sync</summary>
+    <p class="hint">Upload a copy of <code>YouTube.json</code> to your own Google Drive, share it with a Google service account as an Editor, then select both JSON files below. Settings stay in this browser profile.</p>
+    <div class="field">
+      <span>Configuration files</span>
+      <div class="files">
+        <label class="filebtn">google-drive.json<input type="file" id="driveLinkFile" accept=".json,application/json" hidden></label>
+        <label class="filebtn">service-account.json<input type="file" id="driveKeyFile" accept=".json,application/json" hidden></label>
+      </div>
+      <small id="fileStatus" class="muted" aria-live="polite">Select both files to save and sync automatically.</small>
+    </div>
+    <div id="driveFormError" class="err hidden" role="alert"></div>
+    <button id="driveClearBtn" class="secondary hidden">Remove saved configuration</button>
+    <p class="hint">The key is stored in local extension storage, not synced by Google. Remove personal keys before sharing this browser profile.</p>
+  </details>
 
   <!-- Collapsible settings -->
   <details class="card">
@@ -73,6 +90,7 @@
 
   <footer>Version <span id="ver"></span></footer>
   <script src="../shared.js"></script>
+  <script src="../drive.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

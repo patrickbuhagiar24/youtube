@@ -1,58 +1,58 @@
-/* YT Unsub Detector */
-:root { --ytuc-color: #ff3d00; --ytuc-left: #ffd400; }
+/* YOUSUB */
+:root { --yousub-color: #ff3d00; --yousub-left: #ffd400; }
 
 /* Outlines: red = not subscribed; yellow = previously unsubscribed (listed in YouTube.json) */
-[data-ytuc-state="unsub"] { --ytuc-c: var(--ytuc-color); }
-[data-ytuc-state="left"] { --ytuc-c: var(--ytuc-left); }
-html.ytuc-on:is(.ytuc-mode-highlight, .ytuc-mode-dim) :is([data-ytuc-state="unsub"], [data-ytuc-state="left"]):not(ytd-video-owner-renderer) {
-  outline: 3px solid var(--ytuc-c) !important;
+[data-yousub-state="unsub"] { --yousub-c: var(--yousub-color); }
+[data-yousub-state="left"] { --yousub-c: var(--yousub-left); }
+html.yousub-on:is(.yousub-mode-highlight, .yousub-mode-dim) :is([data-yousub-state="unsub"], [data-yousub-state="left"]):not(ytd-video-owner-renderer) {
+  outline: 3px solid var(--yousub-c) !important;
   outline-offset: 3px;
   border-radius: 14px;
-  box-shadow: 0 0 18px color-mix(in srgb, var(--ytuc-c) 45%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--yousub-c) 45%, transparent);
 }
 
 /* Dim subscribed channels mode */
-html.ytuc-on.ytuc-mode-dim [data-ytuc-state="sub"]:not(ytd-video-owner-renderer) {
+html.yousub-on.yousub-mode-dim [data-yousub-state="sub"]:not(ytd-video-owner-renderer) {
   opacity: .3;
   filter: grayscale(.7);
   transition: opacity .2s, filter .2s;
 }
-html.ytuc-on.ytuc-mode-dim [data-ytuc-state="sub"]:not(ytd-video-owner-renderer):hover {
+html.yousub-on.yousub-mode-dim [data-yousub-state="sub"]:not(ytd-video-owner-renderer):hover {
   opacity: 1;
   filter: none;
 }
 
 /* Hide mode */
-html.ytuc-on.ytuc-mode-only-unsub [data-ytuc-state="sub"]:not(ytd-video-owner-renderer),
-html.ytuc-on.ytuc-mode-hide-unsub [data-ytuc-state="unsub"]:not(ytd-video-owner-renderer),
-html.ytuc-on.ytuc-mode-hide-unsub [data-ytuc-state="left"]:not(ytd-video-owner-renderer) {
+html.yousub-on.yousub-mode-only-unsub [data-yousub-state="sub"]:not(ytd-video-owner-renderer),
+html.yousub-on.yousub-mode-hide-unsub [data-yousub-state="unsub"]:not(ytd-video-owner-renderer),
+html.yousub-on.yousub-mode-hide-unsub [data-yousub-state="left"]:not(ytd-video-owner-renderer) {
   display: none !important;
 }
 
 /* Order: not subscribed -> subscribed -> previously unsubscribed (yellow).
    Uses CSS `order` only; YouTube elements are not moved.
    Search: combine all result groups, including scroll-loaded results, into one list */
-html.ytuc-on.ytuc-sort ytd-search ytd-section-list-renderer > #contents {
+html.yousub-on.yousub-sort ytd-search ytd-section-list-renderer > #contents {
   display: flex !important;
   flex-direction: column;
 }
-html.ytuc-on.ytuc-sort ytd-search ytd-section-list-renderer > #contents > ytd-item-section-renderer:not([hidden]),
-html.ytuc-on.ytuc-sort ytd-search ytd-section-list-renderer > #contents > ytd-item-section-renderer:not([hidden]) > #contents {
+html.yousub-on.yousub-sort ytd-search ytd-section-list-renderer > #contents > ytd-item-section-renderer:not([hidden]),
+html.yousub-on.yousub-sort ytd-search ytd-section-list-renderer > #contents > ytd-item-section-renderer:not([hidden]) > #contents {
   display: contents !important;
 }
 /* Watch-page sidebar videos */
-html.ytuc-on.ytuc-sort #related ytd-item-section-renderer > #contents {
+html.yousub-on.yousub-sort #related ytd-item-section-renderer > #contents {
   display: flex !important;
   flex-direction: column;
 }
-html.ytuc-on.ytuc-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents) > [data-ytuc-state="unsub"] { order: -1; }
-html.ytuc-on.ytuc-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents) > [data-ytuc-state="left"] { order: 1; }
-html.ytuc-on.ytuc-sort :is(ytd-showing-results-for-renderer, ytd-did-you-mean-renderer) { order: -2; }
+html.yousub-on.yousub-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents) > [data-yousub-state="unsub"] { order: -1; }
+html.yousub-on.yousub-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents) > [data-yousub-state="left"] { order: 1; }
+html.yousub-on.yousub-sort :is(ytd-showing-results-for-renderer, ytd-did-you-mean-renderer) { order: -2; }
 /* Keep the continuation loader last so infinite scrolling still works */
-html.ytuc-on.ytuc-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-section-list-renderer > #contents, #related ytd-item-section-renderer > #contents) > ytd-continuation-item-renderer { order: 99; }
-/* Autoload (ytuc-autoload, controlled by content.js): keep the invisible loader on screen,
+html.yousub-on.yousub-sort :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-section-list-renderer > #contents, #related ytd-item-section-renderer > #contents) > ytd-continuation-item-renderer { order: 99; }
+/* Autoload (yousub-autoload, controlled by content.js): keep the invisible loader on screen,
    so YouTube loads more videos without scrolling. Only sorted lists, not comments, etc. */
-html.ytuc-on.ytuc-sort.ytuc-autoload :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-section-list-renderer > #contents, #related ytd-item-section-renderer > #contents) > ytd-continuation-item-renderer {
+html.yousub-on.yousub-sort.yousub-autoload :is(ytd-rich-grid-renderer > #contents, ytd-search ytd-section-list-renderer > #contents, #related ytd-item-section-renderer > #contents) > ytd-continuation-item-renderer {
   position: fixed !important;
   left: 0 !important;
   bottom: 0 !important;
@@ -64,24 +64,24 @@ html.ytuc-on.ytuc-sort.ytuc-autoload :is(ytd-rich-grid-renderer > #contents, ytd
   z-index: -1 !important;
 }
 /* Duplicate videos (managed by content.js with sorting): show only the first occurrence */
-html.ytuc-on.ytuc-sort [data-ytuc-dup] { display: none !important; }
+html.yousub-on.yousub-sort [data-yousub-dup] { display: none !important; }
 /* Grid: adjust left margins for the new first column in each row */
-html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][no-gutter-margins][data-ytuc-col="first"] {
+html.yousub-on.yousub-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][no-gutter-margins][data-yousub-col="first"] {
   margin-left: 0 !important;
 }
-html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][data-ytuc-col="rest"] {
+html.yousub-on.yousub-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][data-yousub-col="rest"] {
   margin-left: calc(var(--ytd-rich-grid-item-margin) / 2) !important;
 }
-html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][is-shorts-grid][data-ytuc-col="rest"] {
+html.yousub-on.yousub-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][is-shorts-grid][data-yousub-col="rest"] {
   margin-left: calc(var(--ytd-rich-grid-shorts-item-margin) / 2) !important;
 }
-html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][is-compact-grid][data-ytuc-col="rest"] {
+html.yousub-on.yousub-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-renderer[rendered-from-rich-grid][is-compact-grid][data-yousub-col="rest"] {
   margin-left: calc(var(--ytd-rich-grid-compact-item-margin) / 2) !important;
 }
 
 /* Subscribe (+) button in the top-left corner of a thumbnail */
-.ytuc-host { position: relative !important; }
-.ytuc-subbtn {
+.yousub-host { position: relative !important; }
+.yousub-subbtn {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -93,7 +93,7 @@ html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-render
   padding: 0;
   border: 2.5px solid #fff;
   border-radius: 50%;
-  background: var(--ytuc-color);
+  background: var(--yousub-color);
   /* Hide the + text and draw it with CSS for exact, font-independent centering */
   color: transparent;
   font-size: 0;
@@ -103,8 +103,8 @@ html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-render
   box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .55), 0 3px 10px rgba(0, 0, 0, .6);
   transition: transform .15s, filter .15s;
 }
-.ytuc-subbtn::before,
-.ytuc-subbtn::after {
+.yousub-subbtn::before,
+.yousub-subbtn::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -112,13 +112,13 @@ html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-render
   background: #fff;
   border-radius: 2px;
 }
-.ytuc-subbtn::before { width: 15px; height: 3px; } /* Horizontal stroke */
-.ytuc-subbtn::after { width: 3px; height: 15px; }  /* Vertical stroke */
-.ytuc-subbtn:hover { transform: scale(1.15); filter: brightness(1.1); }
-.ytuc-subbtn:active { transform: scale(.95); }
+.yousub-subbtn::before { width: 15px; height: 3px; } /* Horizontal stroke */
+.yousub-subbtn::after { width: 3px; height: 15px; }  /* Vertical stroke */
+.yousub-subbtn:hover { transform: scale(1.15); filter: brightness(1.1); }
+.yousub-subbtn:active { transform: scale(.95); }
 /* Processing: a spinner, also exactly centered */
-.ytuc-subbtn:disabled { cursor: default; transform: none; filter: none; }
-.ytuc-subbtn:disabled::before {
+.yousub-subbtn:disabled { cursor: default; transform: none; filter: none; }
+.yousub-subbtn:disabled::before {
   width: 15px;
   height: 15px;
   background: none;
@@ -126,16 +126,16 @@ html.ytuc-on.ytuc-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-render
   border-top-color: #fff;
   border-radius: 50%;
   box-sizing: border-box;
-  animation: ytuc-spin .8s linear infinite;
+  animation: yousub-spin .8s linear infinite;
 }
-.ytuc-subbtn:disabled::after { display: none; }
-@keyframes ytuc-spin { to { transform: rotate(360deg); } }
+.yousub-subbtn:disabled::after { display: none; }
+@keyframes yousub-spin { to { transform: rotate(360deg); } }
 /* Blue unsubscribe (−) button */
-.ytuc-subbtn.ytuc-unsubbtn { background: var(--ytuc-unsub-btn, #1e88e5); }
-.ytuc-subbtn.ytuc-unsubbtn::after { display: none; } /* Horizontal stroke only = minus sign */
+.yousub-subbtn.yousub-unsubbtn { background: var(--yousub-unsub-btn, #1e88e5); }
+.yousub-subbtn.yousub-unsubbtn::after { display: none; } /* Horizontal stroke only = minus sign */
 /* Floating button above the hovered video and YouTube preview player */
-.ytuc-subbtn.ytuc-float { position: fixed; z-index: 2147483000; }
-.ytuc-subbtn.ytuc-float[hidden] { display: none !important; }
+.yousub-subbtn.yousub-float { position: fixed; z-index: 2147483000; }
+.yousub-subbtn.yousub-float[hidden] { display: none !important; }
 /* Hide the attached + button while the floating button is active to avoid duplicates */
-[data-ytuc-hover] .ytuc-subbtn:not(.ytuc-float) { visibility: hidden; }
-html:not(.ytuc-on) .ytuc-subbtn { display: none !important; }
+[data-yousub-hover] .yousub-subbtn:not(.yousub-float) { visibility: hidden; }
+html:not(.yousub-on) .yousub-subbtn { display: none !important; }

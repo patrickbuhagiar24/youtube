@@ -1,0 +1,173 @@
+name: Build signed YOUSUB extension
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Sign CRX and package unpacked ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Load the CRX signing key
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/yousub-private.pem"
+          test -n "$CRX_PRIVATE_KEY" || { echo 'Configure the CRX_PRIVATE_KEY repository secret with the RSA private key (PEM).' >&2; exit 1; }
+          printf '%s\n' "$CRX_PRIVATE_KEY" > "$key"
+          chmod 600 "$key"
+          openssl pkey -in "$key" -noout -check > /dev/null
+          openssl pkey -in "$key" -pubout -out "$RUNNER_TEMP/yousub-public.pem"
+          openssl pkey -in "$key" -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/yousub-public.b64"
+          echo "PUBLIC_KEY_B64=$(cat "$RUNNER_TEMP/yousub-public.b64")" >> "$GITHUB_ENV"
+
+      - name: Assemble the extension
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/yousub-extension"
+          mkdir -p "$stage"
+          cp -R manifest.json background.js shared.js drive.js YouTube.json content popup icons "$stage"/
+          python3 - "$stage/manifest.json" "$PUBLIC_KEY_B64" <<'PY'
+          import json
+          import sys
+
+          path, public_key = sys.argv[1:3]
+          with open(path, encoding='utf-8') as stream:
+              manifest = json.load(stream)
+          manifest['key'] = public_key  # Stable ID for unpacked installs too
+          with open(path, 'w', encoding='utf-8') as stream:
+              json.dump(manifest, stream, indent=2)
+              stream.write('\n')
+          PY
+          version=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          (cd "$stage" && zip -q -r -X "$RUNNER_TEMP/yousub-$version-unpacked.zip" .)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build and verify CRX3
+        run: |
+          python3 - "$RUNNER_TEMP/yousub-extension" "$RUNNER_TEMP/yousub-private.pem" "$RUNNER_TEMP/yousub-$VERSION.crx" <<'PY'
+          import hashlib
+          import os
+          import struct
+          import subprocess
+          import sys
+          import tempfile
+          import zipfile
+          from pathlib import Path
+
+          source, key, output = (Path(part) for part in sys.argv[1:4])
+
+          def varint(number):
+              out = bytearray()
+              while number > 0x7F:
+                  out.append((number & 0x7F) | 0x80)
+                  number >>= 7
+              out.append(number)
+              return bytes(out)
+
+          def field(number, data):
+              return varint((number << 3) | 2) + varint(len(data)) + data
+
+          public = subprocess.run(
+              ['openssl', 'pkey', '-in', str(key), '-pubout', '-outform', 'DER'],
+              check=True, capture_output=True).stdout
+          crx_id = hashlib.sha256(public).digest()[:16]
+          signed_data = field(1, crx_id)
+
+          with tempfile.TemporaryDirectory() as temp:
+              folder = Path(temp)
+              archive_path = folder / 'extension.zip'
+              with zipfile.ZipFile(archive_path, 'w', compression=zipfile.ZIP_DEFLATED) as bundle:
+                  for path in sorted(source.rglob('*')):
+                      if not path.is_file() or path.is_symlink():
+                          continue
+                      info = zipfile.ZipInfo(path.relative_to(source).as_posix(), date_time=(2020, 1, 1, 0, 0, 0))
+                      info.compress_type = zipfile.ZIP_DEFLATED
+                      info.external_attr = 0o644 << 16
+                      bundle.writestr(info, path.read_bytes())
+              archive = archive_path.read_bytes()
+
+              payload = b'CRX3 SignedData\x00' + struct.pack('<I', len(signed_data)) + signed_data + archive
+              payload_path = folder / 'payload.bin'
+              payload_path.write_bytes(payload)
+              signature = subprocess.run(
+                  ['openssl', 'dgst', '-sha256', '-sign', str(key), str(payload_path)],
+                  check=True, capture_output=True).stdout
+              signature_path = folder / 'signature.bin'
+              signature_path.write_bytes(signature)
+
+              der_path = folder / 'public.der'
+              der_path.write_bytes(public)
+              pem_path = folder / 'public.pem'
+              subprocess.run(
+                  ['openssl', 'pkey', '-pubin', '-inform', 'DER', '-in', str(der_path), '-out', str(pem_path)],
+                  check=True, capture_output=True)
+              subprocess.run(
+                  ['openssl', 'dgst', '-sha256', '-verify', str(pem_path), '-signature', str(signature_path), str(payload_path)],
+                  check=True, capture_output=True)
+
+          proof = field(1, public) + field(2, signature)
+          header = field(2, proof) + field(10000, signed_data)
+          output.write_bytes(b'Cr24' + struct.pack('<II', 3, len(header)) + header + archive)
+          assert output.read_bytes().startswith(b'Cr24')
+
+          extension_id = ''.join(chr(97 + nibble) for byte in crx_id for nibble in (byte >> 4, byte & 15))
+          print(f'Extension ID: {extension_id}')
+          if os.environ.get('GITHUB_ENV'):
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+                  stream.write(f'EXTENSION_ID={extension_id}\n')
+          PY
+
+      - name: Build extension-only Debian package
+        run: |
+          set -euo pipefail
+          printf '%s' "$EXTENSION_ID" > "$RUNNER_TEMP/yousub-id.txt"
+          python3 - "$RUNNER_TEMP/yousub-external.json" "$EXTENSION_ID" "$VERSION" <<'PY'
+          import json
+          import sys
+
+          path, extension, version = sys.argv[1:4]
+          with open(path, 'w', encoding='utf-8') as stream:
+              json.dump({'external_crx': '/usr/share/yousub/yousub.crx', 'external_version': version}, stream, indent=2)
+              stream.write('\n')
+          PY
+          deb="$RUNNER_TEMP/deb"
+          mkdir -p "$deb/DEBIAN" "$deb/usr/share/yousub" "$deb/usr/share/doc/yousub"
+          cp "$RUNNER_TEMP/yousub-$VERSION.crx" "$deb/usr/share/yousub/yousub.crx"
+          cp "$RUNNER_TEMP/yousub-id.txt" "$RUNNER_TEMP/yousub-external.json" "$deb/usr/share/yousub/"
+          cp README.md LICENSE "$deb/usr/share/doc/yousub/"
+          gzip -n -9 -c debian/changelog > "$deb/usr/share/doc/yousub/changelog.gz"
+          install -m 0644 debian/control "$deb/DEBIAN/control"
+          sed -i "s/^Version: .*/Version: $VERSION/" "$deb/DEBIAN/control"
+          install -m 0755 debian/postinst debian/postrm "$deb/DEBIAN/"
+          (cd "$deb" && find usr -type f -print0 | sort -z | xargs -0 md5sum > DEBIAN/md5sums)
+          dpkg-deb --root-owner-group --build "$deb" "$RUNNER_TEMP/yousub_$VERSION_all.deb"
+          dpkg-deb --info "$RUNNER_TEMP/yousub_$VERSION_all.deb"
+          dpkg-deb --contents "$RUNNER_TEMP/yousub_$VERSION_all.deb"
+
+      - name: Record checksums
+        run: |
+          cd "$RUNNER_TEMP"
+          sha256sum yousub-*.crx yousub-*-unpacked.zip yousub-*.deb yousub-public.pem > checksums.txt
+          echo "Extension ID: $EXTENSION_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: yousub-extension
+          path: |
+            ${{ runner.temp }}/yousub-*.crx
+            ${{ runner.temp }}/yousub-*-unpacked.zip
+            ${{ runner.temp }}/yousub-public.pem
+            ${{ runner.temp }}/yousub-*.deb
+            ${{ runner.temp }}/checksums.txt
+          if-no-files-found: error

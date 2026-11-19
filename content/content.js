@@ -5,12 +5,12 @@
  */
 (() => {
   'use strict';
-  if (window.__YTUC_CONTENT__) return;
-  window.__YTUC_CONTENT__ = true;
+  if (window.__YOUSUB_CONTENT__) return;
+  window.__YOUSUB_CONTENT__ = true;
 
-  const IN = 'ytuc-content';
-  const OUT = 'ytuc-main';
-  const { DEFAULTS, CARD_SEL, AUTOLOAD } = YTUC;
+  const IN = 'yousub-content';
+  const OUT = 'yousub-main';
+  const { DEFAULTS, CARD_SEL, AUTOLOAD } = YOUSUB;
   const THUMB_SEL = 'ytd-thumbnail, #thumbnail, yt-thumbnail-view-model, .yt-lockup-view-model__content-image, ' +
     '[class*="lockup-view-model"][class*="content-image"], [class*="LockupViewModelContentImage"], #avatar-section, #avatar, ytd-playlist-thumbnail';
   // Old (kebab-case) and new (camelCase, e.g. ytContentMetadataViewModelMetadataRow) class names
@@ -117,7 +117,7 @@
     }
   }
   const persistSubs = debounce(() => {
-    chrome.storage.local.set({ ytucSubs: { list: subs.list, ts: subs.ts, accountId: subs.accountId, stats: subs.stats } });
+    chrome.storage.local.set({ yousubSubs: { list: subs.list, ts: subs.ts, accountId: subs.accountId, stats: subs.stats } });
   }, 500);
 
   const isSubKey = (k) => (k.startsWith('UC') ? subs.ids : subs.keys).has(k);
@@ -126,7 +126,7 @@
   function setSubscribed(id, subscribed, info) {
     if (!subs.ts || subs.ids.has(id) === subscribed) return false;
     if (subscribed) {
-      info ||= [...document.querySelectorAll('[data-ytuc-state]')].map((c) => c.__ytucCh).find((r) => r?.id === id);
+      info ||= [...document.querySelectorAll('[data-yousub-state]')].map((c) => c.__yousubCh).find((r) => r?.id === id);
       const url = info?.url || '';
       subs.list.push({ id, title: info?.name || info?.title || '', url, handle: url.startsWith('/@') ? url.slice(1).split('/')[0] : '' });
     } else {
@@ -145,7 +145,7 @@
 
   /* ---------------- unsubscribe history ---------------- */
   const isLeft = (id) => unsubs[id]?.s === 'unsub' && !subs.ids.has(id);
-  const saveUnsubs = debounce(() => chrome.storage.local.set({ ytucUnsubs: unsubs }), 600);
+  const saveUnsubs = debounce(() => chrome.storage.local.set({ yousubUnsubs: unsubs }), 600);
 
   /** Record an unsubscribe, or a resubscribe if the channel was previously left. */
   function recordEvent(id, s, info) {
@@ -209,11 +209,11 @@
   }
 
   function refreshButtons() {
-    for (const b of document.querySelectorAll('.ytuc-subbtn')) {
-      const card = b.__ytucCard || b.closest('[data-ytuc-state]');
-      const on = busy.has(card?.__ytucCh?.key);
+    for (const b of document.querySelectorAll('.yousub-subbtn')) {
+      const card = b.__yousubCard || b.closest('[data-yousub-state]');
+      const on = busy.has(card?.__yousubCh?.key);
       b.disabled = on;
-      b.textContent = on ? '⏳' : b.classList.contains('ytuc-unsubbtn') ? '−' : '+';
+      b.textContent = on ? '⏳' : b.classList.contains('yousub-unsubbtn') ? '−' : '+';
     }
   }
 
@@ -222,7 +222,7 @@
   function toast(html) {
     if (!toastHost?.isConnected) {
       toastHost = document.createElement('div');
-      toastHost.id = 'ytuc-toast-host';
+      toastHost.id = 'yousub-toast-host';
       toastHost.attachShadow({ mode: 'open' });
       (document.body || document.documentElement).appendChild(toastHost);
     }
@@ -263,7 +263,7 @@
 
       const data = { list, ts: startedAt, accountId: r.accountId, stats: r.stats };
       loadSubs(data);
-      await chrome.storage.local.set({ ytucSubs: data });
+      await chrome.storage.local.set({ yousubSubs: data });
       lastError = !list.length ? 'You are not subscribed to any channels.' : r.stats?.note || '';
     } catch (e) {
       lastError = friendlyError(e);
@@ -275,7 +275,7 @@
 
   /* ---------------- card evaluation and marking ---------------- */
   function videoIdOfCard(card) {
-    const v = card.getAttribute('data-ytuc-vid');
+    const v = card.getAttribute('data-yousub-vid');
     if (v) return v;
     const href = card.querySelector('a[href*="watch?v="], a[href^="/shorts/"]')?.getAttribute('href') || '';
     return href.match(/[?&]v=([\w-]{11})/)?.[1] || href.match(/\/shorts\/([\w-]{11})/)?.[1] || '';
@@ -288,9 +288,9 @@
   }
 
   function evaluate(card) {
-    if (card.getAttribute('data-ytuc-ad') === '1') return null;
+    if (card.getAttribute('data-yousub-ad') === '1') return null;
     let collab = null;
-    try { collab = JSON.parse(card.getAttribute('data-ytuc-collab') || 'null'); } catch { /* */ }
+    try { collab = JSON.parse(card.getAttribute('data-yousub-collab') || 'null'); } catch { /* */ }
     if (collab?.length > 1) {
       // A collaboration is subscribed only when ALL collaborators are subscribed
       const missing = collab.filter((c) => !isSubKey(c.id));
@@ -306,9 +306,9 @@
         subCollab: missing.length ? [] : collab.filter((c) => isSubKey(c.id)) // For the unsubscribe button
       };
     }
-    const id = card.getAttribute('data-ytuc-cid') || '';
-    let url = card.getAttribute('data-ytuc-url') || '';
-    let name = card.getAttribute('data-ytuc-name') || '';
+    const id = card.getAttribute('data-yousub-cid') || '';
+    let url = card.getAttribute('data-yousub-url') || '';
+    let name = card.getAttribute('data-yousub-name') || '';
     const keys = id ? [id] : [];
     const uk = keyFromPath(url); if (uk && uk !== id) keys.push(uk);
 
@@ -354,8 +354,8 @@
    *  kind 'unsub' -> blue "−" (unsubscribe), shown on hover for subscribed channels
    */
   const BTN = {
-    sub: { cls: 'ytuc-subbtn', text: '+', label: 'Subscribe to this channel' },
-    unsub: { cls: 'ytuc-subbtn ytuc-unsubbtn', text: '−', label: 'Unsubscribe from this channel' }
+    sub: { cls: 'yousub-subbtn', text: '+', label: 'Subscribe to this channel' },
+    unsub: { cls: 'yousub-subbtn yousub-unsubbtn', text: '−', label: 'Unsubscribe from this channel' }
   };
   /** Watch pages and channel cards already have their own YouTube Subscribe button. */
   const buttonAllowed = (card) => settings.showSubButton && !card.matches('ytd-video-owner-renderer') && !card.querySelector('ytd-subscribe-button-renderer');
@@ -369,46 +369,46 @@
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
-      const ch = getCard()?.__ytucCh;
-      if (ch && !btn.disabled) changeSub({ ...ch }, btn.__ytucKind === 'unsub' ? 'unsubscribe' : 'subscribe');
+      const ch = getCard()?.__yousubCh;
+      if (ch && !btn.disabled) changeSub({ ...ch }, btn.__yousubKind === 'unsub' ? 'unsubscribe' : 'subscribe');
     });
     return btn;
   }
 
   /** Update the button appearance for its kind ('sub' = +, 'unsub' = −). */
   function setKind(btn, kind, card, extraCls = '') {
-    if (btn.__ytucKind === kind && btn.__ytucCard === card) return;
+    if (btn.__yousubKind === kind && btn.__yousubCard === card) return;
     const d = BTN[kind];
-    btn.__ytucKind = kind;
-    btn.__ytucCard = card;
+    btn.__yousubKind = kind;
+    btn.__yousubCard = card;
     btn.className = d.cls + extraCls;
     btn.title = d.label;
     btn.setAttribute('aria-label', d.label);
-    const on = busy.has(card.__ytucCh?.key);
+    const on = busy.has(card.__yousubCh?.key);
     btn.disabled = on;
     btn.textContent = on ? '⏳' : d.text;
   }
 
   /** The "+" button is attached to the card. The "−" button floats (see updateHover). */
   function placeButton(card, kind) {
-    let btn = card.__ytucBtn;
+    let btn = card.__yousubBtn;
     if (kind !== 'sub') {
-      if (btn) { btn.remove(); card.__ytucBtn = null; }
+      if (btn) { btn.remove(); card.__yousubBtn = null; }
       return;
     }
-    btn ||= card.__ytucBtn = makeButton(() => card);
+    btn ||= card.__yousubBtn = makeButton(() => card);
     setKind(btn, kind, card);
     if (btn.isConnected && card.contains(btn)) return;
     const host = card.querySelector(THUMB_SEL) || card.firstElementChild || card;
-    host.classList.add('ytuc-host');
+    host.classList.add('yousub-host');
     host.appendChild(btn);
   }
 
   function clearCard(card) {
-    if (card.hasAttribute('data-ytuc-state')) card.removeAttribute('data-ytuc-state');
-    if (card.hasAttribute('data-ytuc-dup')) card.removeAttribute('data-ytuc-dup');
-    card.__ytucKind = null;
-    card.__ytucSig = '';
+    if (card.hasAttribute('data-yousub-state')) card.removeAttribute('data-yousub-state');
+    if (card.hasAttribute('data-yousub-dup')) card.removeAttribute('data-yousub-dup');
+    card.__yousubKind = null;
+    card.__yousubSig = '';
     placeButton(card, null);
   }
 
@@ -422,15 +422,15 @@
   let lockKey = null; // Hide the button after a subscription change until the cursor moves to another card
 
   const outerCard = (el) => {
-    for (let c = el?.closest?.('[data-ytuc-state]'); c; c = c.parentElement?.closest('[data-ytuc-state]')) {
-      if (!c.parentElement?.closest('[data-ytuc-state]')) return c;
+    for (let c = el?.closest?.('[data-yousub-state]'); c; c = c.parentElement?.closest('[data-yousub-state]')) {
+      if (!c.parentElement?.closest('[data-yousub-state]')) return c;
     }
     return null;
   };
 
   function getFloatBtn() {
     if (floatBtn?.isConnected) return floatBtn;
-    floatBtn = makeButton(() => floatBtn.__ytucCard);
+    floatBtn = makeButton(() => floatBtn.__yousubCard);
     floatBtn.hidden = true;
     (document.body || document.documentElement).appendChild(floatBtn);
     return floatBtn;
@@ -443,9 +443,9 @@
 
   function setHoverCard(card) {
     if (hoverCard === card) return;
-    hoverCard?.removeAttribute('data-ytuc-hover');
+    hoverCard?.removeAttribute('data-yousub-hover');
     hoverCard = card;
-    card?.setAttribute('data-ytuc-hover', '');
+    card?.setAttribute('data-yousub-hover', '');
   }
 
   function hideFloat() {
@@ -457,7 +457,7 @@
 
   function updateHover() {
     hoverQueued = false;
-    if (!pointer || !document.documentElement.classList.contains('ytuc-on')) return leave();
+    if (!pointer || !document.documentElement.classList.contains('yousub-on')) return leave();
     const top = document.elementFromPoint(pointer.x, pointer.y);
     if (!top) return leave();
     let card;
@@ -470,16 +470,16 @@
         card = document.elementsFromPoint(pointer.x, pointer.y).map(outerCard).find(Boolean) || (hoverCard?.isConnected ? hoverCard : null);
       }
     }
-    const key = card?.__ytucCh?.key;
+    const key = card?.__yousubCh?.key;
     if (lockKey && key !== lockKey) lockKey = null;
-    const kind = card?.__ytucKind;
+    const kind = card?.__yousubKind;
     if (!card || !kind || !card.isConnected || (lockKey && key === lockKey)) return hideFloat();
     const host = card.querySelector(THUMB_SEL) || card.firstElementChild || card;
     const r = host.getBoundingClientRect();
     if (!r.width || r.top + 8 < headerBottom()) return hideFloat();
     setHoverCard(card);
     const b = getFloatBtn();
-    setKind(b, kind, card, ' ytuc-float');
+    setKind(b, kind, card, ' yousub-float');
     b.style.left = Math.round(r.left + 8) + 'px';
     b.style.top = Math.round(r.top + 8) + 'px';
     if (b.hidden) b.hidden = false;
@@ -496,7 +496,7 @@
 
   function scan() {
     const ready = settings.enabled && subs.loggedIn !== false && subs.ts > 0;
-    document.documentElement.classList.toggle('ytuc-on', ready);
+    document.documentElement.classList.toggle('yousub-on', ready);
     // Traverse the DOM once (YouTube may have tens of thousands of elements), also counting grids and videos
     const grids = new Set();
     // Autoload counts only the visible page; YouTube keeps previous pages hidden
@@ -507,35 +507,35 @@
     const seen = new Set();
     const done = (card, parent) => {
       const shown = !page || page.contains(card);
-      const key = dedupe && shown && isList(parent) && card.__ytucKey;
+      const key = dedupe && shown && isList(parent) && card.__yousubKey;
       const dup = !!key && seen.has(key);
       if (key) seen.add(key);
-      if (card.hasAttribute('data-ytuc-dup') !== dup) card.toggleAttribute('data-ytuc-dup', dup);
+      if (card.hasAttribute('data-yousub-dup') !== dup) card.toggleAttribute('data-yousub-dup', dup);
       if (shown && !dup) marked++;
-      placeButton(card, card.__ytucKind);
+      placeButton(card, card.__yousubKind);
     };
 
     for (const card of document.querySelectorAll(CARD_SEL)) {
       const parent = card.parentElement;
       if (card.localName === 'ytd-rich-item-renderer' && parent?.id === 'contents' && parent.parentElement?.localName === 'ytd-rich-grid-renderer') grids.add(parent);
-      // Neither card data (data-ytuc-v from main-world.js) nor subscriptions changed; reuse the result
-      const sig = ready ? gen + '|' + card.getAttribute('data-ytuc-v') : '';
-      if (sig && card.__ytucSig === sig) { done(card, parent); continue; }
+      // Neither card data (data-yousub-v from main-world.js) nor subscriptions changed; reuse the result
+      const sig = ready ? gen + '|' + card.getAttribute('data-yousub-v') : '';
+      if (sig && card.__yousubSig === sig) { done(card, parent); continue; }
       // Only mark outermost cards to avoid duplicate marks on nested elements
       const r = ready && !parent?.closest(CARD_SEL) ? evaluate(card) : null;
       if (!r) { clearCard(card); continue; }
       // sub = subscribed; left = previously unsubscribed (yellow outline, no +); unsub = not subscribed
       const state = r.subscribed ? 'sub' : r.left ? 'left' : 'unsub';
-      if (card.getAttribute('data-ytuc-state') !== state) card.setAttribute('data-ytuc-state', state);
+      if (card.getAttribute('data-yousub-state') !== state) card.setAttribute('data-yousub-state', state);
       if (!r.id) r.vid = videoIdOfCard(card); // Fallback for resolving a channel ID when + is clicked
-      card.__ytucCh = r;
-      card.__ytucKey = dupKey(card);
+      card.__yousubCh = r;
+      card.__yousubKey = dupKey(card);
       // Only offer unsubscribe for a confirmed subscribed ID, avoiding mismatches from duplicate names
       const canUnsub = state === 'sub' && (r.subCollab ? r.subCollab.length > 0 : subs.ids.has(r.id));
       const kind = state === 'unsub' ? 'sub' : canUnsub ? 'unsub' : null;
-      card.__ytucKind = kind && buttonAllowed(card) ? kind : null;
+      card.__yousubKind = kind && buttonAllowed(card) ? kind : null;
       // Cache only confirmed channel IDs; reevaluate cards identified only by page text
-      card.__ytucSig = r.id ? sig : '';
+      card.__yousubSig = r.id ? sig : '';
       done(card, parent);
     }
 
@@ -557,23 +557,23 @@
   // For grids (Home, channel Videos tab), refresh first-column markers to preserve left margins.
   // Sorted, deduplicated video lists (keep in sync with content.css)
   const LIST_SEL = 'ytd-rich-grid-renderer > #contents, ytd-search ytd-item-section-renderer > #contents, #related ytd-item-section-renderer > #contents';
-  const isList = (el) => !!el && (el.__ytucList ??= el.matches(LIST_SEL));
+  const isList = (el) => !!el && (el.__yousubList ??= el.matches(LIST_SEL));
   const SORT_RANK = { unsub: -1, sub: 0, left: 1 };
   function sortRank(el) {
     if (el.localName === 'ytd-continuation-item-renderer') return 99;
-    if (el.hasAttribute('data-ytuc-dup')) return 100; // Hidden cards still shift subsequent grid columns
-    return SORT_RANK[el.getAttribute('data-ytuc-state')] || 0;
+    if (el.hasAttribute('data-yousub-dup')) return 100; // Hidden cards still shift subsequent grid columns
+    return SORT_RANK[el.getAttribute('data-yousub-state')] || 0;
   }
   function fixGridColumns(grids, active) {
     for (const grid of grids) {
       const kids = [...grid.children];
       const ranks = active ? kids.map(sortRank) : [];
       const sig = active ? gen + '|' + getComputedStyle(grid).getPropertyValue('--ytd-rich-grid-items-per-row') + '|' + ranks.join(',') : '';
-      if (grid.__ytucSortSig === sig) continue;
-      grid.__ytucSortSig = sig;
+      if (grid.__yousubSortSig === sig) continue;
+      grid.__yousubSortSig = sig;
       const sorted = ranks.map((r, i) => ({ el: kids[i], i, r })).sort((a, b) => a.r - b.r || a.i - b.i);
       if (!active || sorted.every((x, i) => x.i === i)) { // Nothing moved; let YouTube manage the layout
-        for (const el of kids) if (el.hasAttribute('data-ytuc-col')) el.removeAttribute('data-ytuc-col');
+        for (const el of kids) if (el.hasAttribute('data-yousub-col')) el.removeAttribute('data-yousub-col');
         continue;
       }
       const perRowCache = {};
@@ -581,20 +581,20 @@
       for (const { el } of sorted) {
         const visible = el.getClientRects().length > 0;
         if (el.localName !== 'ytd-rich-item-renderer') { if (visible) col = 0; continue; } // A full-width section starts a new row
-        if (!visible) { el.removeAttribute('data-ytuc-col'); continue; }
+        if (!visible) { el.removeAttribute('data-yousub-col'); continue; }
         const v = el.hasAttribute('is-slim-media') ? '--ytd-rich-grid-slim-items-per-row'
           : el.hasAttribute('is-post') ? '--ytd-rich-grid-posts-per-row' : '--ytd-rich-grid-items-per-row';
         const per = perRowCache[v] ??= (parseInt(getComputedStyle(el).getPropertyValue(v), 10) || parseInt(el.getAttribute('items-per-row'), 10) || 3);
         const val = col % per === 0 ? 'first' : 'rest';
         col++;
-        if (el.getAttribute('data-ytuc-col') !== val) el.setAttribute('data-ytuc-col', val);
+        if (el.getAttribute('data-yousub-col') !== val) el.setAttribute('data-yousub-col', val);
       }
     }
   }
 
   /* ---------------- autoload before sorting ----------------
    * YouTube loads more videos when ytd-continuation-item-renderer enters the viewport.
-   * While ytuc-autoload is active, this element is invisible but stays "on screen" (see content.css),
+   * While yousub-autoload is active, this element is invisible but stays "on screen" (see content.css),
    * so YouTube keeps loading without scrolling. Stop at AUTOLOAD.limit marked videos (n),
    * or after AUTOLOAD.stallMs without new items. Normal scrolling then resumes.
    */
@@ -610,7 +610,7 @@
       auto.done = n >= AUTOLOAD.limit || Date.now() - auto.since > AUTOLOAD.stallMs;
       on = !auto.done;
     }
-    document.documentElement.classList.toggle('ytuc-autoload', on);
+    document.documentElement.classList.toggle('yousub-autoload', on);
   }
 
   let scanTimer = 0;
@@ -622,11 +622,11 @@
   function applySettings() {
     gen++;
     const cl = document.documentElement.classList;
-    for (const c of [...cl]) if (c.startsWith('ytuc-mode-')) cl.remove(c);
-    cl.add('ytuc-mode-' + settings.mode);
-    cl.toggle('ytuc-sort', !!settings.sortUnsub);
-    document.documentElement.style.setProperty('--ytuc-color', settings.color);
-    document.documentElement.style.setProperty('--ytuc-left', settings.leftColor);
+    for (const c of [...cl]) if (c.startsWith('yousub-mode-')) cl.remove(c);
+    cl.add('yousub-mode-' + settings.mode);
+    cl.toggle('yousub-sort', !!settings.sortUnsub);
+    document.documentElement.style.setProperty('--yousub-color', settings.color);
+    document.documentElement.style.setProperty('--yousub-left', settings.leftColor);
     scheduleScan();
   }
 
@@ -642,15 +642,15 @@
   });
 
   chrome.storage.onChanged.addListener(safe((changes, area) => {
-    if (area === 'sync' && changes.ytucSettings) {
-      settings = { ...DEFAULTS, ...changes.ytucSettings.newValue };
+    if (area === 'sync' && changes.yousubSettings) {
+      settings = { ...DEFAULTS, ...changes.yousubSettings.newValue };
       applySettings();
     }
     if (area !== 'local') return;
-    if (changes.ytucSubs && !syncing) { loadSubs(changes.ytucSubs.newValue); reconcile(); scheduleScan(); }
-    if (changes.ytucUnsubs) {
+    if (changes.yousubSubs && !syncing) { loadSubs(changes.yousubSubs.newValue); reconcile(); scheduleScan(); }
+    if (changes.yousubUnsubs) {
       // Merge with newest-event-wins so pending local records are not overwritten
-      const inc = changes.ytucUnsubs.newValue || {};
+      const inc = changes.yousubUnsubs.newValue || {};
       const merged = { ...inc };
       for (const [id, e] of Object.entries(unsubs)) if (!merged[id] || e.at > merged[id].at) merged[id] = e;
       unsubs = merged;
@@ -661,22 +661,22 @@
 
   /* ---------------- init ---------------- */
   async function init() {
-    const [{ ytucSettings }, { ytucSubs, ytucUnsubs }] = await Promise.all([
-      chrome.storage.sync.get('ytucSettings'), chrome.storage.local.get(['ytucSubs', 'ytucUnsubs'])
+    const [{ yousubSettings }, { yousubSubs, yousubUnsubs }] = await Promise.all([
+      chrome.storage.sync.get('yousubSettings'), chrome.storage.local.get(['yousubSubs', 'yousubUnsubs'])
     ]);
-    unsubs = ytucUnsubs || {};
+    unsubs = yousubUnsubs || {};
     safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // Pull changes from other devices
-    settings = { ...DEFAULTS, ...ytucSettings };
-    loadSubs(ytucSubs);
+    settings = { ...DEFAULTS, ...yousubSettings };
+    loadSubs(yousubSubs);
     reconcile();
     applySettings();
 
     new MutationObserver((muts) => {
       if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target))) scheduleScan();
-    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-ytuc-v', 'hidden'] });
+    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-yousub-v', 'hidden'] });
     // Fallback every 10 seconds, or 2.5 seconds during autoload to detect an exhausted list
     let tick = 0;
-    setInterval(() => extAlive && (++tick % 4 === 0 || document.documentElement.classList.contains('ytuc-autoload')) && scheduleScan(), 2500);
+    setInterval(() => extAlive && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
     for (const ev of ['pointermove', 'pointerover']) document.addEventListener(ev, onPointer, { capture: true, passive: true });
     document.addEventListener('scroll', queueHover, { capture: true, passive: true });
     window.addEventListener('resize', queueHover, { passive: true });

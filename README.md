@@ -1,6 +1,8 @@
-# YT Unsub Detector
+# YOUSUB
 
-A Chromium-compatible browser extension that marks videos and channels you are not subscribed to across YouTube. All interface text, source comments, documentation, and newly exported data are in English.
+A Google Chrome browser extension (Manifest V3) that marks videos and channels you are not subscribed to across YouTube. All interface text, source comments, documentation, and exported data are in English.
+
+This project is **only a browser extension**: there is no CLI command, native messaging host, .deb package, or system installer.
 
 ## Features
 
@@ -11,122 +13,69 @@ A Chromium-compatible browser extension that marks videos and channels you are n
 - Refresh your subscription list and export it as CSV.
 - Optionally sync unsubscribe history between devices using a JSON file in your own Google Drive.
 
-Requires Google Chrome or Chromium installed from a `.deb` package on Linux, with Manifest V3 support (Chrome 111 or newer). Snap/Flatpak browser builds and Firefox are not supported by this packaging.
+## Requirements
 
-## Install on Ubuntu 26.10 through APT only
+- Google Chrome 111 or newer (Manifest V3).
+- A YouTube account for subscription detection.
 
-Ubuntu 26.10 uses the repository suite **`stonking`**. The project includes a Debian package, a deb822 APT source, and a GitHub Pages publishing workflow. The intended repository URL is:
+## Install from source
 
-```text
-https://patrickbuhagiar24.github.io/youtube/
-```
+1. Download or clone this repository.
+2. Open `chrome://extensions` in Chrome and enable **Developer mode**.
+3. Click **Load unpacked** and select this repository's root folder (the folder that contains `manifest.json`).
+4. Pin **YOUSUB** to the toolbar, open <https://www.youtube.com>, and sign in.
 
-**Availability:** these commands work after the maintainer completes [APT repository publishing](docs/PUBLISHING_APT.md), including enabling GitHub Pages under **Settings → Pages → Build and deployment → Source: GitHub Actions**. Once configured, pushes to `main` build and publish the signed repository automatically; the workflow can also be started manually. Adding packaging files to the source tree does not itself configure Pages or create a signing key.
+A source checkout needs no installer. Released builds also include an optional `.deb` package (below).
 
-Obtain the **full 40-character signing-key fingerprint** from a trusted maintainer channel independent of the repository website. Do not use the fingerprint downloaded from the same website as your only verification. The commands below require Bash, `curl`, and `gpg` (provided by `gnupg`). They download the key into a private temporary directory and ask for the trusted fingerprint before changing system files. If it is unavailable or does not match, stop and contact the maintainer.
+## Signed release builds
 
-```bash
-(
-  set -euo pipefail
-  tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
-  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-    -o "$tmpdir/archive-keyring.gpg" \
-    https://patrickbuhagiar24.github.io/youtube/archive-keyring.gpg
-  fingerprint=$(gpg --batch --with-colons --show-keys "$tmpdir/archive-keyring.gpg" |
-    awk -F: '$1 == "pub" { count++; want = 1; next }
-      want && $1 == "fpr" { print $10; want = 0 }
-      END { if (count != 1) exit 1 }')
-  [[ "$fingerprint" =~ ^[A-F0-9]{40}$ ]] || { echo 'Invalid key fingerprint.' >&2; exit 1; }
-  printf 'Downloaded key fingerprint: %s\n' "$fingerprint"
-  read -r -p 'Enter the independently verified fingerprint: ' expected
-  expected=${expected//[[:space:]]/}
-  [[ "${expected^^}" == "$fingerprint" ]] || { echo 'Fingerprint mismatch; nothing installed.' >&2; exit 1; }
-  cat > "$tmpdir/yt-unsub-detector.sources" <<'EOF'
-Types: deb
-URIs: https://patrickbuhagiar24.github.io/youtube/
-Suites: stonking
-Components: main
-Architectures: all
-Signed-By: /etc/apt/keyrings/yt-unsub-detector.gpg
-EOF
-  sudo install -d -m 0755 /etc/apt/keyrings
-  sudo install -m 0644 "$tmpdir/archive-keyring.gpg" /etc/apt/keyrings/yt-unsub-detector.gpg
-  sudo install -m 0644 "$tmpdir/yt-unsub-detector.sources" /etc/apt/sources.list.d/yt-unsub-detector.sources
-  sudo apt update
-  sudo apt install yt-unsub-detector
-)
-```
+The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch, on `v*` tags, and when a release is published. It uses the repository secret **`CRX_PRIVATE_KEY`** — an RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact.
 
-The local source explicitly scopes the verified key to this repository. No unsigned fallback or `Trusted: yes` is used. If a command fails, the subshell stops and removes its temporary directory.
+Because every release uses the same secret key, all users get the **same extension ID**, and reinstalling or upgrading keeps that ID and the browser storage that belongs to it. This also holds when the CRX is distributed through APT. The private key is written only to a temporary runner file with `0600` permissions; it is never printed, committed, or included in an artifact.
 
-That is the whole installation. The package registers the extension for Chrome/Chromium automatically. **Restart the browser** after APT finishes, then open <https://www.youtube.com> and sign in. There is no `Load unpacked` step and no separate per-user installer command.
+## Install on Linux with APT
 
-The first APT installation creates a machine-local CRX signing key under `/var/lib/yt-unsub-detector` and uses it to pack/register the extension. Upgrades keep that key, so the extension ID and browser storage remain stable. Google Drive configuration is never stored inside the extension package.
-
-### Upgrade
+Download `yousub_<version>_all.deb` from the `yousub-extension` artifact and install it:
 
 ```bash
-sudo apt update
-sudo apt upgrade
+sudo apt install ./yousub_2.0.0_all.deb
 ```
 
-Restart the browser after the upgrade. Your user configuration and browser extension storage are preserved.
+Restart Chrome, then open <https://www.youtube.com> and sign in. The package only places the signed CRX under `/usr/share/yousub` and registers it in `/etc/opt/chrome/extensions` and `/etc/chromium/extensions`. It installs **no CLI command, native messaging host, or per-user configuration files**. To remove the registration, run `sudo apt remove yousub`; Chrome profile data is left untouched.
 
-### Remove
+Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
 
-```bash
-sudo apt remove yt-unsub-detector
-```
+## Extension ID and the CRX key
 
-Restart the browser so it notices the removed registration. User configuration under `~/.config/yt-unsub-detector` is left in place. `sudo apt purge yt-unsub-detector` also removes the machine-local CRX key; a later reinstall will create a new extension ID.
+A Chrome extension ID is derived from its **public signing key**: Chrome takes the first 16 bytes of the SHA-256 hash of the DER-encoded public key and maps each nibble to `a`–`p`. The ID therefore stays the same when the extension is reinstalled **as long as the same key is used**. If the key changes or is lost, the ID changes and Chrome treats it as a different extension, so its browser storage (settings, subscription list, and local unsubscribe history) does not carry over.
 
-### Local package installation
+- **Unpacked installation (as above):** the signed ZIP from the release workflow already contains the `key` field, so it keeps the release ID wherever it is extracted. A raw source checkout has no `key`: Chrome then derives the ID from the folder path, and moving or renaming the folder can change it. To pin the ID of a source build, generate a key pair once and add the public key to the manifest:
 
-If you have a built package instead of a published repository:
+  ```bash
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out yousub.pem
+  openssl pkey -in yousub.pem -pubout -outform DER | base64 -w0
+  ```
 
-```bash
-sudo apt install ./dist/yt-unsub-detector_1.21.0ubuntu3_all.deb
-```
+  Put the printed value in a top-level `"key": "..."` field in `manifest.json`. Keep `yousub.pem` private and backed up; it is ignored by Git. Every installation that uses the same public key gets the same ID, even from a different folder.
 
-Restart the browser afterward.
+- **Packed CRX:** sign every new CRX with the same private key (for example `chrome.exe --pack-extension=<folder> --pack-extension-key=yousub.pem`). Chrome Web Store uploads likewise keep the ID when the same upload key is reused.
 
-## Per-user Google Drive configuration
+Reinstalling with the same key keeps the ID and browser storage. Clearing the Chrome profile, removing the extension together with its site data, or switching keys does not. Data written to your own Google Drive file is independent of the extension ID.
 
-Google Drive is disabled until both a file link and a valid service account key are provided. Configuration lives in the user's XDG configuration folder, outside the extension:
+## Google Drive sync (optional)
 
-```text
-~/.config/yt-unsub-detector/google-drive.json
-~/.config/yt-unsub-detector/service-account.json
-```
-
-If `XDG_CONFIG_HOME` is set, the folder is `$XDG_CONFIG_HOME/yt-unsub-detector`. The extension creates private default files on first use. You can also create or locate them explicitly:
-
-```bash
-# Run as your normal desktop user, NOT with sudo.
-yt-unsub-detector config
-yt-unsub-detector status
-```
+Google Drive sync is disabled until both settings are provided in the extension popup. The original `google-drive.json` and `service-account.json` files can be loaded directly with the file pickers in the popup; their contents are read locally in the browser and saved as the popup settings. No files outside the browser and no helper application are used.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
-2. Download its JSON key and save it as `service-account.json` in the user configuration folder.
+2. Download its JSON key.
 3. Upload `YouTube.json` to **your own** Google Drive. Share that file with the service account's `client_email` as an **Editor**. A new service account cannot create files using its own storage quota.
-4. Put the shared **file** link, not a folder link, into `google-drive.json`:
+4. Open the extension popup → **☁️ Google Drive sync** and select `google-drive.json` (the file containing the shared **file** link, not a folder link) and `service-account.json` with the two file pickers. These are the only inputs: when both files are valid, their settings are saved and synced automatically.
 
-   ```json
-   {
-     "link": "https://drive.google.com/file/d/YOUR_FILE_ID/view"
-   }
-   ```
+Both values are saved in `chrome.storage.local` for this browser profile only; the key is never placed in `chrome.storage.sync`, in source code, or in the extension archive. **Local extension storage is not encrypted**: keep your Chrome profile private, remove personal keys before sharing a profile, and never commit a real key to a repository. **Remove saved configuration** in the popup deletes both values.
 
-   `google-drive.json` may also contain a bare JSON string with the link. The service account key is always read from `service-account.json` beside it.
-5. Restart the browser or click the extension's Google Drive sync button.
+The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 
-The extension reads these two files through an APT-installed native messaging host. The host manifest allows only this extension's ID, and the configuration files are created with private permissions (`0700` directory, `0600` files). An existing `drive-config.json` wrapper is migrated into these two files and removed automatically. Configuration from the older per-user extension directory is also migrated once, without overwriting newer user edits. The repository root contains a placeholder template only; the installed extension reads the per-user files, not the template.
-
-**Keep service account keys private.** Never put a real key in a commit, issue, screenshot, or shared extension archive. The service account key is separate from the APT repository signing key and the machine-local CRX signing key.
-
-### English data format
+### Data format
 
 Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, and channel fields `id`, `name`, `url`, `status`, and `date`. Status values are `unsubscribed` and `resubscribed`. Only this English format is read and written. Keep a backup of your Drive file before upgrading.
 
@@ -134,21 +83,21 @@ Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, a
 
 Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results, up to the built-in limit. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
 
-## Build and test
+## Development
 
-Build dependencies on Ubuntu 26.10:
+No build step is required. Check and test the source with Node.js 18 or newer:
 
 ```bash
-sudo apt update
-sudo apt install build-essential dpkg-dev nodejs python3 openssl make gzip xz-utils
-make test
-make package
-make apt-repository
+node --check background.js
+node --check shared.js
+node --check drive.js
+node --check content/content.js
+node --check content/main-world.js
+node --check popup/popup.js
+node --test tests/*.test.cjs
 ```
 
-The binary package is written to `dist/`. `make apt-repository` creates **unsigned** staging metadata; it must be signed before publication. `make source-package` builds a source package. See [APT repository publishing](docs/PUBLISHING_APT.md) for signing, CI secrets, and deployment.
-
-The CI workflow builds and tests inside an `ubuntu:26.10` container. Local builds on other Debian-based systems can check packaging, but are not a substitute for the target-release test.
+The CI workflow runs the same checks for every push and pull request.
 
 ## License
 

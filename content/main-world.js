@@ -1,18 +1,18 @@
 /*
  * Runs in the YouTube page's MAIN world (access to window.ytcfg and Polymer data).
  *  1. Reads all subscriptions from youtube.com/feed/channels (FEchannels, every page).
- *  2. Writes each card's channel to data-ytuc-* attributes for content.js.
+ *  2. Writes each card's channel to data-yousub-* attributes for content.js.
  *  3. Tracks Subscribe / Unsubscribe actions in real time.
  */
 (() => {
   'use strict';
-  if (window.__YTUC_MAIN__) return;
-  window.__YTUC_MAIN__ = true;
+  if (window.__YOUSUB_MAIN__) return;
+  window.__YOUSUB_MAIN__ = true;
 
-  const OUT = 'ytuc-main';
-  const IN = 'ytuc-content';
+  const OUT = 'yousub-main';
+  const IN = 'yousub-content';
   const ORIGIN = 'https://www.youtube.com';
-  const { CARD_SEL } = YTUC;
+  const { CARD_SEL } = YOUSUB;
   const origFetch = window.fetch.bind(window);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const post = (type, payload = {}) => window.postMessage({ source: OUT, type, payload }, location.origin);
@@ -436,7 +436,7 @@
     return (h.match(/[?&]v=([\w-]{11})/) || h.match(/\/shorts\/([\w-]{11})/))?.[1] || '';
   }
 
-  /* ---------- Write data-ytuc-* attributes to each card ---------- */
+  /* ---------- Write data-yousub-* attributes to each card ---------- */
   let dataCache = new WeakMap();
   let btnCache = new WeakMap();
   let containerCache = new WeakMap();
@@ -475,8 +475,8 @@
       let ch = d ? findChannel(d) : null;
       if (ch?.ad) {
         dataCache.set(el, { d, vid, mv: mapVersion, resolved: true });
-        setAttr(el, 'data-ytuc-ad', '1');
-        el.setAttribute('data-ytuc-v', String(++ver));
+        setAttr(el, 'data-yousub-ad', '1');
+        el.setAttribute('data-yousub-v', String(++ver));
         continue;
       }
       const fromMap = vid ? videoMap.get(vid) : null;
@@ -487,15 +487,15 @@
       const collabAttr = collab ? JSON.stringify(collab) : '';
 
       dataCache.set(el, { d, vid, mv: mapVersion, resolved: !!ch?.id });
-      const changed = el.getAttribute('data-ytuc-cid') !== (ch?.id || null) || el.getAttribute('data-ytuc-name') !== (ch?.name || null) ||
-        (el.getAttribute('data-ytuc-collab') || '') !== collabAttr;
-      setAttr(el, 'data-ytuc-cid', ch?.id || '');
-      setAttr(el, 'data-ytuc-url', ch?.url || '');
-      setAttr(el, 'data-ytuc-name', ch?.name || '');
-      setAttr(el, 'data-ytuc-vid', vid);
-      setAttr(el, 'data-ytuc-collab', collabAttr);
-      setAttr(el, 'data-ytuc-ad', '');
-      if (changed || !prev || prev.vid !== vid) el.setAttribute('data-ytuc-v', String(++ver));
+      const changed = el.getAttribute('data-yousub-cid') !== (ch?.id || null) || el.getAttribute('data-yousub-name') !== (ch?.name || null) ||
+        (el.getAttribute('data-yousub-collab') || '') !== collabAttr;
+      setAttr(el, 'data-yousub-cid', ch?.id || '');
+      setAttr(el, 'data-yousub-url', ch?.url || '');
+      setAttr(el, 'data-yousub-name', ch?.name || '');
+      setAttr(el, 'data-yousub-vid', vid);
+      setAttr(el, 'data-yousub-collab', collabAttr);
+      setAttr(el, 'data-yousub-ad', '');
+      if (changed || !prev || prev.vid !== vid) el.setAttribute('data-yousub-v', String(++ver));
     }
 
     scanButtons(buttons);
@@ -564,9 +564,9 @@
   // Some YouTube requests use XHR
   try {
     const { open, send } = XMLHttpRequest.prototype;
-    XMLHttpRequest.prototype.open = function (method, url) { this.__ytucUrl = String(url || ''); return open.apply(this, arguments); };
+    XMLHttpRequest.prototype.open = function (method, url) { this.__yousubUrl = String(url || ''); return open.apply(this, arguments); };
     XMLHttpRequest.prototype.send = function () {
-      if (INDEX_URL.test(this.__ytucUrl || '')) {
+      if (INDEX_URL.test(this.__yousubUrl || '')) {
         this.addEventListener('load', () => {
           try { safeIndex(this.responseType === 'json' ? this.response : JSON.parse(this.responseText)); } catch { /* */ }
         });

@@ -1,24 +1,17 @@
 #!/bin/sh
-# Register the extension for Chrome/Chromium after APT installs the files.
+# Register the signed CRX for Chrome/Chromium. No CLI or helper program.
 set -eu
 
-STATE=/var/lib/yt-unsub-detector
-KEY="$STATE/crx-private.pem"
+[ "${1:-}" = configure ] || exit 0
 
-case "${1:-}" in
-  configure)
-    install -d -m 0700 "$STATE"
-    if [ ! -f "$KEY" ]; then
-      ( umask 077
-        openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEY.tmp"
-        mv "$KEY.tmp" "$KEY"
-      )
-    fi
-    chmod 0600 "$KEY"
-    # Browser registration and host directories must be accessible to desktop users.
-    umask 022
-    python3 /usr/share/yt-unsub-detector/browser_setup.py
-    ;;
-esac
+base=/usr/share/yousub
+[ -f "$base/yousub-id.txt" ] || exit 0
+extension=$(cat "$base/yousub-id.txt")
+[ -n "$extension" ] || exit 0
+
+for directory in /etc/opt/chrome/extensions /etc/chromium/extensions; do
+  install -d -m 0755 "$directory"
+  install -m 0644 "$base/yousub-external.json" "$directory/$extension.json"
+done
 
 exit 0

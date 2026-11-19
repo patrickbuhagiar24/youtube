@@ -3,7 +3,7 @@
  * the popup, and the service worker.
  */
 // eslint-disable-next-line no-unused-vars, no-var
-var YTUC = Object.freeze({
+var YOUSUB = Object.freeze({
   DEFAULTS: Object.freeze({
     enabled: true,
     mode: 'highlight', // highlight | badge | dim | only-unsub | hide-unsub
@@ -27,7 +27,10 @@ var YTUC = Object.freeze({
   AUTOLOAD: Object.freeze({ limit: 500, stallMs: 15000 }),
 
   // Local storage keys in use (other keys are removed on update)
-  STORE_KEYS: Object.freeze(['ytucSubs', 'ytucUnsubs', 'ytucDrive']),
+  STORE_KEYS: Object.freeze(['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig']),
+
+  // Drive settings entered in the popup: { link, keyText } (stored locally, never synced)
+  CONFIG_KEY: 'yousubDriveConfig',
 
   // Google Drive file for the user-confirmed unsubscribe history
   DRIVE_FILE: 'YouTube.json',

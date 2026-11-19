@@ -1,17 +1,16 @@
 /*
- * Sync the unsubscribe history to Google Drive (YTUC.DRIVE_FILE) using a service account.
+ * Sync the unsubscribe history to Google Drive (YOUSUB.DRIVE_FILE) using a service account.
  * Loaded by the service worker (background.js).
  *
- * Configuration is read from the USER'S CONFIGURATION FOLDER through the APT-installed
- * native messaging host, never from the extension package. The folder contains only:
- *   ~/.config/yt-unsub-detector/google-drive.json    -> { "link": "<shared YouTube.json file link>" }
- *   ~/.config/yt-unsub-detector/service-account.json -> JSON key downloaded from Google Cloud
+ * This is a browser-extension-only project: there is no CLI, native messaging host, or
+ * configuration file outside the extension. Settings are entered in the popup and kept
+ * in chrome.storage.local.yousubDriveConfig as { link, keyText }.
  *
  * Only a FILE LINK is used: upload YouTube.json to your own Drive, share it with the service account
  * as an Editor, and paste its file link. The extension never creates or searches for files
  * (new service accounts also have no storage quota).
  *
- * Local data (chrome.storage.local.ytucUnsubs):
+ * Local data (chrome.storage.local.yousubUnsubs):
  *   { [channelId]: { s: 'unsub' | 'resub', at: timestamp, title, url } }
  * Cross-device merge: the most recent event wins for each channel.
  * Only the English Drive file format is read and written.
@@ -24,59 +23,48 @@ var Drive = (() => {
   const SCOPE = 'https://www.googleapis.com/auth/drive';
   const RESUB_KEEP_MS = 180 * 864e5; // Keep resubscribe events for 180 days so cross-device syncing remains correct
 
-  /* ---------------- configuration from the user's XDG config folder ---------------- */
-  const CONFIG_FILE = 'google-drive.json';
-  const KEY_FILE = 'service-account.json';
-  const NATIVE_HOST = 'io.github.patrickbuhagiar24.yt_unsub_detector';
+  /* ---------------- configuration entered in the popup ---------------- */
+  const SETTINGS = 'the Google Drive settings in the popup';
 
-  function readUserConfig() {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendNativeMessage(NATIVE_HOST, { type: 'readConfig' }, (response) => {
-        const error = chrome.runtime.lastError;
-        if (error) {
-          reject(new Error('The YT Unsub Detector configuration host is unavailable. Install the yt-unsub-detector APT package and restart your browser.'));
-          return;
-        }
-        resolve(response);
-      });
-    });
+  /** Read a link from google-drive.json: { "link": "..." } or a bare JSON string. */
+  function linkFromConfig(text) {
+    let value;
+    try { value = typeof text === 'string' ? JSON.parse(text) : text; }
+    catch { throw new Error('google-drive.json is not valid JSON.'); }
+    const link = typeof value === 'string' ? value : value && typeof value === 'object' ? value.link : '';
+    return typeof link === 'string' ? link.trim() : '';
   }
 
   /** Extract a file ID from a Google Drive file link. '' means no link is configured. */
-  function fileIdOf(v, source = CONFIG_FILE) {
+  function fileIdOf(v, source = SETTINGS) {
     v = String(v || '').trim();
     if (!v || /^[A-Z]+(?:_[A-Z]+)+$/.test(v)) return '';
     if (/\/folders\//.test(v)) {
-      throw new Error(`The link in ${source} points to a folder. Use a file link: right-click ${YTUC.DRIVE_FILE} → Share → Copy link.`);
+      throw new Error(`The link in ${source} points to a folder. Use a file link: right-click ${YOUSUB.DRIVE_FILE} → Share → Copy link.`);
     }
     const m = v.match(/\/file\/d\/([\w-]+)/) || v.match(/[?&]id=([\w-]{10,})/) || v.match(/^([\w-]{10,})$/);
     if (m) return m[1];
-    throw new Error(`The link in ${source} is not a Google Drive file link. Right-click ${YTUC.DRIVE_FILE} → Share → Copy link.`);
+    throw new Error(`The link in ${source} is not a Google Drive file link. Right-click ${YOUSUB.DRIVE_FILE} → Share → Copy link.`);
   }
 
-  /** Read google-drive.json and the service account key through the native host. */
+  /** Read the popup settings from local extension storage. Re-read on every sync. */
   async function loadConfig() {
-    const response = await readUserConfig();
-    if (!response || response.ok !== true) {
-      throw new Error(response?.error || `${CONFIG_FILE} could not be read from your user configuration folder.`);
-    }
-    const configPath = response.configPath || CONFIG_FILE;
-    if (!response.configured) return { disabled: true, configPath };
-    const fileId = fileIdOf(response.link, configPath);
-    const sa = response.key;
-    // An absent or empty key is unconfigured; never try to authenticate with the placeholder.
-    if (sa === null || sa === undefined) {
-      return fileId ? { missingKey: response.keyPath || KEY_FILE, configPath } : { disabled: true, configPath };
-    }
-    const key = parseKey(sa);
-    if (!fileId) return { missingLink: true, key, configPath };
-    return { key, fileId, configPath };
+    const { [YOUSUB.CONFIG_KEY]: saved = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
+    const link = String(saved.link || '').trim();
+    const keyText = typeof saved.keyText === 'string' ? saved.keyText.trim() : '';
+    if (!link && !keyText) return { disabled: true };
+    const fileId = link ? fileIdOf(link) : '';
+    // An absent or empty key is unconfigured; never try to authenticate with a placeholder.
+    if (!keyText) return fileId ? { missingKey: true } : { disabled: true };
+    const key = parseKey(keyText);
+    if (!fileId) return { missingLink: true, key };
+    return { key, fileId };
   }
 
   /** Validate a service account JSON key and return only the fields we use. */
   function parseKey(text) {
     let k;
-    try { k = typeof text === 'string' ? JSON.parse(text) : text; } catch { throw new Error('This file is not a valid JSON key file.'); }
+    try { k = typeof text === 'string' ? JSON.parse(text) : text; } catch { throw new Error('The service account key is not valid JSON.'); }
     if (k?.type !== 'service_account' || !k.client_email || !/BEGIN PRIVATE KEY/.test(k.private_key || '')) {
       throw new Error('This is not a service account key. Download a JSON key from Google Cloud → IAM → Service Accounts → Keys.');
     }
@@ -107,7 +95,7 @@ var Drive = (() => {
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.access_token) {
       throw new Error(/invalid_grant|invalid_client|account not found/i.test(JSON.stringify(j))
-        ? 'The service account key is invalid or has been revoked. Create a new key, save it in your YT Unsub Detector user configuration folder, then click the extension sync button.'
+        ? 'The service account key is invalid or has been revoked. Create a new key, paste it into the popup settings, then click the extension sync button.'
         : 'Could not sign in to Google with the service account. Check your internet connection.');
     }
     tokenCache = { email: key.client_email, token: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
@@ -126,7 +114,7 @@ var Drive = (() => {
       throw new Error('The service account has no storage quota.');
     }
     if (res.status === 404) throw Object.assign(new Error('File not found.'), { code: 404 });
-    if (res.status === 403) throw new Error(`The service account does not have permission. Share ${YTUC.DRIVE_FILE} with it as an "Editor".`);
+    if (res.status === 403) throw new Error(`The service account does not have permission. Share ${YOUSUB.DRIVE_FILE} with it as an "Editor".`);
     throw new Error(`Google Drive rejected the request (status ${res.status}). Try again later.`);
   }
 
@@ -137,18 +125,18 @@ var Drive = (() => {
       f = await (await call(key, `${API}/${fileId}?fields=${encodeURIComponent('id,name,mimeType,trashed,capabilities(canEdit)')}&supportsAllDrives=true`)).json();
     } catch (e) {
       if (e.code === 404) {
-        throw new Error(`The linked file has not been shared. In Google Drive, right-click ${YTUC.DRIVE_FILE} → Share → add ${key.client_email} as an Editor.`);
+        throw new Error(`The linked file has not been shared. In Google Drive, right-click ${YOUSUB.DRIVE_FILE} → Share → add ${key.client_email} as an Editor.`);
       }
       throw e;
     }
     if (f.mimeType === 'application/vnd.google-apps.folder') {
-      throw new Error(`The configured link points to a folder. Use a file link: right-click ${YTUC.DRIVE_FILE} → Share → Copy link.`);
+      throw new Error(`The configured link points to a folder. Use a file link: right-click ${YOUSUB.DRIVE_FILE} → Share → Copy link.`);
     }
-    if (f.trashed) throw new Error(`${f.name || YTUC.DRIVE_FILE} is in Google Drive Trash. Restore the file first.`);
+    if (f.trashed) throw new Error(`${f.name || YOUSUB.DRIVE_FILE} is in Google Drive Trash. Restore the file first.`);
     if (/^application\/vnd\.google-apps\./.test(f.mimeType || '')) {
-      throw new Error(`"${f.name}" is a Google document or spreadsheet, not ${YTUC.DRIVE_FILE}. Upload a JSON copy of ${YTUC.DRIVE_FILE} to your own Drive, then share that file.`);
+      throw new Error(`"${f.name}" is a Google document or spreadsheet, not ${YOUSUB.DRIVE_FILE}. Upload a JSON copy of ${YOUSUB.DRIVE_FILE} to your own Drive, then share that file.`);
     }
-    if (!f.capabilities?.canEdit) throw new Error(`${f.name || YTUC.DRIVE_FILE} is view-only. Change ${key.client_email} to "Editor".`);
+    if (!f.capabilities?.canEdit) throw new Error(`${f.name || YOUSUB.DRIVE_FILE} is view-only. Change ${key.client_email} to "Editor".`);
     return f;
   }
 
@@ -178,7 +166,7 @@ var Drive = (() => {
       .map(([id, e]) => ({ id, name: e.title || '', url: e.url ? new URL(e.url, 'https://www.youtube.com').href : `https://www.youtube.com/channel/${id}`, status: LABEL[e.s], date: new Date(e.at).toISOString() }))
       .sort((a, b) => (a.status === b.status ? b.date.localeCompare(a.date) : a.status === LABEL.unsub ? -1 : 1));
     return JSON.stringify({
-      application: 'YT Unsub Detector',
+      application: 'YOUSUB',
       description: 'YouTube channels you have unsubscribed from. Updated automatically by the extension; avoid editing this file manually.',
       updatedAt: new Date().toISOString(),
       unsubscribeCount: rows.filter((r) => r.status === LABEL.unsub).length,
@@ -206,8 +194,8 @@ var Drive = (() => {
   /* ---------------- synchronization ---------------- */
   let running = null;
   const save = async (patch) => {
-    const { ytucDrive: cur = {} } = await chrome.storage.local.get('ytucDrive');
-    await chrome.storage.local.set({ ytucDrive: { ...cur, ...patch } });
+    const { yousubDrive: cur = {} } = await chrome.storage.local.get('yousubDrive');
+    await chrome.storage.local.set({ yousubDrive: { ...cur, ...patch } });
   };
 
   /** Pull from Drive, merge with local data, and write back if anything changed. */
@@ -220,17 +208,17 @@ var Drive = (() => {
           return { ok: false, error: e.message };
         }
         if (!cfg || cfg.disabled) {
-          await chrome.storage.local.set({ ytucDrive: { configured: false, configPath: cfg?.configPath || '' } });
+          await chrome.storage.local.set({ yousubDrive: { configured: false } });
           return { ok: false, configured: false };
         }
         if (cfg.missingKey || cfg.missingLink) {
-          const msg = cfg.missingKey ? `The key file "${cfg.missingKey}" is missing. Save the service account key as ${KEY_FILE} in your user configuration folder.`
-            : `Paste the ${YTUC.DRIVE_FILE} file link into ${cfg.configPath} (right-click the file → Share → Copy link).`;
-          await chrome.storage.local.set({ ytucDrive: { configured: true, syncing: false, email: cfg.key?.client_email || '', lastError: msg } });
+          const msg = cfg.missingKey ? `Paste your service account JSON key into ${SETTINGS}.`
+            : `Paste the ${YOUSUB.DRIVE_FILE} file link into ${SETTINGS} (right-click the file → Share → Copy link).`;
+          await chrome.storage.local.set({ yousubDrive: { configured: true, syncing: false, email: cfg.key?.client_email || '', lastError: msg } });
           return { ok: false, error: msg };
         }
         const { key, fileId: id } = cfg;
-        const { ytucDrive: prev = {}, ytucUnsubs = {} } = await chrome.storage.local.get(['ytucDrive', 'ytucUnsubs']);
+        const { yousubDrive: prev = {}, yousubUnsubs = {} } = await chrome.storage.local.get(['yousubDrive', 'yousubUnsubs']);
         const status = { configured: true, email: key.client_email, fileId: id, fileName: prev.fileId === id ? prev.fileName || '' : '', checked: false };
         try {
           await save({ ...status, syncing: true });
@@ -245,11 +233,11 @@ var Drive = (() => {
             throw e;
           }
           const remote = fromFile(text);
-          const merged = merge(remote, ytucUnsubs);
+          const merged = merge(remote, yousubUnsubs);
           if (!same(merged, remote) || !/"channels"/.test(text)) await writeFile(key, id, toFile(merged));
-          const latest = (await chrome.storage.local.get('ytucUnsubs')).ytucUnsubs || {};
+          const latest = (await chrome.storage.local.get('yousubUnsubs')).yousubUnsubs || {};
           const finalMap = merge(merged, latest); // Preserve local changes made while the sync was running
-          if (!same(finalMap, latest)) await chrome.storage.local.set({ ytucUnsubs: finalMap });
+          if (!same(finalMap, latest)) await chrome.storage.local.set({ yousubUnsubs: finalMap });
           Object.assign(status, { lastSync: Date.now(), lastError: '', count: Object.values(finalMap).filter((e) => e.s === 'unsub').length });
           return { ok: true };
         } catch (e) {
@@ -266,5 +254,5 @@ var Drive = (() => {
     return running;
   }
 
-  return { parseKey, fileIdOf, sync, merge, fromFile, toFile };
+  return { parseKey, fileIdOf, linkFromConfig, sync, merge, fromFile, toFile };
 })();
