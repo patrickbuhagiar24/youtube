@@ -43,8 +43,10 @@
     <div class="field">
       <span>Configuration files</span>
       <div class="files">
-        <label class="filebtn">google-drive.json<input type="file" id="driveLinkFile" accept=".json,application/json" hidden></label>
-        <label class="filebtn">service-account.json<input type="file" id="driveKeyFile" accept=".json,application/json" hidden></label>
+        <label class="filebtn" for="driveLinkFile">google-drive.json</label>
+        <input class="fileinput" type="file" id="driveLinkFile" accept=".json,application/json">
+        <label class="filebtn" for="driveKeyFile">service-account.json</label>
+        <input class="fileinput" type="file" id="driveKeyFile" accept=".json,application/json">
       </div>
       <small id="fileStatus" class="muted" aria-live="polite">Select both files to save and sync automatically.</small>
     </div>

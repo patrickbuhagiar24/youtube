@@ -1,3 +1,9 @@
+yousub (2.1.2) unstable; urgency=medium
+
+  * Use visible file inputs in the popup so the file pickers are reliable.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:35:00 +0000
+
 yousub (2.1.1) unstable; urgency=medium
 
   * Explain why a Pastex-style folder_url configuration is rejected and require
