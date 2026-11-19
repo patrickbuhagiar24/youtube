@@ -151,9 +151,9 @@ jobs:
           sed -i "s/^Version: .*/Version: $VERSION/" "$deb/DEBIAN/control"
           install -m 0755 debian/postinst debian/postrm "$deb/DEBIAN/"
           (cd "$deb" && find usr -type f -print0 | sort -z | xargs -0 md5sum > DEBIAN/md5sums)
-          dpkg-deb --root-owner-group --build "$deb" "$RUNNER_TEMP/yousub_$VERSION_all.deb"
-          dpkg-deb --info "$RUNNER_TEMP/yousub_$VERSION_all.deb"
-          dpkg-deb --contents "$RUNNER_TEMP/yousub_$VERSION_all.deb"
+          dpkg-deb --root-owner-group --build "$deb" "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
+          dpkg-deb --info "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
+          dpkg-deb --contents "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
 
       - name: Record checksums
         run: |

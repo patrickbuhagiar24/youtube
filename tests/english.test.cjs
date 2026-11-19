@@ -48,7 +48,7 @@ test('the Debian package only registers the signed CRX', () => {
   assert.match(postinst, /yousub-id\.txt/);
   const workflow = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.match(workflow, /dpkg-deb --root-owner-group/);
-  assert.match(workflow, /yousub_\$VERSION_all\.deb/);
+  assert.match(workflow, /yousub_\${VERSION}_all\.deb/);
   assert.match(workflow, /yousub-\*\.deb/);
 });
 
