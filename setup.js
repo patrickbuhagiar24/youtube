@@ -14,50 +14,6 @@ const showError = (message) => {
   $('driveFormError').textContent = message || '';
 };
 
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function saveFolderHandle(handle) {
-  const db = await openDB();
-  try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(handle, HANDLE_KEY);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } finally { db.close(); }
-}
-
-async function loadFolderHandle() {
-  const db = await openDB();
-  try {
-    return await new Promise((resolve, reject) => {
-      const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(HANDLE_KEY);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-  } finally { db.close(); }
-}
-
-async function clearFolderHandle() {
-  const db = await openDB();
-  try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).delete(HANDLE_KEY);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } finally { db.close(); }
-}
-
 async function hasReadPermission(handle) {
   if (!handle.queryPermission) return true;
   const state = await handle.queryPermission({ mode: 'read' });
@@ -72,7 +28,7 @@ async function findConfigFiles(directory) {
   let visited = 0;
   async function walk(folder, depth) {
     if (depth > 2 || visited > 300 || (files[LINK_NAME] && files[KEY_NAME])) return;
-    for await (const [name, entry] of directory === folder ? folder.entries() : folder.entries()) {
+    for await (const [name, entry] of folder.entries()) {
       visited += 1;
       if (visited > 300) return;
       if (entry.kind === 'directory') {
@@ -125,7 +81,7 @@ $('folderBtn').addEventListener('click', async () => {
       showError('Read permission for the folder was not granted.');
       return;
     }
-    await saveFolderHandle(handle);
+    await YousubConfigStore.saveFolderHandle(handle);
     showError('');
     await applyFolderFiles(handle);
   } catch (e) {
@@ -144,7 +100,7 @@ async function renderSaved() {
 
 $('setupClearBtn').addEventListener('click', async () => {
   await chrome.storage.local.remove([CONFIG_KEY, 'yousubDrive', 'yousubUnsubs']);
-  await clearFolderHandle();
+  await YousubConfigStore.clearFolderHandle();
   $('fileStatus').textContent = FILE_HINT;
   $('folderStatus').textContent = 'No folder selected.';
   showError('');
@@ -154,7 +110,7 @@ $('setupClearBtn').addEventListener('click', async () => {
 (async () => {
   await renderSaved();
   try {
-    const handle = await loadFolderHandle();
+    const handle = await YousubConfigStore.loadFolderHandle();
     if (!handle) {
       $('folderStatus').textContent = 'No folder selected.';
       return;

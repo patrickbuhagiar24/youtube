@@ -136,7 +136,7 @@ async function syncNow() {
 $('driveSyncBtn').addEventListener('click', syncNow);
 $('driveSetupBtn').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }));
 $('driveClearBtn').addEventListener('click', async () => {
-  await chrome.storage.local.remove([YOUSUB.CONFIG_KEY, 'yousubDrive']);
+  await chrome.runtime.sendMessage({ type: 'driveClear' }).catch(() => {});
   renderDrive();
 });
 

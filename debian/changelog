@@ -1,3 +1,10 @@
+yousub (2.2.5) unstable; urgency=medium
+
+  * Clear Drive settings, local history, and the saved folder handle together.
+  * Share the folder-handle store between the setup tab and service worker.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:45:00 +0000
+
 yousub (2.2.4) unstable; urgency=medium
 
   * Remove stale file-picker text and CSS; align docs with folder-only setup.

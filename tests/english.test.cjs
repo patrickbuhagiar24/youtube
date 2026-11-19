@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.2.4');
+  assert.equal(manifest.version, '2.2.5');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -92,6 +92,9 @@ test('Google Drive settings are selected from a folder, not typed or read per fi
   assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
   assert.match(fs.readFileSync('content/content.js', 'utf8'), /readDriveConfigured/);
   assert.match(fs.readFileSync('background.js', 'utf8'), /clearHistoryWhenUnconfigured/);
+  assert.match(fs.readFileSync('background.js', 'utf8'), /case 'driveClear'/);
+  assert.match(fs.readFileSync('popup/popup.js', 'utf8'), /type: 'driveClear'/);
+  assert.match(fs.readFileSync('config-store.js', 'utf8'), /clearFolderHandle/);
   assert.doesNotMatch(setup, /select the two files below|old name/);
   assert.doesNotMatch(fs.readFileSync('popup/popup.css', 'utf8'), /\.filebtn|\.fileinput/);
   assert.match(fs.readFileSync('README.md', 'utf8'), /extension-only `\.deb`/);
