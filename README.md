@@ -35,7 +35,7 @@ Because every build uses the same secret key, all users get the **same extension
 
 ## Install from the APT repository
 
-The **Publish signed APT repository** workflow publishes a signed repository to <https://patrickbuhagiar24.github.io/youtube/> whenever a `v*` tag is pushed. The `stable` suite is architecture-independent.
+The **Publish signed APT repository** workflow publishes a signed repository to <https://patrickbuhagiar24.github.io/youtube/> whenever a `v*` tag is pushed. The `stable` suite is architecture-independent; the older `stonking` suite is also published as an alias for configurations created by earlier versions.
 
 Obtain the **full 40-character signing-key fingerprint** from a trusted maintainer channel independent of this website. Do not use a fingerprint downloaded only from the same site as your sole verification. The commands below require Bash, `curl`, `gpg` (from `gnupg`), and `sudo`; they download the key into a private temporary directory and ask you to confirm the trusted fingerprint before changing system files.
 

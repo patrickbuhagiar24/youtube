@@ -76,11 +76,13 @@ jobs:
       - name: Build repository metadata
         run: |
           set -euo pipefail
-          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all
+          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all site/dists/stonking/main/binary-all
           cp release/yousub_*.deb site/pool/main/y/yousub/
           cd site
           dpkg-scanpackages --arch all pool /dev/null > dists/stable/main/binary-all/Packages
           gzip -9 -n -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
+          cp dists/stable/main/binary-all/Packages dists/stonking/main/binary-all/Packages
+          cp dists/stable/main/binary-all/Packages.gz dists/stonking/main/binary-all/Packages.gz
           cat > yousub.sources <<'EOF'
           Types: deb
           URIs: https://patrickbuhagiar24.github.io/youtube/
@@ -109,28 +111,29 @@ jobs:
           from email.utils import format_datetime
           from pathlib import Path
 
-          root = Path('dists/stable')
-          files = sorted(p for p in root.rglob('*') if p.is_file())
-          if not files:
-              raise SystemExit('No package indices were generated.')
-          fields = [
-              'Origin: YOUSUB',
-              'Label: YOUSUB',
-              'Suite: stable',
-              'Codename: stable',
-              'Date: ' + format_datetime(datetime.now(timezone.utc), usegmt=True),
-              'Architectures: all',
-              'Components: main',
-              'Description: Signed YOUSUB Chrome extension packages',
-              'Acquire-By-Hash: no',
-          ]
-          for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):
-              fields.append(label + ':')
-              for path in files:
-                  data = path.read_bytes()
-                  digest = hashlib.new(algorithm, data).hexdigest()
-                  fields.append(f' {digest} {len(data):16d} {path.relative_to(root).as_posix()}')
-          (root / 'Release').write_text('\n'.join(fields) + '\n', encoding='utf-8')
+          for suite in ('stable', 'stonking'):
+              root = Path('dists') / suite
+              files = sorted(p for p in root.rglob('*') if p.is_file())
+              if not files:
+                  raise SystemExit('No package indices were generated.')
+              fields = [
+                  'Origin: YOUSUB',
+                  'Label: YOUSUB',
+                  f'Suite: {suite}',
+                  f'Codename: {suite}',
+                  'Date: ' + format_datetime(datetime.now(timezone.utc), usegmt=True),
+                  'Architectures: all',
+                  'Components: main',
+                  'Description: Signed YOUSUB Chrome extension packages',
+                  'Acquire-By-Hash: no',
+              ]
+              for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):
+                  fields.append(label + ':')
+                  for path in files:
+                      data = path.read_bytes()
+                      digest = hashlib.new(algorithm, data).hexdigest()
+                      fields.append(f' {digest} {len(data):16d} {path.relative_to(root).as_posix()}')
+              (root / 'Release').write_text('\n'.join(fields) + '\n', encoding='utf-8')
           PY
 
       - name: Sign the repository
@@ -155,14 +158,16 @@ jobs:
           printf '%s\n' "$fingerprint" > site/archive-keyring.fingerprint.txt
           gpg --batch --yes --armor --export "$fingerprint" > site/archive-keyring.asc
           gpg --batch --yes --export "$fingerprint" > site/archive-keyring.gpg
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --local-user "$fingerprint" --armor --detach-sign \
-            --output site/dists/stable/Release.gpg site/dists/stable/Release
-          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
-            --local-user "$fingerprint" --clearsign \
-            --output site/dists/stable/InRelease site/dists/stable/Release
-          gpgv --keyring site/archive-keyring.gpg site/dists/stable/Release.gpg site/dists/stable/Release
-          gpg --verify site/dists/stable/InRelease
+          for suite in stable stonking; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$fingerprint" --armor --detach-sign \
+              --output "site/dists/$suite/Release.gpg" "site/dists/$suite/Release"
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$fingerprint" --clearsign \
+              --output "site/dists/$suite/InRelease" "site/dists/$suite/Release"
+            gpgv --keyring site/archive-keyring.gpg "site/dists/$suite/Release.gpg" "site/dists/$suite/Release"
+            gpg --verify "site/dists/$suite/InRelease"
+          done
 
       - name: Remove temporary GPG keyring
         if: always()

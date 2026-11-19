@@ -86,6 +86,8 @@ test('the APT repository workflow is signed and deployed through Pages', () => {
   assert.match(text, /GPG_PRIVATE_KEY: \$\{\{ secrets\.GPG_PRIVATE_KEY \}\}/);
   assert.match(text, /GPG_PASSPHRASE: \$\{\{ secrets\.GPG_PASSPHRASE \}\}/);
   assert.match(text, /Suites: stable/);
+  assert.match(text, /for suite in \('stable', 'stonking'\)/);
+  assert.match(text, /for suite in stable stonking; do/);
   assert.match(text, /Signed-By: \/etc\/apt\/keyrings\/yousub\.gpg/);
   assert.match(text, /actions\/deploy-pages/);
   assert.match(text, /gpgv --keyring/);
