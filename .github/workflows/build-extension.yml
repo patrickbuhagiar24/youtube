@@ -17,12 +17,12 @@ jobs:
 
       - name: Load the CRX signing key
         env:
-          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+          YOUSUB_CRX_PRIVATE_KEY: ${{ secrets.YOUSUB_CRX_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           key="$RUNNER_TEMP/yousub-private.pem"
-          test -n "$CRX_PRIVATE_KEY" || { echo 'Configure the CRX_PRIVATE_KEY repository secret with the RSA private key (PEM).' >&2; exit 1; }
-          printf '%s\n' "$CRX_PRIVATE_KEY" > "$key"
+          test -n "$YOUSUB_CRX_PRIVATE_KEY" || { echo 'Configure the YOUSUB_CRX_PRIVATE_KEY repository secret with a dedicated RSA private key (PEM).' >&2; exit 1; }
+          printf '%s\n' "$YOUSUB_CRX_PRIVATE_KEY" > "$key"
           chmod 600 "$key"
           openssl pkey -in "$key" -noout -check > /dev/null
           openssl pkey -in "$key" -pubout -out "$RUNNER_TEMP/yousub-public.pem"

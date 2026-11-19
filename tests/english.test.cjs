@@ -59,7 +59,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.0.2');
+  assert.equal(manifest.version, '2.1.0');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -106,11 +106,11 @@ test('the APT repository workflow is signed and deployed through Pages', () => {
 
 test('the build workflow signs the CRX and does not publish a GitHub Release', () => {
   const text = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
-  assert.match(text, /CRX_PRIVATE_KEY: \$\{\{ secrets\.CRX_PRIVATE_KEY \}\}/);
+  assert.match(text, /YOUSUB_CRX_PRIVATE_KEY: \$\{\{ secrets\.YOUSUB_CRX_PRIVATE_KEY \}\}/);
   assert.match(text, /'dgst', '-sha256', '-sign'/);
   assert.match(text, /manifest\['key'\] = public_key/);
   assert.match(text, /on:\n  workflow_dispatch:/);
-  assert.doesNotMatch(text, /echo[^\n]*\$CRX_PRIVATE_KEY/);
+  assert.doesNotMatch(text, /echo[^\n]*\$YOUSUB_CRX_PRIVATE_KEY/);
 });
 
 test('every popup element used by the script exists in the markup', () => {

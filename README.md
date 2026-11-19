@@ -29,7 +29,9 @@ A source checkout needs no installer. Signed packages are distributed only throu
 
 ## Signed builds
 
-The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch and on `v*` tags. It uses the repository secret **`CRX_PRIVATE_KEY`** — an RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact; the APT publisher consumes that artifact directly.
+The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch and on `v*` tags. It uses the repository secret **`YOUSUB_CRX_PRIVATE_KEY`** — a dedicated RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact; the APT publisher consumes that artifact directly.
+
+**Do not reuse the signing key of another extension project.** Chrome derives the ID from the public key, so two projects using the same key get the same ID and both packages try to register the same `/usr/share/*/extensions/<id>.json` file. That collision prevents Chrome and `dpkg` from distinguishing them. Generate a separate key for YOUSUB and back it up privately; the resulting ID is printed in the build log and stored in `/usr/share/yousub/yousub-id.txt`.
 
 Because every build uses the same secret key, all users get the **same extension ID**, and reinstalling or upgrading keeps that ID and the browser storage that belongs to it. The private key is written only to a temporary runner file with `0600` permissions; it is never printed, committed, or included in an artifact.
 
@@ -101,7 +103,7 @@ import pathlib
 import shutil
 
 root = pathlib.Path.home() / '.config/google-chrome'
-ident = 'bjcloclfnfkohlbefpdiaohakphaobff'
+ident = open('/usr/share/yousub/yousub-id.txt').read().strip()
 for pref in [root / 'Default/Preferences', *root.glob('Profile */Preferences')]:
     if not pref.exists():
         continue
