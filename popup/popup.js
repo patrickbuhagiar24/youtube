@@ -113,22 +113,6 @@ $('exportBtn').addEventListener('click', async (e) => {
 $('openFeedBtn').addEventListener('click', (e) => e.preventDefault() || chrome.tabs.create({ url: 'https://www.youtube.com/feed/channels' }));
 
 /* ---------------- Google Drive ---------------- */
-const FILE_HINT = 'Select both files to save and sync automatically.';
-let pendingLink = '';
-let pendingKey = '';
-let userInteracted = false;
-
-const driveError = (message) => {
-  $('driveFormError').classList.toggle('hidden', !message);
-  $('driveFormError').textContent = message || '';
-};
-
-async function readSavedConfig() {
-  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
-  pendingLink = cfg.link || '';
-  pendingKey = cfg.keyText || '';
-}
-
 async function renderDrive() {
   const keys = ['yousubDrive', 'yousubUnsubs', YOUSUB.CONFIG_KEY];
   const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(keys);
@@ -150,76 +134,9 @@ async function syncNow() {
 }
 
 $('driveSyncBtn').addEventListener('click', syncNow);
-
-async function saveDriveSettings() {
-  try {
-    if (!pendingLink || !pendingKey) throw new Error('Select both google-drive.json and service-account.json.');
-    Drive.fileIdOf(pendingLink);
-    Drive.parseKey(pendingKey);
-    await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: { link: pendingLink, keyText: pendingKey } });
-    driveError('');
-    await syncNow();
-    return true;
-  } catch (e) {
-    driveError(e.message || String(e));
-    return false;
-  }
-}
-
-/* The only way to configure Drive: select the two local JSON files. */
-async function readConfigFile(input, parse) {
-  const file = input.files?.[0];
-  if (!file) return null;
-  userInteracted = true;
-  $('fileStatus').textContent = `Reading ${file.name}…`;
-  try {
-    const value = parse((await file.text()).trim());
-    return { value, name: file.name };
-  } catch (e) {
-    driveError(e.message || String(e));
-    return null;
-  } finally {
-    input.value = ''; // Allow selecting the same file again
-  }
-}
-
-async function saveWhenBothFilesLoaded() {
-  if (!pendingLink || !pendingKey) return;
-  if (await saveDriveSettings()) $('fileStatus').textContent = 'Both files loaded and saved.';
-}
-
-for (const [id, label] of [['driveLinkFile', 'google-drive.json'], ['driveKeyFile', 'service-account.json']]) {
-  $(id).addEventListener('click', () => {
-    userInteracted = true;
-    $('fileStatus').textContent = `Waiting for ${label}…`;
-  });
-}
-
-$('driveLinkFile').addEventListener('change', async () => {
-  const result = await readConfigFile($('driveLinkFile'), Drive.linkFromConfig);
-  if (!result) return;
-  if (!result.value) { driveError('google-drive.json has no file link.'); return; }
-  pendingLink = result.value;
-  driveError('');
-  $('fileStatus').textContent = `${result.name} loaded. Select service-account.json.`;
-  await saveWhenBothFilesLoaded();
-});
-
-$('driveKeyFile').addEventListener('change', async () => {
-  const result = await readConfigFile($('driveKeyFile'), (text) => { Drive.parseKey(text); return text; });
-  if (!result) return;
-  pendingKey = result.value;
-  driveError('');
-  $('fileStatus').textContent = `${result.name} loaded. Select google-drive.json.`;
-  await saveWhenBothFilesLoaded();
-});
-
+$('driveSetupBtn').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }));
 $('driveClearBtn').addEventListener('click', async () => {
   await chrome.storage.local.remove([YOUSUB.CONFIG_KEY, 'yousubDrive']);
-  pendingLink = '';
-  pendingKey = '';
-  $('fileStatus').textContent = FILE_HINT;
-  driveError('');
   renderDrive();
 });
 
@@ -231,8 +148,6 @@ chrome.storage.onChanged.addListener((c, area) => {
 (async () => {
   await loadSettings();
   await renderFromStorage();
-  await readSavedConfig();
-  if (!userInteracted) $('fileStatus').textContent = pendingLink && pendingKey ? 'Configuration files loaded. Select new files to replace them.' : FILE_HINT;
   renderDrive();
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (YT_URL.test(tab?.url || '')) tabId = tab.id;

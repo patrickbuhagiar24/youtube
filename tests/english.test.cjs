@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.1.3');
+  assert.equal(manifest.version, '2.1.4');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -73,16 +73,20 @@ test('manifest describes the Chrome extension and declares every asset', () => {
 
 test('Google Drive settings are edited in the popup, not in configuration files', () => {
   const popup = fs.readFileSync('popup/popup.html', 'utf8');
-  assert.match(popup, /<input class="fileinput" type="file" id="driveLinkFile"/);
+  assert.match(popup, /id="driveSetupBtn"/);
+  assert.match(fs.readFileSync('setup.html', 'utf8'), /<input class="fileinput" type="file" id="driveLinkFile"/);
+  assert.match(fs.readFileSync('setup.js', 'utf8'), /chrome\.storage\.local\.set/);
   assert.doesNotMatch(popup, /id="driveLink"/);
   assert.doesNotMatch(popup, /id="driveKey"/);
   assert.doesNotMatch(popup, /id="driveSaveBtn"/);
-  assert.match(popup, /id="driveLinkFile"[^>]*accept="\.json,application\/json"/);
-  assert.match(popup, /id="driveKeyFile"[^>]*accept="\.json,application\/json"/);
+  const setup = fs.readFileSync('setup.html', 'utf8');
+  assert.match(setup, /id="driveLinkFile"[^>]*accept="\.json,application\/json"/);
+  assert.match(setup, /id="driveKeyFile"[^>]*accept="\.json,application\/json"/);
   const popupJs = fs.readFileSync('popup/popup.js', 'utf8');
-  assert.match(popupJs, /Drive\.linkFromConfig/);
+  const setupJs = fs.readFileSync('setup.js', 'utf8');
   assert.match(popupJs, /YOUSUB\.CONFIG_KEY/);
-  assert.match(popupJs, /chrome\.storage\.local\.set/);
+  assert.match(setupJs, /Drive\.linkFromConfig/);
+  assert.match(setupJs, /YOUSUB|CONFIG_KEY/);
   assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
 });
 
