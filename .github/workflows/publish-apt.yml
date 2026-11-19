@@ -2,8 +2,16 @@ name: Publish signed APT repository
 
 on:
   push:
-    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: ID of a successful "Build signed YOUSUB extension" run
+        required: false
+      tag:
+        description: Tag to wait for when no build run ID is given
+        required: false
+        default: v2.0.0
 
 permissions:
   contents: read
@@ -13,78 +21,165 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    container: ubuntu:26.10
-    steps:
-      - name: Install build tools
-        run: |
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates git nodejs python3 openssl build-essential dpkg-dev make gzip xz-utils
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: make package
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-deb
-          path: dist/*.deb
-          if-no-files-found: error
-          retention-days: 7
-
   publish:
-    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-deb
-          path: dist
       - name: Install repository tools
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev gnupg gpgv
-      - name: Generate archive metadata
-        run: bash scripts/build-apt-repository.sh dist site stonking
-      - name: Import repository GPG key
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv
+
+      - name: Find the signed build run
+        id: build
         env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          test -n "$GPG_PRIVATE_KEY" || { echo 'Configure the GPG_PRIVATE_KEY repository secret first.'; exit 1; }
+          if [ -n "$RUN_ID" ]; then
+            echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for attempt in $(seq 1 12); do
+            id=$(gh api "repos/$GH_REPO/actions/workflows/build-extension.yml/runs?per_page=20" \
+              --jq ".workflow_runs[] | select(.head_branch == \"$TAG\" and .event == \"push\") | .id" | head -n 1 || true)
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/$GH_REPO/actions/runs/$id" --jq '.status + " " + (.conclusion // "")')
+              case "$state" in
+                "completed success") echo "run_id=$id" >> "$GITHUB_OUTPUT"; exit 0 ;;
+                "completed failure") echo "Build run $id failed." >&2; exit 1 ;;
+              esac
+            fi
+            echo "Waiting for the build run for $TAG ($attempt/12)..."
+            sleep 10
+          done
+          echo "No successful build run found for $TAG." >&2
+          exit 1
+
+      - name: Download the signed package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh run download "${{ steps.build.outputs.run_id }}" --name yousub-extension --dir release
+          test -n "$(find release -name 'yousub_*.deb' -print -quit)"
+          (cd release && sha256sum -c checksums.txt)
+
+      - name: Build repository metadata
+        run: |
+          set -euo pipefail
+          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all site/dists/stonking/main/binary-all
+          cp release/yousub-id.txt site/extension-id.txt
+          cp release/yousub_*.deb site/pool/main/y/yousub/
+          cd site
+          dpkg-scanpackages --arch all pool /dev/null > dists/stable/main/binary-all/Packages
+          gzip -9 -n -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
+          cp dists/stable/main/binary-all/Packages dists/stonking/main/binary-all/Packages
+          cp dists/stable/main/binary-all/Packages.gz dists/stonking/main/binary-all/Packages.gz
+          cat > yousub.sources <<'EOF'
+          Types: deb
+          URIs: https://patrickbuhagiar24.github.io/youtube/
+          Suites: stable
+          Components: main
+          Architectures: all
+          Signed-By: /etc/apt/keyrings/yousub.gpg
+          EOF
+          cat > index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>YOUSUB APT repository</title></head>
+          <body>
+            <h1>YOUSUB APT repository</h1>
+            <p>Install with <code>sudo apt install yousub</code> after adding
+              <code>yousub.sources</code> and the verified archive key. See the
+              <a href="https://github.com/patrickbuhagiar24/youtube">installation instructions</a>.</p>
+            <p>Always verify the 40-character key fingerprint through an independent channel before installing.</p>
+          </body>
+          </html>
+          EOF
+          python3 - <<'PY'
+          import gzip
+          import hashlib
+          from datetime import datetime, timezone
+          from email.utils import format_datetime
+          from pathlib import Path
+
+          for suite in ('stable', 'stonking'):
+              root = Path('dists') / suite
+              files = sorted(p for p in root.rglob('*') if p.is_file())
+              if not files:
+                  raise SystemExit('No package indices were generated.')
+              fields = [
+                  'Origin: YOUSUB',
+                  'Label: YOUSUB',
+                  f'Suite: {suite}',
+                  f'Codename: {suite}',
+                  'Date: ' + format_datetime(datetime.now(timezone.utc), usegmt=True),
+                  'Architectures: all',
+                  'Components: main',
+                  'Description: Signed YOUSUB Chrome extension packages',
+                  'Acquire-By-Hash: no',
+              ]
+              for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):
+                  fields.append(label + ':')
+                  for path in files:
+                      data = path.read_bytes()
+                      digest = hashlib.new(algorithm, data).hexdigest()
+                      fields.append(f' {digest} {len(data):16d} {path.relative_to(root).as_posix()}')
+              (root / 'Release').write_text('\n'.join(fields) + '\n', encoding='utf-8')
+          PY
+
+      - name: Sign the repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GNUPGHOME: ${{ runner.temp }}/yousub-apt-gnupg
+        run: |
+          set -euo pipefail
+          test -n "$GPG_PRIVATE_KEY" || { echo 'Configure the GPG_PRIVATE_KEY repository secret first.' >&2; exit 1; }
           install -d -m 0700 "$GNUPGHOME"
           printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
-          # In colon output, field 5 is the key ID; the following fpr record holds the full fingerprint.
           fingerprint=$(gpg --batch --with-colons --list-secret-keys | awk -F: '
             $1 == "sec" { primaries++; want_fpr = 1; next }
             want_fpr && $1 == "fpr" { print $10; want_fpr = 0 }
             END { if (primaries != 1) exit 2 }
-          ') || { echo 'GPG_PRIVATE_KEY must contain exactly one primary key identity.'; exit 1; }
-          [[ "$fingerprint" =~ ^[A-Fa-f0-9]{40}$ ]] || { echo 'Could not determine a valid GPG fingerprint.'; exit 1; }
+          ') || { echo 'GPG_PRIVATE_KEY must contain exactly one primary key identity.' >&2; exit 1; }
+          [[ "$fingerprint" =~ ^[A-Fa-f0-9]{40}$ ]] || { echo 'Invalid signing key fingerprint.' >&2; exit 1; }
           gpg --batch --with-colons --list-secret-keys "$fingerprint" \
             | awk -F: '($1 == "sec" || $1 == "ssb") && tolower($12) ~ /s/ { found = 1 } END { exit !found }' \
-            || { echo 'The imported GPG key has no secret signing capability.'; exit 1; }
-          printf 'APT_SIGNING_KEY_ID=%s\n' "$fingerprint" >> "$GITHUB_ENV"
-      - name: Sign and verify archive
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
-        run: bash scripts/sign-apt-repository.sh site stonking
+            || { echo 'The signing key has no signing-capable subkey.' >&2; exit 1; }
+          printf '%s\n' "$fingerprint" > site/archive-keyring.fingerprint.txt
+          gpg --batch --yes --armor --export "$fingerprint" > site/archive-keyring.asc
+          gpg --batch --yes --export "$fingerprint" > site/archive-keyring.gpg
+          for suite in stable stonking; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$fingerprint" --armor --detach-sign \
+              --output "site/dists/$suite/Release.gpg" "site/dists/$suite/Release"
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$fingerprint" --clearsign \
+              --output "site/dists/$suite/InRelease" "site/dists/$suite/Release"
+            gpgv --keyring site/archive-keyring.gpg "site/dists/$suite/Release.gpg" "site/dists/$suite/Release"
+            gpg --verify "site/dists/$suite/InRelease"
+          done
+
       - name: Remove temporary GPG keyring
         if: always()
         env:
-          GNUPGHOME: ${{ runner.temp }}/ytuc-apt-gnupg
+          GNUPGHOME: ${{ runner.temp }}/yousub-apt-gnupg
         run: |
           if [ -d "$GNUPGHOME" ]; then
             gpgconf --kill gpg-agent || true
             rm -rf "$GNUPGHOME"
           fi
+
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

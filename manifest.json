@@ -1,14 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "YT Unsub Detector",
-  "short_name": "YT Unsub",
-  "version": "1.21.0",
+  "name": "YOUSUB",
+  "short_name": "YOUSUB",
+  "version": "2.2.5",
   "description": "Marks videos and channels you are not subscribed to across YouTube.",
   "minimum_chrome_version": "111",
   "permissions": [
     "storage",
-    "alarms",
-    "nativeMessaging"
+    "alarms"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -19,7 +18,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "YT Unsub Detector",
+    "default_title": "YOUSUB",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

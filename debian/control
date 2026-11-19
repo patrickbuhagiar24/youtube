@@ -1,24 +1,15 @@
-Source: yt-unsub-detector
+Package: yousub
+Version: 2.2.5
 Section: web
 Priority: optional
-Maintainer: Patrick Buhagiar <arobidsh@proton.me>
-Build-Depends: dpkg-dev (>= 1.19.0), make, gzip, xz-utils, nodejs (>= 18), openssl, python3 (>= 3.10)
-Standards-Version: 4.6.2
-Homepage: https://github.com/patrickbuhagiar24/youtube
-Vcs-Browser: https://github.com/patrickbuhagiar24/youtube
-Vcs-Git: https://github.com/patrickbuhagiar24/youtube.git
-Rules-Requires-Root: no
-
-Package: yt-unsub-detector
 Architecture: all
-Depends: python3 (>= 3.10), openssl
-Description: YouTube subscription marker browser extension
- Installs the English-language YT Unsub Detector extension for Chrome and
- Chromium on Linux. APT registers the extension automatically; restart the
- browser after installation. The extension highlights channels you are not
- subscribed to, tracks unsubscribes, and optionally syncs that history
- through Google Drive.
+Recommends: google-chrome-stable | chromium
+Maintainer: Patrick Buhagiar <arobidsh@proton.me>
+Homepage: https://github.com/patrickbuhagiar24/youtube
+Description: YOUSUB YouTube subscription marker Chrome extension
+ Registers the signed YOUSUB Chrome extension built with the repository
+ CRX signing key. The extension marks YouTube channels you are not
+ subscribed to and can sync unsubscribe history to your own Google Drive.
  .
- Google Drive configuration is stored per user under
- ~/.config/yt-unsub-detector, outside the extension package. Run
- yt-unsub-detector config as your desktop user to create or locate the files.
+ No command-line program, native messaging host, or per-user configuration
+ files are installed; Drive settings are selected in the extension popup.

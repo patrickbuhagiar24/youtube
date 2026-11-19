@@ -1,46 +1,96 @@
-yt-unsub-detector (1.21.0ubuntu3) stonking; urgency=medium
+yousub (2.2.5) unstable; urgency=medium
 
-  * Publish the signed GitHub Pages APT archive on pushes to main.
-  * Update publication and installation documentation.
+  * Clear Drive settings, local history, and the saved folder handle together.
+  * Share the folder-handle store between the setup tab and service worker.
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Tue, 17 Nov 2026 06:52:44 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:45:00 +0000
 
-yt-unsub-detector (1.21.0ubuntu2) stonking; urgency=medium
+yousub (2.2.4) unstable; urgency=medium
 
-  * Fix browser registration directories created with restrictive permissions.
-  * Repair affected shared directories during package upgrades and test user access.
+  * Remove stale file-picker text and CSS; align docs with folder-only setup.
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Mon, 16 Nov 2026 04:00:00 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:30:00 +0000
 
-yt-unsub-detector (1.21.0ubuntu1) stonking; urgency=medium
+yousub (2.2.3) unstable; urgency=medium
 
-  * Store per-user Google Drive configuration only in google-drive.json and service-account.json.
-  * Migrate and remove the older drive-config.json wrapper automatically.
-  * Remove non-English legacy data compatibility and keep all project text English.
+  * Replace the Drive menu text with a compact row of icon buttons.
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 22:10:00 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:15:00 +0000
 
-yt-unsub-detector (1.20.0ubuntu1) stonking; urgency=medium
+yousub (2.2.2) unstable; urgency=medium
 
-  * Read the Google Drive file link from a separate per-user google-drive.json file.
-  * Keep inline Drive links and older configuration files readable.
-  * Document GitHub Pages enablement and audit project text for English-only prose.
+  * Keep unsubscribe history only while Drive sync is configured; remove it
+    when configuration is absent or cleared.
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 20:30:00 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:00:00 +0000
 
-yt-unsub-detector (1.19.0ubuntu1) stonking; urgency=medium
+yousub (2.2.1) unstable; urgency=medium
 
-  * Install and register the browser extension through APT only.
-  * Read Google Drive configuration from the user's XDG configuration folder.
-  * Add a native messaging host and automatic CRX registration for Chrome/Chromium.
+  * Remove per-file pickers; configuration is selected by folder only.
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 18:00:00 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:45:00 +0000
 
-yt-unsub-detector (1.18.0ubuntu1) stonking; urgency=medium
+yousub (2.2.0) unstable; urgency=medium
 
-  * Translate the interface, comments, messages, and exported data to English.
-  * Read legacy Google Drive files without losing unsubscribe history.
-  * Add an architecture-independent Debian package and per-user setup command.
-  * Add signed APT repository publishing for Ubuntu 26.10 (stonking).
+  * Add a one-time folder picker that finds yousub-google-drive.json and
+    service-account.json automatically.
+  * Rename the link configuration file; the old google-drive.json name is
+    no longer accepted.
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 14 Nov 2026 14:34:00 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:30:00 +0000
+
+yousub (2.1.4) unstable; urgency=medium
+
+  * Open Drive file pickers in a real extension tab: Linux popups close when
+    a file chooser opens, so their change events never arrived.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:05:00 +0000
+
+yousub (2.1.3) unstable; urgency=medium
+
+  * Show when a file picker is clicked and when a selected file is being read.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:50:00 +0000
+
+yousub (2.1.2) unstable; urgency=medium
+
+  * Use visible file inputs in the popup so the file pickers are reliable.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:35:00 +0000
+
+yousub (2.1.1) unstable; urgency=medium
+
+  * Explain why a Pastex-style folder_url configuration is rejected and require
+    a direct YouTube.json file link in google-drive.json.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:20:00 +0000
+
+yousub (2.1.0) unstable; urgency=medium
+
+  * Sign the CRX with a dedicated YOUSUB_CRX_PRIVATE_KEY so the extension ID
+    cannot collide with extensions from other repositories.
+  * Ship the Chrome/Chromium external-extension JSON in the package payload.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:00:00 +0000
+
+yousub (2.0.2) unstable; urgency=medium
+
+  * Ship the Chrome/Chromium external-extension JSON inside the .deb payload,
+    matching the known-working pastex packaging, with postinst as a fallback.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 07:30:00 +0000
+
+yousub (2.0.1) unstable; urgency=medium
+
+  * Register the signed CRX in the Chrome Linux external-extension directory.
+  * Keep the Chromium registration and earlier paths for compatibility.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 07:10:00 +0000
+
+yousub (2.0.0) unstable; urgency=medium
+
+  * Rename the extension to YOUSUB and remove the command-line program.
+  * Register the CRX signed with the repository CRX_PRIVATE_KEY secret.
+  * Configure Google Drive from JSON files selected in the extension popup.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 00:00:00 +0000

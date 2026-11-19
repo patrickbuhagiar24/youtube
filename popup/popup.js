@@ -1,4 +1,4 @@
-const { DEFAULTS, STATUS } = YTUC;
+const { DEFAULTS, STATUS } = YOUSUB;
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 const YT_URL = /^https:\/\/www\.youtube\.com\//;
@@ -20,8 +20,8 @@ const FIELDS = {
 };
 
 async function loadSettings() {
-  const { ytucSettings } = await chrome.storage.sync.get('ytucSettings');
-  settings = { ...DEFAULTS, ...ytucSettings };
+  const { yousubSettings } = await chrome.storage.sync.get('yousubSettings');
+  settings = { ...DEFAULTS, ...yousubSettings };
   for (const [id, [key, prop]] of Object.entries(FIELDS)) $(id)[prop] = prop === 'checked' ? !!settings[key] : String(settings[key]);
   applyColors();
 }
@@ -33,7 +33,7 @@ for (const [id, [key, prop, conv = (v) => v]] of Object.entries(FIELDS)) {
   $(id).addEventListener($(id).type === 'color' ? 'input' : 'change', (e) => { // Update colors immediately while the picker changes
     settings = { ...settings, [key]: conv(e.target[prop]) };
     applyColors();
-    chrome.storage.sync.set({ ytucSettings: settings });
+    chrome.storage.sync.set({ yousubSettings: settings });
   });
 }
 
@@ -55,8 +55,8 @@ function renderSummary({ subsCount, stats, ts }) {
 
 async function renderFromStorage() {
   // Keep showing the count even when the active tab is not YouTube
-  const { ytucSubs } = await chrome.storage.local.get('ytucSubs');
-  renderSummary({ subsCount: ytucSubs?.list?.length || 0, stats: ytucSubs?.stats, ts: ytucSubs?.ts });
+  const { yousubSubs } = await chrome.storage.local.get('yousubSubs');
+  renderSummary({ subsCount: yousubSubs?.list?.length || 0, stats: yousubSubs?.stats, ts: yousubSubs?.ts });
 }
 
 function render(state) {
@@ -96,8 +96,8 @@ $('syncBtn').addEventListener('click', async () => {
 
 $('exportBtn').addEventListener('click', async (e) => {
   e.preventDefault();
-  const { ytucSubs } = await chrome.storage.local.get('ytucSubs');
-  const list = ytucSubs?.list || [];
+  const { yousubSubs } = await chrome.storage.local.get('yousubSubs');
+  const list = yousubSubs?.list || [];
   if (!list.length) { alert('No list yet. Open YouTube, then click "Refresh list".'); return; }
   const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const rows = [['No.', 'Channel name', 'Handle', 'URL', 'Channel ID'].map(q).join(',')];
@@ -105,7 +105,7 @@ $('exportBtn').addEventListener('click', async (e) => {
     .forEach((c, i) => rows.push([i + 1, c.title, c.handle, 'https://www.youtube.com/channel/' + c.id, c.id].map(q).join(',')));
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-  a.download = `youtube-subscriptions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `yousub-subscriptions-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
@@ -114,21 +114,35 @@ $('openFeedBtn').addEventListener('click', (e) => e.preventDefault() || chrome.t
 
 /* ---------------- Google Drive ---------------- */
 async function renderDrive() {
-  const { ytucDrive: d = {}, ytucUnsubs = {} } = await chrome.storage.local.get(['ytucDrive', 'ytucUnsubs']);
-  $('unsubCount').textContent = fmt(Object.values(ytucUnsubs).filter((e) => e.s === 'unsub').length);
-  $('driveSyncBtn').classList.toggle('hidden', !d.configured);
-  $('driveStatus').textContent = !d.configured ? (d.configPath ? `Google Drive is not configured · ${d.configPath}` : 'Google Drive is not configured (see README)')
+  const keys = ['yousubDrive', 'yousubUnsubs', YOUSUB.CONFIG_KEY];
+  const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(keys);
+  $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
+  const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
+  $('driveSyncBtn').classList.toggle('hidden', !configured);
+  $('driveClearBtn').classList.toggle('hidden', !configured);
+  $('driveStatus').textContent = !configured ? 'Google Drive is not configured — open "Google Drive sync" below'
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
 }
-$('driveSyncBtn').addEventListener('click', async (e) => {
-  e.currentTarget.disabled = true;
+
+async function syncNow() {
+  $('driveSyncBtn').disabled = true;
   await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
   $('driveSyncBtn').disabled = false;
   renderDrive();
+}
+
+$('driveSyncBtn').addEventListener('click', syncNow);
+$('driveSetupBtn').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }));
+$('driveClearBtn').addEventListener('click', async () => {
+  await chrome.runtime.sendMessage({ type: 'driveClear' }).catch(() => {});
+  renderDrive();
 });
-chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && (c.ytucDrive || c.ytucUnsubs)) renderDrive(); });
+
+chrome.storage.onChanged.addListener((c, area) => {
+  if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
+});
 
 /* ---------------- startup ---------------- */
 (async () => {

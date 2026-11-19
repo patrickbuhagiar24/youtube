@@ -1,6 +1,0 @@
-Types: deb
-URIs: https://patrickbuhagiar24.github.io/youtube/
-Suites: stonking
-Components: main
-Architectures: all
-Signed-By: /etc/apt/keyrings/yt-unsub-detector.gpg

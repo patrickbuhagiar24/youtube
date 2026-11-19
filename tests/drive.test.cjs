@@ -12,16 +12,31 @@ function load(chrome = {}, fetch = async () => ({ ok: false }), cryptoImpl = cry
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const id = 'UCabcdefghijklmnopqrstuv';
 const now = Date.now();
-const configPath = '/home/test/.config/yt-unsub-detector/google-drive.json';
-const keyPath = '/home/test/.config/yt-unsub-detector/service-account.json';
+const link = 'https://drive.google.com/file/d/abcdefghij1234567890/view';
 const key = { type: 'service_account', client_email: 'test@example.invalid', private_key: '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----' };
+const settings = { link, keyText: JSON.stringify(key) };
+
+/** Minimal chrome.storage.local implementation for the service worker. */
+function storageChrome(store = {}) {
+  return {
+    storage: { local: {
+      get: async (keys) => {
+        if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in store).map((k) => [k, store[k]]));
+        if (keys === null) return { ...store };
+        return keys in store ? { [keys]: store[keys] } : {};
+      },
+      set: async (patch) => Object.assign(store, patch),
+      remove: async (keys) => { for (const k of [].concat(keys)) delete store[k]; },
+    } },
+  };
+}
 
 test('Drive exports use English fields and round-trip both event types', () => {
   const { Drive } = load();
   const events = { [id]: { s: 'unsub', at: now, title: 'Example', url: '/@example' } };
   const text = Drive.toFile(events);
   const data = JSON.parse(text);
-  assert.equal(data.application, 'YT Unsub Detector');
+  assert.equal(data.application, 'YOUSUB');
   assert.equal(data.unsubscribeCount, 1);
   assert.equal(data.channels[0].name, 'Example');
   assert.equal(data.channels[0].url, 'https://www.youtube.com/@example');
@@ -69,75 +84,72 @@ test('file links are validated and placeholders remain disabled', () => {
   assert.equal(Drive.fileIdOf('https://drive.google.com/file/d/abcdefghij1234567890/view'), 'abcdefghij1234567890');
   assert.equal(Drive.fileIdOf(''), '');
   assert.equal(Drive.fileIdOf('PASTE_FILE_LINK_HERE'), '');
-  assert.throws(() => Drive.fileIdOf('https://drive.google.com/drive/folders/abc'), /google-drive\.json.*folder/);
-  assert.throws(() => Drive.fileIdOf('not a link'), /google-drive\.json.*not a Google Drive file link/);
+  assert.throws(() => Drive.fileIdOf('https://drive.google.com/drive/folders/abc'), /settings in the popup.*folder/);
+  assert.throws(() => Drive.fileIdOf('not a link'), /settings in the popup.*not a Google Drive file link/);
 });
 
-function nativeChrome(response, store = {}) {
-  return {
-    runtime: {
-      lastError: null,
-      sendNativeMessage: (_host, _message, callback) => callback(response),
-    },
-    storage: { local: {
-      get: async (keys) => {
-        if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in store).map((k) => [k, store[k]]));
-        return keys in store ? { [keys]: store[keys] } : {};
-      },
-      set: async (patch) => Object.assign(store, patch),
-    } },
-  };
-}
+test('yousub-google-drive.json accepts a link object or a bare JSON string', () => {
+  const { Drive } = load();
+  assert.equal(Drive.linkFromConfig(JSON.stringify({ link })), link);
+  assert.equal(Drive.linkFromConfig(JSON.stringify(link)), link);
+  assert.equal(Drive.linkFromConfig(JSON.stringify({ file_url: link })), link);
+  assert.throws(() => Drive.linkFromConfig('{"link": 42}'), /must contain a "link" field/);
+  assert.throws(() => Drive.linkFromConfig('not json'), /not valid JSON/);
+});
 
-test('unconfigured user files disable Drive without authentication errors', async () => {
+test('yousub-google-drive.json rejects folder and placeholder links with a clear error', () => {
+  const { Drive } = load();
+  assert.throws(() => Drive.linkFromConfig('{"folder_url": "https://drive.google.com/drive/folders/abc"}'), /points to a folder.*direct file link/);
+  assert.throws(() => Drive.linkFromConfig('{"link": "PASTE_FILE_LINK_HERE"}'), /still contains the placeholder/);
+});
+
+test('service account keys are validated without a helper program', () => {
+  const { Drive } = load();
+  assert.equal(Drive.parseKey(key).client_email, key.client_email);
+  assert.throws(() => Drive.parseKey('{not json'), /not valid JSON/);
+  assert.throws(() => Drive.parseKey('{"type":"user"}'), /not a service account key/);
+});
+
+test('empty Drive settings disable sync without authentication errors', async () => {
   const store = {};
-  const chrome = nativeChrome({ ok: true, configured: false, configPath, keyPath }, store);
-  const { Drive } = load(chrome);
+  const { Drive } = load(storageChrome(store));
   assert.deepEqual(plain(await Drive.sync()), { ok: false, configured: false });
-  assert.equal(store.ytucDrive.configured, false);
-  assert.match(store.ytucDrive.configPath, /google-drive\.json$/);
+  assert.equal(store.yousubDrive.configured, false);
+  assert.equal(store.yousubDrive.configPath, undefined);
 });
 
-test('a missing link points the user to google-drive.json', async () => {
-  const chrome = nativeChrome({ ok: true, configured: true, link: '', key, configPath, keyPath });
-  const { Drive } = load(chrome);
+test('a missing link points the user to the popup', async () => {
+  const store = { yousubDriveConfig: { link: '', keyText: JSON.stringify(key) } };
+  const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /Paste the YouTube\.json file link into .*google-drive\.json/);
+  assert.match(result.error, /Paste the YouTube\.json file link into .*popup/);
 });
 
-test('missing key with a configured link produces an English error', async () => {
-  const chrome = nativeChrome({ ok: true, configured: true, link: 'abcdefghij1234567890', key: null, configPath, keyPath });
-  const { Drive } = load(chrome);
+test('a missing key with a configured link produces an English error', async () => {
+  const store = { yousubDriveConfig: { link, keyText: '' } };
+  const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /key file .*service-account\.json.* is missing/);
+  assert.match(result.error, /Paste your service account JSON key into .*popup/);
 });
 
-test('missing native host produces an actionable APT error', async () => {
-  const chrome = nativeChrome(null);
-  chrome.runtime.sendNativeMessage = (_host, _message, callback) => {
-    chrome.runtime.lastError = { message: 'Specified native messaging host not found.' };
-    callback(null);
-  };
-  const { Drive } = load(chrome);
+test('an invalid key is reported without network access', async () => {
+  const store = { yousubDriveConfig: { link, keyText: '{bad' } };
+  const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /APT package/);
+  assert.match(result.error, /not valid JSON/);
 });
 
-test('a later sync re-reads user configuration after an unconfigured result', async () => {
-  let response = { ok: true, configured: false, configPath, keyPath };
-  let calls = 0;
-  const chrome = nativeChrome(response);
-  chrome.runtime.sendNativeMessage = (_host, _message, callback) => { calls += 1; callback(response); };
-  const { Drive } = load(chrome);
+test('a later sync re-reads settings from storage after an unconfigured result', async () => {
+  const store = {};
+  const { Drive } = load(storageChrome(store));
   assert.deepEqual(plain(await Drive.sync()), { ok: false, configured: false });
-  response = { ok: true, configured: true, link: 'abcdefghij1234567890', key: null, configPath, keyPath };
+  store.yousubDriveConfig = { link, keyText: '' };
   const second = await Drive.sync();
-  assert.equal(calls, 2);
   assert.equal(second.ok, false);
-  assert.match(second.error, /key file .* is missing/);
+  assert.match(second.error, /service account JSON key/);
 });
 
 test('a full sync preserves newer local events and writes English data', async () => {
@@ -146,8 +158,7 @@ test('a full sync preserves newer local events and writes English data', async (
     { id, name: 'Remote channel', url: '/@remote', status: 'resubscribed', date: new Date(now - 1000).toISOString() }
   ] });
   const local = { [secondId]: { s: 'unsub', at: now, title: 'Local channel', url: '/@local' } };
-  const store = { ytucUnsubs: local };
-  const chrome = nativeChrome({ ok: true, configured: true, link: 'abcdefghij1234567890', key, configPath, keyPath }, store);
+  const store = { yousubDriveConfig: settings, yousubUnsubs: local };
   let uploaded = '';
   const fetch = async (url, options = {}) => {
     if (url === 'https://oauth2.googleapis.com/token') return { ok: true, json: async () => ({ access_token: 'test-token', expires_in: 3600 }) };
@@ -157,14 +168,15 @@ test('a full sync preserves newer local events and writes English data', async (
     throw new Error('Unexpected URL: ' + url);
   };
   const cryptoImpl = { subtle: { importKey: async () => ({}), sign: async () => new Uint8Array([1, 2, 3]) } };
-  const { Drive } = load(chrome, fetch, cryptoImpl);
+  const { Drive } = load(storageChrome(store), fetch, cryptoImpl);
   assert.deepEqual(plain(await Drive.sync()), { ok: true });
   const data = JSON.parse(uploaded);
+  assert.equal(data.application, 'YOUSUB');
   assert.equal(data.unsubscribeCount, 1);
   assert.equal(data.channels.length, 2);
   assert.ok(data.channels.every((row) => row.name && row.date && ['unsubscribed', 'resubscribed'].includes(row.status)));
-  assert.equal(store.ytucUnsubs[id].s, 'resub');
-  assert.equal(store.ytucUnsubs[secondId].s, 'unsub');
-  assert.equal(store.ytucDrive.lastError, '');
-  assert.equal(store.ytucDrive.syncing, false);
+  assert.equal(store.yousubUnsubs[id].s, 'resub');
+  assert.equal(store.yousubUnsubs[secondId].s, 'unsub');
+  assert.equal(store.yousubDrive.lastError, '');
+  assert.equal(store.yousubDrive.syncing, false);
 });
