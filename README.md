@@ -67,9 +67,9 @@ Obtain the **full 40-character signing-key fingerprint** from a trusted maintain
 )
 ```
 
-Restart Chrome, then open <https://www.youtube.com> and sign in. To remove the registration later, run `sudo apt remove yousub`; Chrome profile data is left untouched.
+Restart **all** Chrome windows, then open <https://www.youtube.com> and sign in. If the extension does not appear, check `chrome://extensions` with Developer mode enabled; external registrations are read from `/usr/share/google-chrome/extensions/` (and `/etc/chromium/extensions/` for Chromium) at browser startup. To remove the registration later, run `sudo apt remove yousub`; Chrome profile data is left untouched.
 
-The package only places the signed CRX under `/usr/share/yousub` and registers it in `/etc/opt/chrome/extensions` and `/etc/chromium/extensions`. It installs **no CLI command, native messaging host, or per-user configuration files**. Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
+The package only places the signed CRX under `/usr/share/yousub` and registers it for Chrome and Chromium. It installs **no CLI command, native messaging host, or per-user configuration files**. Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
 
 ## Extension ID and the CRX key
 

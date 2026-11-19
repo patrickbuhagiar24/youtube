@@ -42,7 +42,8 @@ test('the Debian package only registers the signed CRX', () => {
   const postrm = fs.readFileSync('debian/postrm', 'utf8');
   for (const script of [postinst, postrm]) {
     assert.doesNotMatch(script, /python3|openssl|native|cli/);
-    assert.match(script, /\/etc\/(?:opt\/chrome|chromium)\/extensions/);
+    assert.match(script, /\/usr\/share\/google-chrome\/extensions/);
+    assert.match(script, /\/etc\/chromium\/extensions/);
   }
   assert.match(postinst, /yousub-id\.txt/);
   const workflow = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
@@ -56,7 +57,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.0.0');
+  assert.equal(manifest.version, '2.0.1');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);

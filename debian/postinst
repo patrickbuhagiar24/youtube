@@ -9,7 +9,8 @@ base=/usr/share/yousub
 extension=$(cat "$base/yousub-id.txt")
 [ -n "$extension" ] || exit 0
 
-for directory in /etc/opt/chrome/extensions /etc/chromium/extensions; do
+for directory in /usr/share/google-chrome/extensions /opt/google/chrome/extensions \
+  /etc/opt/chrome/extensions /usr/share/chromium/extensions /etc/chromium/extensions; do
   install -d -m 0755 "$directory"
   install -m 0644 "$base/yousub-external.json" "$directory/$extension.json"
 done

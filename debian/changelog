@@ -1,3 +1,10 @@
+yousub (2.0.1) unstable; urgency=medium
+
+  * Register the signed CRX in the Chrome Linux external-extension directory.
+  * Keep the Chromium registration and earlier paths for compatibility.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 07:10:00 +0000
+
 yousub (2.0.0) unstable; urgency=medium
 
   * Rename the extension to YOUSUB and remove the command-line program.
