@@ -26,13 +26,13 @@ var Drive = (() => {
   /* ---------------- configuration entered in the popup ---------------- */
   const SETTINGS = 'the Google Drive settings in the popup';
 
-  /** Read a direct YouTube.json file link from google-drive.json. */
+  /** Read a direct YouTube.json file link from yousub-google-drive.json. */
   function linkFromConfig(text) {
     let value;
     try { value = typeof text === 'string' ? JSON.parse(text) : text; }
-    catch { throw new Error('google-drive.json is not valid JSON.'); }
-    const folderError = 'google-drive.json points to a folder. YOUSUB needs a direct file link to YouTube.json: open the uploaded YouTube.json in Drive, click Share → Copy link, and save {"link": "<file link>"}.';
-    const placeholderError = 'google-drive.json still contains the placeholder link. Replace it with the shared YouTube.json file link.';
+    catch { throw new Error('yousub-google-drive.json is not valid JSON.'); }
+    const folderError = 'yousub-google-drive.json points to a folder. YOUSUB needs a direct file link to YouTube.json: open the uploaded YouTube.json in Drive, click Share → Copy link, and save {"link": "<file link>"}.';
+    const placeholderError = 'yousub-google-drive.json still contains the placeholder link. Replace it with the shared YouTube.json file link.';
     let link = '';
     if (typeof value === 'string') {
       link = value.trim();
@@ -41,7 +41,7 @@ var Drive = (() => {
       const candidate = value.link ?? value.file_url ?? value.file_link ?? value.url;
       link = typeof candidate === 'string' ? candidate.trim() : '';
     }
-    if (!link) throw new Error('google-drive.json must contain a "link" field with the shared YouTube.json file link.');
+    if (!link) throw new Error('yousub-google-drive.json must contain a "link" field with the shared YouTube.json file link.');
     if (/^[A-Z]+(?:_[A-Z]+)+$/.test(link)) throw new Error(placeholderError);
     if (/\/folders\//.test(link)) throw new Error(folderError);
     return link;

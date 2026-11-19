@@ -88,7 +88,7 @@ test('file links are validated and placeholders remain disabled', () => {
   assert.throws(() => Drive.fileIdOf('not a link'), /settings in the popup.*not a Google Drive file link/);
 });
 
-test('google-drive.json accepts a link object or a bare JSON string', () => {
+test('yousub-google-drive.json accepts a link object or a bare JSON string', () => {
   const { Drive } = load();
   assert.equal(Drive.linkFromConfig(JSON.stringify({ link })), link);
   assert.equal(Drive.linkFromConfig(JSON.stringify(link)), link);
@@ -97,7 +97,7 @@ test('google-drive.json accepts a link object or a bare JSON string', () => {
   assert.throws(() => Drive.linkFromConfig('not json'), /not valid JSON/);
 });
 
-test('google-drive.json rejects folder and placeholder links with a clear error', () => {
+test('yousub-google-drive.json rejects folder and placeholder links with a clear error', () => {
   const { Drive } = load();
   assert.throws(() => Drive.linkFromConfig('{"folder_url": "https://drive.google.com/drive/folders/abc"}'), /points to a folder.*direct file link/);
   assert.throws(() => Drive.linkFromConfig('{"link": "PASTE_FILE_LINK_HERE"}'), /still contains the placeholder/);

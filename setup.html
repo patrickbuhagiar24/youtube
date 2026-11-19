@@ -11,14 +11,16 @@
     <h1>YOUSUB Drive setup</h1>
   </header>
   <section class="card">
-    <p class="hint">Select the two JSON files. The contents are read here in the browser and saved only in this Chrome profile — there is no manual text entry.</p>
+    <p class="hint">Choose a folder once and YOUSUB will find its configuration files automatically, or select the two files below. Contents are read here in the browser and saved only in this Chrome profile — there is no manual text entry.</p>
+    <button id="folderBtn">📂 Choose configuration folder</button>
+    <small id="folderStatus" class="muted" aria-live="polite">Looks for yousub-google-drive.json and service-account.json in the chosen folder.</small>
     <div class="files">
-      <label class="filebtn" for="driveLinkFile">google-drive.json</label>
+      <label class="filebtn" for="driveLinkFile">yousub-google-drive.json</label>
       <input class="fileinput" type="file" id="driveLinkFile" accept=".json,application/json">
       <label class="filebtn" for="driveKeyFile">service-account.json</label>
       <input class="fileinput" type="file" id="driveKeyFile" accept=".json,application/json">
     </div>
-    <p class="hint">In the file dialog, click the file once and press <b>Open</b>. Double-clicking can cancel the selection on Linux.</p>
+    <p class="hint">The old name <b>google-drive.json</b> is no longer accepted. In a file dialog, click the file once and press <b>Open</b> — double-clicking can cancel on Linux.</p>
     <small id="fileStatus" class="muted" aria-live="polite">Select both files to save and sync automatically.</small>
     <div id="driveFormError" class="err hidden" role="alert"></div>
     <button id="setupClearBtn" class="secondary hidden">Remove saved configuration</button>

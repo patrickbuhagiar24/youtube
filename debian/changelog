@@ -1,3 +1,12 @@
+yousub (2.2.0) unstable; urgency=medium
+
+  * Add a one-time folder picker that finds yousub-google-drive.json and
+    service-account.json automatically.
+  * Rename the link configuration file; the old google-drive.json name is
+    no longer accepted.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:30:00 +0000
+
 yousub (2.1.4) unstable; urgency=medium
 
   * Open Drive file pickers in a real extension tab: Linux popups close when

@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.1.4');
+  assert.equal(manifest.version, '2.2.0');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -80,13 +80,17 @@ test('Google Drive settings are edited in the popup, not in configuration files'
   assert.doesNotMatch(popup, /id="driveKey"/);
   assert.doesNotMatch(popup, /id="driveSaveBtn"/);
   const setup = fs.readFileSync('setup.html', 'utf8');
-  assert.match(setup, /id="driveLinkFile"[^>]*accept="\.json,application\/json"/);
+  assert.match(setup, /id="yousub-google-drive|for="driveLinkFile">yousub-google-drive\.json/);
+  assert.match(setup, /id="folderBtn"/);
+  assert.match(fs.readFileSync('setup.js', 'utf8'), /showDirectoryPicker/);
   assert.match(setup, /id="driveKeyFile"[^>]*accept="\.json,application\/json"/);
   const popupJs = fs.readFileSync('popup/popup.js', 'utf8');
   const setupJs = fs.readFileSync('setup.js', 'utf8');
   assert.match(popupJs, /YOUSUB\.CONFIG_KEY/);
   assert.match(setupJs, /Drive\.linkFromConfig/);
   assert.match(setupJs, /YOUSUB|CONFIG_KEY/);
+  assert.match(setupJs, /yousub-google-drive\.json/);
+  assert.doesNotMatch(setupJs, /readFile\(\$('driveLinkFile'), 'google-drive\.json'/);
   assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
 });
 
