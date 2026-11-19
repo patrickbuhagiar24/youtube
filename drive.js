@@ -59,7 +59,7 @@ var Drive = (() => {
     throw new Error(`The link in ${source} is not a Google Drive file link. Right-click ${YOUSUB.DRIVE_FILE} → Share → Copy link.`);
   }
 
-  /** Read the popup settings from local extension storage. Re-read on every sync. */
+  /** Read the saved setup-page settings from local extension storage. Re-read on every sync. */
   async function loadConfig() {
     const { [YOUSUB.CONFIG_KEY]: saved = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
     const link = String(saved.link || '').trim();
@@ -107,7 +107,7 @@ var Drive = (() => {
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.access_token) {
       throw new Error(/invalid_grant|invalid_client|account not found/i.test(JSON.stringify(j))
-        ? 'The service account key is invalid or has been revoked. Create a new key, paste it into the popup settings, then click the extension sync button.'
+        ? 'The service account key is invalid or has been revoked. Create a new key, replace it in the chosen folder, then click the extension sync button.'
         : 'Could not sign in to Google with the service account. Check your internet connection.');
     }
     tokenCache = { email: key.client_email, token: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };

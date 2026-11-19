@@ -1,3 +1,9 @@
+yousub (2.2.4) unstable; urgency=medium
+
+  * Remove stale file-picker text and CSS; align docs with folder-only setup.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:30:00 +0000
+
 yousub (2.2.3) unstable; urgency=medium
 
   * Replace the Drive menu text with a compact row of icon buttons.

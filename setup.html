@@ -11,11 +11,10 @@
     <h1>YOUSUB Drive setup</h1>
   </header>
   <section class="card">
-    <p class="hint">Choose a folder once and YOUSUB will find its configuration files automatically, or select the two files below. Contents are read here in the browser and saved only in this Chrome profile — there is no manual text entry.</p>
+    <p class="hint">Choose the folder containing your YOUSUB configuration files. They are read here in the browser and saved only in this Chrome profile.</p>
     <button id="folderBtn">📂 Choose configuration folder</button>
-    <small id="folderStatus" class="muted" aria-live="polite">Looks for yousub-google-drive.json and service-account.json in the chosen folder.</small>
-    <p class="hint">The old name <b>google-drive.json</b> is no longer accepted. Only files named <b>yousub-google-drive.json</b> and <b>service-account.json</b> in the chosen folder are used.</p>
-    <small id="fileStatus" class="muted" aria-live="polite">Select both files to save and sync automatically.</small>
+    <small id="folderStatus" class="muted" aria-live="polite"></small>
+    <small id="fileStatus" class="muted" aria-live="polite"></small>
     <div id="driveFormError" class="err hidden" role="alert"></div>
     <button id="setupClearBtn" class="secondary hidden">Remove saved configuration</button>
   </section>

@@ -23,5 +23,6 @@ jobs:
           node --check content/content.js
           node --check content/main-world.js
           node --check popup/popup.js
+          node --check setup.js
       - name: Run tests
         run: node --test tests/*.test.cjs

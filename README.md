@@ -2,7 +2,7 @@
 
 A Google Chrome browser extension (Manifest V3) that marks videos and channels you are not subscribed to across YouTube. All interface text, source comments, documentation, and exported data are in English.
 
-This project is **only a browser extension**: there is no CLI command, native messaging host, .deb package, or system installer.
+This project is **only a Chrome extension**, distributed as a signed CRX and an extension-only `.deb` that registers it. There is no CLI command or native messaging host.
 
 ## Features
 
@@ -31,7 +31,6 @@ A source checkout needs no installer. Signed packages are distributed only throu
 
 The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch and on `v*` tags. It uses the repository secret **`YOUSUB_CRX_PRIVATE_KEY`** — a dedicated RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact; the APT publisher consumes that artifact directly.
 
-Folder mode uses `showDirectoryPicker()` in the setup tab; Chrome requires a one-time folder selection and its permission may need to be granted again after a browser restart.
 
 **Do not reuse the signing key of another extension project.** Chrome derives the ID from the public key, so two projects using the same key get the same ID and both packages try to register the same `/usr/share/*/extensions/<id>.json` file. That collision prevents Chrome and `dpkg` from distinguishing them. Generate a separate key for YOUSUB and back it up privately; the resulting ID is printed in the build log, stored in `/usr/share/yousub/yousub-id.txt`, and published as `https://patrickbuhagiar24.github.io/youtube/extension-id.txt`.
 
@@ -148,18 +147,18 @@ Reinstalling with the same key keeps the ID and browser storage. Clearing the Ch
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until both settings are provided in the extension popup. Unsubscribe history is kept locally **only while Drive sync is configured**: without a configuration, new unsubscribe events are not stored and any existing local history is removed. Removing the configuration clears that history as well. The `yousub-google-drive.json` and `service-account.json` files are discovered by choosing their folder once on the **Drive file setup** page, opened from **☁️ Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a folder/file chooser opens; the files are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
+Google Drive sync is disabled until the configuration folder is chosen on the setup page. Unsubscribe history is kept locally **only while Drive sync is configured**: without a configuration, new unsubscribe events are not stored and any existing local history is removed. Removing the configuration clears that history as well. The `yousub-google-drive.json` and `service-account.json` files are discovered by choosing their folder once on the **Drive file setup** page, opened from **☁️ Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a folder/file chooser opens; the files are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
 3. Upload `YouTube.json` to **your own** Google Drive. Share that file with the service account's `client_email` as an **Editor**. A new service account cannot create files using its own storage quota.
-4. Open the extension popup → **☁️ Google Drive sync** → **Open Drive file setup**, then click **Choose configuration folder** and select the folder containing `yousub-google-drive.json` (the file with the shared **file** link, not a folder link) and `service-account.json`. YOUSUB finds them automatically and saves/syncs their settings. There is no per-file picker and no manual text entry. A folder configuration such as `{"folder_url": "..."}` from another project is **not** accepted; YOUSUB reads and writes one specific file. Use:
+4. Open the popup → **Google Drive sync** → 📁, then click **Choose configuration folder** and select the folder containing `yousub-google-drive.json` (the file with the shared **file** link, not a folder link) and `service-account.json`. YOUSUB finds them automatically and saves/syncs their settings. There is no per-file picker and no manual text entry. A folder configuration such as `{"folder_url": "..."}` from another project is **not** accepted; YOUSUB reads and writes one specific file. Folder access uses `showDirectoryPicker()` and may need to be granted again after a browser restart. Use:
 
    ```json
    {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}
    ```
 
-Both values are saved in `chrome.storage.local` for this browser profile only; the key is never placed in `chrome.storage.sync`, in source code, or in the extension archive. **Local extension storage is not encrypted**: keep your Chrome profile private, remove personal keys before sharing a profile, and never commit a real key to a repository. **Remove saved configuration** in the popup deletes both values.
+Both values are saved in `chrome.storage.local` for this browser profile only; the key is never placed in `chrome.storage.sync`, in source code, or in the extension archive. **Local extension storage is not encrypted**: keep your Chrome profile private, remove personal keys before sharing a profile, and never commit a real key to a repository. The 🗑️ button in the popup deletes both values and the local unsubscribe history.
 
 The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 
@@ -182,6 +181,7 @@ node --check drive.js
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js
+node --check setup.js
 node --test tests/*.test.cjs
 ```
 

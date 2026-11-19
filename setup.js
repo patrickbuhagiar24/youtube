@@ -117,7 +117,7 @@ async function applyFolderFiles(directory) {
 $('folderBtn').addEventListener('click', async () => {
   try {
     if (!window.showDirectoryPicker) {
-      showError('This Chrome does not support folder access. Select the two files below instead.');
+      showError('This Chrome does not support folder access.');
       return;
     }
     const handle = await window.showDirectoryPicker({ id: 'yousub-config', mode: 'read' });
@@ -155,12 +155,15 @@ $('setupClearBtn').addEventListener('click', async () => {
   await renderSaved();
   try {
     const handle = await loadFolderHandle();
-    if (!handle) return;
+    if (!handle) {
+      $('folderStatus').textContent = 'No folder selected.';
+      return;
+    }
     if (await hasReadPermission(handle)) {
       $('folderStatus').textContent = 'Using the saved folder…';
       await applyFolderFiles(handle);
     } else {
       $('folderStatus').textContent = 'Folder access needs to be granted again. Choose it once more.';
     }
-  } catch { /* IndexedDB or permission unavailable: file pickers still work. */ }
+  } catch { /* Folder access unavailable; the saved folder can be chosen again. */ }
 })();

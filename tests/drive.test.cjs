@@ -110,7 +110,7 @@ test('service account keys are validated without a helper program', () => {
   assert.throws(() => Drive.parseKey('{"type":"user"}'), /not a service account key/);
 });
 
-test('empty popup settings disable Drive without authentication errors', async () => {
+test('empty Drive settings disable sync without authentication errors', async () => {
   const store = {};
   const { Drive } = load(storageChrome(store));
   assert.deepEqual(plain(await Drive.sync()), { ok: false, configured: false });
