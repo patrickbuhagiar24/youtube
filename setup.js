@@ -143,7 +143,7 @@ async function renderSaved() {
 }
 
 $('setupClearBtn').addEventListener('click', async () => {
-  await chrome.storage.local.remove([CONFIG_KEY, 'yousubDrive']);
+  await chrome.storage.local.remove([CONFIG_KEY, 'yousubDrive', 'yousubUnsubs']);
   await clearFolderHandle();
   $('fileStatus').textContent = FILE_HINT;
   $('folderStatus').textContent = 'No folder selected.';

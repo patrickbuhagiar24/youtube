@@ -148,7 +148,7 @@ Reinstalling with the same key keeps the ID and browser storage. Clearing the Ch
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until both settings are provided in the extension popup. The `yousub-google-drive.json` and `service-account.json` files are discovered by choosing their folder once on the **Drive file setup** page, opened from **☁️ Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a folder/file chooser opens; the files are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
+Google Drive sync is disabled until both settings are provided in the extension popup. Unsubscribe history is kept locally **only while Drive sync is configured**: without a configuration, new unsubscribe events are not stored and any existing local history is removed. Removing the configuration clears that history as well. The `yousub-google-drive.json` and `service-account.json` files are discovered by choosing their folder once on the **Drive file setup** page, opened from **☁️ Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a folder/file chooser opens; the files are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.

@@ -145,7 +145,15 @@
 
   /* ---------------- unsubscribe history ---------------- */
   const isLeft = (id) => unsubs[id]?.s === 'unsub' && !subs.ids.has(id);
-  const saveUnsubs = debounce(() => chrome.storage.local.set({ yousubUnsubs: unsubs }), 600);
+  const driveConfigured = (cfg) => !!(String(cfg?.link || '').trim() && String(cfg?.keyText || '').trim());
+  const readDriveConfigured = async () => {
+    const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
+    return driveConfigured(cfg);
+  };
+  const saveUnsubs = debounce(async () => {
+    if (!(await readDriveConfigured())) { unsubs = {}; return; }
+    await chrome.storage.local.set({ yousubUnsubs: unsubs });
+  }, 600);
 
   /** Record an unsubscribe, or a resubscribe if the channel was previously left. */
   function recordEvent(id, s, info) {
@@ -661,10 +669,10 @@
 
   /* ---------------- init ---------------- */
   async function init() {
-    const [{ yousubSettings }, { yousubSubs, yousubUnsubs }] = await Promise.all([
-      chrome.storage.sync.get('yousubSettings'), chrome.storage.local.get(['yousubSubs', 'yousubUnsubs'])
+    const [{ yousubSettings }, { yousubSubs, yousubUnsubs, [YOUSUB.CONFIG_KEY]: cfg = {} }] = await Promise.all([
+      chrome.storage.sync.get('yousubSettings'), chrome.storage.local.get(['yousubSubs', 'yousubUnsubs', YOUSUB.CONFIG_KEY])
     ]);
-    unsubs = yousubUnsubs || {};
+    unsubs = driveConfigured(cfg) ? (yousubUnsubs || {}) : {};
     safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // Pull changes from other devices
     settings = { ...DEFAULTS, ...yousubSettings };
     loadSubs(yousubSubs);

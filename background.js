@@ -13,17 +13,27 @@ chrome.runtime.onInstalled.addListener(async () => {
   const stale = Object.keys(all).filter((k) => !YOUSUB.STORE_KEYS.includes(k));
   if (stale.length) await chrome.storage.local.remove(stale);
   setupAlarm();
+  clearHistoryWhenUnconfigured();
   Drive.sync(); // Read the Drive settings saved in the popup after installation or reload
 });
-chrome.runtime.onStartup.addListener(() => { setupAlarm(); Drive.sync(); });
+chrome.runtime.onStartup.addListener(() => { setupAlarm(); clearHistoryWhenUnconfigured(); Drive.sync(); });
 
 function setupAlarm() { chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 15 }); }
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === SYNC_ALARM) Drive.sync(); });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === SYNC_ALARM) { clearHistoryWhenUnconfigured(); Drive.sync(); } });
+
+// Local unsubscribe history exists only while Drive sync is configured.
+async function clearHistoryWhenUnconfigured() {
+  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
+  const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
+  if (!configured) await chrome.storage.local.remove('yousubUnsubs');
+}
 
 // Unsubscribe history changed on this device -> send it to Drive (debounced to batch rapid changes).
 let pushTimer = 0;
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes.yousubUnsubs) return;
+  if (area !== 'local') return;
+  if (changes[YOUSUB.CONFIG_KEY]) clearHistoryWhenUnconfigured();
+  if (!changes.yousubUnsubs) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => Drive.sync(), 3000);
 });

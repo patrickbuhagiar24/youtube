@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.2.1');
+  assert.equal(manifest.version, '2.2.2');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -88,7 +88,10 @@ test('Google Drive settings are selected from a folder, not typed or read per fi
   assert.doesNotMatch(setupJs, /driveLinkFile/);
   assert.match(fs.readFileSync('popup/popup.js', 'utf8'), /YOUSUB\.CONFIG_KEY/);
   assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
+  assert.match(fs.readFileSync('content/content.js', 'utf8'), /readDriveConfigured/);
+  assert.match(fs.readFileSync('background.js', 'utf8'), /clearHistoryWhenUnconfigured/);
 });
+
 
 
 test('the APT repository workflow is signed and deployed through Pages', () => {
