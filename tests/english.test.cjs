@@ -49,7 +49,7 @@ test('the Debian package only registers the signed CRX', () => {
   const workflow = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.match(workflow, /dpkg-deb --root-owner-group/);
   assert.match(workflow, /yousub_\${VERSION}_all\.deb/);
-  assert.match(workflow, /yousub-\*\.deb/);
+  assert.match(workflow, /yousub_\*\.deb/);
 });
 
 test('manifest describes the Chrome extension and declares every asset', () => {
