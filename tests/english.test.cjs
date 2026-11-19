@@ -50,6 +50,8 @@ test('the Debian package only registers the signed CRX', () => {
   assert.match(workflow, /dpkg-deb --root-owner-group/);
   assert.match(workflow, /yousub_\${VERSION}_all\.deb/);
   assert.match(workflow, /yousub_\*\.deb/);
+  assert.match(workflow, /usr\/share\/google-chrome\/extensions/);
+  assert.match(workflow, /usr\/share\/chromium\/extensions/);
 });
 
 test('manifest describes the Chrome extension and declares every asset', () => {
@@ -57,7 +59,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.0.1');
+  assert.equal(manifest.version, '2.0.2');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);

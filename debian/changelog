@@ -1,3 +1,10 @@
+yousub (2.0.2) unstable; urgency=medium
+
+  * Ship the Chrome/Chromium external-extension JSON inside the .deb payload,
+    matching the known-working pastex packaging, with postinst as a fallback.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 07:30:00 +0000
+
 yousub (2.0.1) unstable; urgency=medium
 
   * Register the signed CRX in the Chrome Linux external-extension directory.
