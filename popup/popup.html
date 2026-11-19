@@ -36,16 +36,12 @@
     <button id="driveSyncBtn" class="icon hidden" title="Sync with Google Drive now" aria-label="Sync with Google Drive now">🔄</button>
   </section>
 
-  <!-- Drive settings are picked in a real extension tab: Linux popups close on file choosers -->
-  <details class="card" id="driveDetails">
-    <summary>☁️ Google Drive sync</summary>
-    <p class="hint">Upload a copy of <code>YouTube.json</code> to your own Google Drive, share it with a Google service account as an Editor, then select both JSON files in the setup page. Settings stay in this browser profile.</p>
-    <button id="driveSetupBtn">📁 Open Drive file setup</button>
-    <p class="hint">The setup page uses file pickers only. Select a file with one click and press <b>Open</b>; double-clicking can cancel on Linux.</p>
-    <div id="driveFormError" class="err hidden" role="alert"></div>
-    <button id="driveClearBtn" class="secondary hidden">Remove saved configuration</button>
-    <p class="hint">The key is stored in local extension storage, not synced by Google. Remove personal keys before sharing this browser profile.</p>
-  </details>
+  <!-- Compact Drive actions: only the label and icon buttons -->
+  <section class="card drive">
+    <div class="grow">Google Drive sync</div>
+    <button id="driveSetupBtn" class="icon" title="Open Drive file setup" aria-label="Open Drive file setup">📁</button>
+    <button id="driveClearBtn" class="icon hidden" title="Remove saved configuration" aria-label="Remove saved configuration">🗑️</button>
+  </section>
 
   <!-- Collapsible settings -->
   <details class="card">

@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.2.2');
+  assert.equal(manifest.version, '2.2.3');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -73,7 +73,9 @@ test('manifest describes the Chrome extension and declares every asset', () => {
 
 test('Google Drive settings are selected from a folder, not typed or read per file', () => {
   const popup = fs.readFileSync('popup/popup.html', 'utf8');
-  assert.match(popup, /id="driveSetupBtn"/);
+  assert.match(popup, /id="driveSetupBtn"[^>]*class="icon"/);
+  assert.match(popup, /id="driveClearBtn"[^>]*class="icon hidden"/);
+  assert.doesNotMatch(popup, /<details class="card" id="driveDetails">/);
   assert.doesNotMatch(popup, /id="driveLink"/);
   const setup = fs.readFileSync('setup.html', 'utf8');
   assert.doesNotMatch(setup, /type="file"/);

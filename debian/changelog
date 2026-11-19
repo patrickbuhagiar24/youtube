@@ -1,3 +1,9 @@
+yousub (2.2.3) unstable; urgency=medium
+
+  * Replace the Drive menu text with a compact row of icon buttons.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:15:00 +0000
+
 yousub (2.2.2) unstable; urgency=medium
 
   * Keep unsubscribe history only while Drive sync is configured; remove it
