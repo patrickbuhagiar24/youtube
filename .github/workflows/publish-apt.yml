@@ -1,0 +1,170 @@
+name: Publish signed APT repository
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose yousub .deb package should be published
+        required: true
+        default: v2.0.0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv
+
+      - name: Determine release tag
+        id: release
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the signed release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -q '^yousub_.*_all\.deb$'; then
+              echo "Release asset is available for $TAG"
+              exit 0
+            fi
+            echo "Waiting for the .deb asset in release $TAG ($attempt/30)..."
+            sleep 10
+          done
+          echo "Release $TAG has no yousub .deb asset." >&2
+          exit 1
+
+      - name: Download the package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh release download "$TAG" --pattern 'yousub_*.deb' --dir release
+          test -n "$(find release -name 'yousub_*.deb' -print -quit)"
+
+      - name: Build repository metadata
+        run: |
+          set -euo pipefail
+          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all
+          cp release/yousub_*.deb site/pool/main/y/yousub/
+          cd site
+          dpkg-scanpackages --arch all pool /dev/null > dists/stable/main/binary-all/Packages
+          gzip -9 -n -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
+          cat > yousub.sources <<'EOF'
+          Types: deb
+          URIs: https://patrickbuhagiar24.github.io/youtube/
+          Suites: stable
+          Components: main
+          Architectures: all
+          Signed-By: /etc/apt/keyrings/yousub.gpg
+          EOF
+          cat > index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>YOUSUB APT repository</title></head>
+          <body>
+            <h1>YOUSUB APT repository</h1>
+            <p>Install with <code>sudo apt install yousub</code> after adding
+              <code>yousub.sources</code> and the verified archive key. See the
+              <a href="https://github.com/patrickbuhagiar24/youtube">installation instructions</a>.</p>
+            <p>Always verify the 40-character key fingerprint through an independent channel before installing.</p>
+          </body>
+          </html>
+          EOF
+          python3 - <<'PY'
+          import gzip
+          import hashlib
+          from datetime import datetime, timezone
+          from email.utils import format_datetime
+          from pathlib import Path
+
+          root = Path('dists/stable')
+          files = sorted(p for p in root.rglob('*') if p.is_file())
+          if not files:
+              raise SystemExit('No package indices were generated.')
+          fields = [
+              'Origin: YOUSUB',
+              'Label: YOUSUB',
+              'Suite: stable',
+              'Codename: stable',
+              'Date: ' + format_datetime(datetime.now(timezone.utc), usegmt=True),
+              'Architectures: all',
+              'Components: main',
+              'Description: Signed YOUSUB Chrome extension packages',
+              'Acquire-By-Hash: no',
+          ]
+          for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):
+              fields.append(label + ':')
+              for path in files:
+                  data = path.read_bytes()
+                  digest = hashlib.new(algorithm, data).hexdigest()
+                  fields.append(f' {digest} {len(data):16d} {path.relative_to(root).as_posix()}')
+          (root / 'Release').write_text('\n'.join(fields) + '\n', encoding='utf-8')
+          PY
+
+      - name: Sign the repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GNUPGHOME: ${{ runner.temp }}/yousub-apt-gnupg
+        run: |
+          set -euo pipefail
+          test -n "$GPG_PRIVATE_KEY" || { echo 'Configure the GPG_PRIVATE_KEY repository secret first.' >&2; exit 1; }
+          install -d -m 0700 "$GNUPGHOME"
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          fingerprint=$(gpg --batch --with-colons --list-secret-keys | awk -F: '
+            $1 == "sec" { primaries++; want_fpr = 1; next }
+            want_fpr && $1 == "fpr" { print $10; want_fpr = 0 }
+            END { if (primaries != 1) exit 2 }
+          ') || { echo 'GPG_PRIVATE_KEY must contain exactly one primary key identity.' >&2; exit 1; }
+          [[ "$fingerprint" =~ ^[A-Fa-f0-9]{40}$ ]] || { echo 'Invalid signing key fingerprint.' >&2; exit 1; }
+          gpg --batch --with-colons --list-secret-keys "$fingerprint" \
+            | awk -F: '($1 == "sec" || $1 == "ssb") && tolower($12) ~ /s/ { found = 1 } END { exit !found }' \
+            || { echo 'The signing key has no signing-capable subkey.' >&2; exit 1; }
+          printf '%s\n' "$fingerprint" > site/archive-keyring.fingerprint.txt
+          gpg --batch --yes --armor --export "$fingerprint" > site/archive-keyring.asc
+          gpg --batch --yes --export "$fingerprint" > site/archive-keyring.gpg
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --local-user "$fingerprint" --armor --detach-sign \
+            --output site/dists/stable/Release.gpg site/dists/stable/Release
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --local-user "$fingerprint" --clearsign \
+            --output site/dists/stable/InRelease site/dists/stable/Release
+          gpgv --keyring site/archive-keyring.gpg site/dists/stable/Release.gpg site/dists/stable/Release
+          gpg --verify site/dists/stable/InRelease
+
+      - name: Remove temporary GPG keyring
+        if: always()
+        env:
+          GNUPGHOME: ${{ runner.temp }}/yousub-apt-gnupg
+        run: |
+          if [ -d "$GNUPGHOME" ]; then
+            gpgconf --kill gpg-agent || true
+            rm -rf "$GNUPGHOME"
+          fi
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+          include-hidden-files: true
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

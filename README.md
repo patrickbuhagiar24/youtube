@@ -33,17 +33,53 @@ The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extensi
 
 Because every release uses the same secret key, all users get the **same extension ID**, and reinstalling or upgrading keeps that ID and the browser storage that belongs to it. This also holds when the CRX is distributed through APT. The private key is written only to a temporary runner file with `0600` permissions; it is never printed, committed, or included in an artifact.
 
-## Install on Linux with APT
+## Install from the APT repository
 
-Download `yousub_<version>_all.deb` from the `yousub-extension` artifact and install it:
+The **Publish signed APT repository** workflow publishes a signed repository to <https://patrickbuhagiar24.github.io/youtube/> whenever a `v*` tag is pushed. The `stable` suite is architecture-independent.
+
+Obtain the **full 40-character signing-key fingerprint** from a trusted maintainer channel independent of this website. Do not use a fingerprint downloaded only from the same site as your sole verification. The commands below require Bash, `curl`, `gpg` (from `gnupg`), and `sudo`; they download the key into a private temporary directory and ask you to confirm the trusted fingerprint before changing system files.
+
+```bash
+(
+  set -euo pipefail
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    -o "$tmpdir/archive-keyring.gpg" \
+    https://patrickbuhagiar24.github.io/youtube/archive-keyring.gpg
+  fingerprint=$(gpg --batch --with-colons --show-keys "$tmpdir/archive-keyring.gpg" |
+    awk -F: '$1 == "pub" { count++; want = 1; next }
+      want && $1 == "fpr" { print $10; want = 0 }
+      END { if (count != 1) exit 1 }')
+  [[ "$fingerprint" =~ ^[A-F0-9]{40}$ ]] || { echo 'Invalid key fingerprint.' >&2; exit 1; }
+  printf 'Downloaded key fingerprint: %s\n' "$fingerprint"
+  read -r -p 'Enter the independently verified fingerprint: ' expected
+  expected=${expected//[[:space:]]/}
+  [[ "${expected^^}" == "$fingerprint" ]] || { echo 'Fingerprint mismatch; nothing installed.' >&2; exit 1; }
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    -o "$tmpdir/yousub.sources" \
+    https://patrickbuhagiar24.github.io/youtube/yousub.sources
+  sudo install -d -m 0755 /etc/apt/keyrings
+  sudo install -m 0644 "$tmpdir/archive-keyring.gpg" /etc/apt/keyrings/yousub.gpg
+  sudo install -m 0644 "$tmpdir/yousub.sources" /etc/apt/sources.list.d/yousub.sources
+  sudo apt update
+  sudo apt install yousub
+)
+```
+
+Restart Chrome, then open <https://www.youtube.com> and sign in. To remove the registration later, run `sudo apt remove yousub`; Chrome profile data is left untouched.
+
+The package only places the signed CRX under `/usr/share/yousub` and registers it in `/etc/opt/chrome/extensions` and `/etc/chromium/extensions`. It installs **no CLI command, native messaging host, or per-user configuration files**. Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
+
+### Install a downloaded .deb directly
+
+If you prefer the artifact from a GitHub Release instead of the repository:
 
 ```bash
 sudo apt install ./yousub_2.0.0_all.deb
 ```
 
-Restart Chrome, then open <https://www.youtube.com> and sign in. The package only places the signed CRX under `/usr/share/yousub` and registers it in `/etc/opt/chrome/extensions` and `/etc/chromium/extensions`. It installs **no CLI command, native messaging host, or per-user configuration files**. To remove the registration, run `sudo apt remove yousub`; Chrome profile data is left untouched.
-
-Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
+Restart Chrome afterward.
 
 ## Extension ID and the CRX key
 

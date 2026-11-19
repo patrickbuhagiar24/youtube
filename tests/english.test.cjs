@@ -32,7 +32,6 @@ test('the project contains no CLI program or native messaging host', () => {
     const text = fs.readFileSync(file, 'utf8');
     assert.doesNotMatch(text, /sendNativeMessage|nativeMessaging|native-messaging-host|cli\.py|config_store|apt-repository/, `CLI reference remains in ${file}`);
   }
-  assert.ok(!fs.existsSync('.github/workflows/publish-apt.yml'));
 });
 
 test('the Debian package only registers the signed CRX', () => {
@@ -82,6 +81,20 @@ test('Google Drive settings are edited in the popup, not in configuration files'
   assert.match(popupJs, /YOUSUB\.CONFIG_KEY/);
   assert.match(popupJs, /chrome\.storage\.local\.set/);
   assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
+});
+
+test('the APT repository workflow is signed and deployed through Pages', () => {
+  const text = fs.readFileSync('.github/workflows/publish-apt.yml', 'utf8');
+  assert.match(text, /GPG_PRIVATE_KEY: \$\{\{ secrets\.GPG_PRIVATE_KEY \}\}/);
+  assert.match(text, /GPG_PASSPHRASE: \$\{\{ secrets\.GPG_PASSPHRASE \}\}/);
+  assert.match(text, /Suites: stable/);
+  assert.match(text, /Signed-By: \/etc\/apt\/keyrings\/yousub\.gpg/);
+  assert.match(text, /actions\/deploy-pages/);
+  assert.match(text, /gpgv --keyring/);
+  assert.doesNotMatch(text, /Trusted: yes/);
+  const readme = fs.readFileSync('README.md', 'utf8');
+  assert.match(readme, /^## Install from the APT repository$/m);
+  assert.match(readme, /patrickbuhagiar24\.github\.io\/youtube\/yousub\.sources/);
 });
 
 test('the release workflow signs CRX builds with the repository secret', () => {
