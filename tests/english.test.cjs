@@ -52,6 +52,7 @@ test('the Debian package only registers the signed CRX', () => {
   assert.match(workflow, /yousub_\*\.deb/);
   assert.match(workflow, /usr\/share\/google-chrome\/extensions/);
   assert.match(workflow, /usr\/share\/chromium\/extensions/);
+  assert.match(workflow, /yousub-id\.txt/);
 });
 
 test('manifest describes the Chrome extension and declares every asset', () => {

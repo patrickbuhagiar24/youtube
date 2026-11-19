@@ -173,5 +173,7 @@ jobs:
             ${{ runner.temp }}/yousub-*-unpacked.zip
             ${{ runner.temp }}/yousub-public.pem
             ${{ runner.temp }}/yousub_*.deb
+            ${{ runner.temp }}/yousub-id.txt
+            ${{ runner.temp }}/yousub-external.json
             ${{ runner.temp }}/checksums.txt
           if-no-files-found: error
