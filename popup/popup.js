@@ -116,6 +116,7 @@ $('openFeedBtn').addEventListener('click', (e) => e.preventDefault() || chrome.t
 const FILE_HINT = 'Select both files to save and sync automatically.';
 let pendingLink = '';
 let pendingKey = '';
+let userInteracted = false;
 
 const driveError = (message) => {
   $('driveFormError').classList.toggle('hidden', !message);
@@ -169,6 +170,8 @@ async function saveDriveSettings() {
 async function readConfigFile(input, parse) {
   const file = input.files?.[0];
   if (!file) return null;
+  userInteracted = true;
+  $('fileStatus').textContent = `Reading ${file.name}…`;
   try {
     const value = parse((await file.text()).trim());
     return { value, name: file.name };
@@ -183,6 +186,13 @@ async function readConfigFile(input, parse) {
 async function saveWhenBothFilesLoaded() {
   if (!pendingLink || !pendingKey) return;
   if (await saveDriveSettings()) $('fileStatus').textContent = 'Both files loaded and saved.';
+}
+
+for (const [id, label] of [['driveLinkFile', 'google-drive.json'], ['driveKeyFile', 'service-account.json']]) {
+  $(id).addEventListener('click', () => {
+    userInteracted = true;
+    $('fileStatus').textContent = `Waiting for ${label}…`;
+  });
 }
 
 $('driveLinkFile').addEventListener('change', async () => {
@@ -222,7 +232,7 @@ chrome.storage.onChanged.addListener((c, area) => {
   await loadSettings();
   await renderFromStorage();
   await readSavedConfig();
-  $('fileStatus').textContent = pendingLink && pendingKey ? 'Configuration files loaded. Select new files to replace them.' : FILE_HINT;
+  if (!userInteracted) $('fileStatus').textContent = pendingLink && pendingKey ? 'Configuration files loaded. Select new files to replace them.' : FILE_HINT;
   renderDrive();
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (YT_URL.test(tab?.url || '')) tabId = tab.id;

@@ -1,3 +1,9 @@
+yousub (2.1.3) unstable; urgency=medium
+
+  * Show when a file picker is clicked and when a selected file is being read.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:50:00 +0000
+
 yousub (2.1.2) unstable; urgency=medium
 
   * Use visible file inputs in the popup so the file pickers are reliable.

@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.1.2');
+  assert.equal(manifest.version, '2.1.3');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
