@@ -16,7 +16,7 @@ const FIELDS = {
   leftColor: ['leftColor', 'value'],
   showSubButton: ['showSubButton', 'checked'],
   sortUnsub: ['sortUnsub', 'checked'],
-  autoSyncHours: ['autoSyncHours', 'value', Number]
+  autoloadLimit: ['autoloadLimit', 'value', Number]
 };
 
 async function loadSettings() {
@@ -90,8 +90,7 @@ $('syncBtn').addEventListener('click', async () => {
   if (tabId === null) return;
   $('syncBtn').disabled = true;
   $('syncBtn').textContent = '⏳ Refreshing…';
-  const poll = setInterval(async () => render(await getState()), 700);
-  try { render(await chrome.tabs.sendMessage(tabId, { type: 'sync' })); } catch { render(null); } finally { clearInterval(poll); }
+  try { render(await chrome.tabs.sendMessage(tabId, { type: 'sync' })); } catch { render(null); }
 });
 
 $('exportBtn').addEventListener('click', async (e) => {
@@ -134,7 +133,28 @@ async function syncNow() {
 }
 
 $('driveSyncBtn').addEventListener('click', syncNow);
-$('driveSetupBtn').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }));
+$('driveSetupBtn').addEventListener('click', async () => {
+  if (!window.showOpenFilePicker) {
+    $('driveStatus').textContent = 'This browser does not support the file picker.';
+    return;
+  }
+  try {
+    // Start the picker immediately in the click gesture. The side panel stays open on Linux.
+    const [handle] = await window.showOpenFilePicker({
+      multiple: false,
+      types: [{ description: 'JSON configuration manifest', accept: { 'application/json': ['.json'] } }]
+    });
+    const file = await handle.getFile();
+    if (file.size > 256 * 1024) throw new Error('The manifest is too large (maximum 256 KB).');
+    $('driveStatus').textContent = 'Loading linked configuration files…';
+    const config = await YousubManifest.load(await file.text());
+    await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
+    await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
+    await renderDrive();
+  } catch (e) {
+    if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not load configuration: ' + (e.message || String(e));
+  }
+});
 $('driveClearBtn').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'driveClear' }).catch(() => {});
   renderDrive();
@@ -142,6 +162,23 @@ $('driveClearBtn').addEventListener('click', async () => {
 
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
+  if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
+});
+
+// The active YouTube tab pushes changes instead of being polled continuously.
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type === 'yousubStateChanged' && sender.tab?.id === tabId) render(message.state);
+});
+
+/* The side panel stays open while the active tab changes. */
+async function refreshActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  tabId = YT_URL.test(tab?.url || '') ? tab.id : null;
+  render(await getState());
+}
+chrome.tabs.onActivated.addListener(refreshActiveTab);
+chrome.tabs.onUpdated.addListener((id, change) => {
+  if (change.url || change.status === 'complete') refreshActiveTab();
 });
 
 /* ---------------- startup ---------------- */
@@ -149,8 +186,7 @@ chrome.storage.onChanged.addListener((c, area) => {
   await loadSettings();
   await renderFromStorage();
   renderDrive();
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (YT_URL.test(tab?.url || '')) tabId = tab.id;
-  render(await getState());
-  setInterval(async () => { const s = await getState(); if (s) render(s); }, 1500);
+  await refreshActiveTab();
+  // Slow fallback for messages lost during navigation or extension reload.
+  setInterval(async () => { if (!document.hidden) { const s = await getState(); if (s) render(s); } }, 30000);
 })();

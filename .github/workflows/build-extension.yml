@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           stage="$RUNNER_TEMP/yousub-extension"
           mkdir -p "$stage"
-          cp -R manifest.json background.js shared.js drive.js config-store.js setup.html setup.js YouTube.json content popup icons "$stage"/
+          cp -R manifest.json background.js shared.js drive.js config-store.js config-manifest.js YouTube.json content popup icons "$stage"/
           python3 - "$stage/manifest.json" "$PUBLIC_KEY_B64" <<'PY'
           import json
           import sys

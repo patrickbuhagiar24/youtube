@@ -2,24 +2,26 @@
   "manifest_version": 3,
   "name": "YOUSUB",
   "short_name": "YOUSUB",
-  "version": "2.2.5",
+  "version": "2.2.9",
   "description": "Marks videos and channels you are not subscribed to across YouTube.",
-  "minimum_chrome_version": "111",
+  "minimum_chrome_version": "116",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://oauth2.googleapis.com/*",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://drive.google.com/*",
+    "https://*.googleusercontent.com/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_title": "YOUSUB",
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -52,6 +54,7 @@
       ],
       "js": [
         "shared.js",
+        "content/native-refresh.js",
         "content/content.js"
       ],
       "css": [
@@ -60,5 +63,8 @@
       "run_at": "document_idle",
       "all_frames": false
     }
-  ]
+  ],
+  "side_panel": {
+    "default_path": "popup/popup.html"
+  }
 }
