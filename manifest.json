@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YOUSUB",
   "short_name": "YOUSUB",
-  "version": "2.2.8",
+  "version": "2.2.9",
   "description": "Marks videos and channels you are not subscribed to across YouTube.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -54,6 +54,7 @@
       ],
       "js": [
         "shared.js",
+        "content/native-refresh.js",
         "content/content.js"
       ],
       "css": [

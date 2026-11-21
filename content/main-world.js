@@ -439,6 +439,7 @@
   /* ---------- Write data-yousub-* attributes to each card ---------- */
   let dataCache = new WeakMap();
   let btnCache = new WeakMap();
+  let nativeSequence = 0;
   let containerCache = new WeakMap();
   let ver = 0;
 
@@ -517,12 +518,12 @@
       if (prev.sub === d.subscribed) continue;
       if (prev.timer) clearTimeout(prev.timer);
       const id = d.channelId, subscribed = d.subscribed;
-      const entry = { id, sub: subscribed, timer: 0 };
+      const entry = { id, sub: subscribed, seq: nativeSequence, timer: 0 };
       entry.timer = setTimeout(() => {
         const current = getData(el);
         if (el.isConnected && btnCache.get(el) === entry &&
             current?.channelId === id && current.subscribed === subscribed) {
-          post('nativeButtonChanged', { id });
+          post('nativeButtonChanged', { id, subscribed, seq: entry.seq });
         }
         entry.timer = 0;
       }, 1500);
@@ -543,10 +544,10 @@
     if (matches('.yousub-subbtn')) return;
     if (matches(NATIVE_SUB_BUTTON)) {
       nativeClickAt = Date.now();
-      post('nativeRefreshRequested');
+      post('nativeRefreshRequested', { seq: ++nativeSequence });
     } else if (nativeClickAt && Date.now() - nativeClickAt < 120000 && matches(CONFIRM_BUTTON)) {
       nativeClickAt = 0;
-      post('nativeRefreshRequested');
+      post('nativeRefreshRequested', { seq: nativeSequence });
     }
   }, true);
 
@@ -555,12 +556,13 @@
 
   function start() {
     // Ignore player-only changes (time, progress bar) that do not affect cards
-    new MutationObserver((muts) => { if (muts.some((m) => !m.target.closest?.('.html5-video-player'))) scheduleScan(); })
+    new MutationObserver((muts) => { if (muts.some((m) => !m.target.closest?.('.html5-video-player') && !m.target.closest?.('ytd-page-manager > [hidden]'))) scheduleScan(); })
       .observe(document.documentElement, { childList: true, subtree: true });
     // Check YouTube Subscribe buttons every 2 seconds (state can change without DOM mutations); full scan every 10 seconds
     // as a fallback. Normal scans are triggered by DOM changes, navigation, and InnerTube responses.
     let tick = 0;
-    setInterval(() => (++tick % 5 ? scanButtons(document.getElementsByTagName(SUB_BTN)) : scan()), 2000);
+    setInterval(() => { if (!document.hidden) (++tick % 5 ? scanButtons(document.getElementsByTagName(SUB_BTN)) : scan()); }, 2000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleScan(); });
     for (const e of ['yt-navigate-finish', 'yt-page-data-updated', 'yt-action']) document.addEventListener(e, scheduleScan);
     document.addEventListener('yt-navigate-finish', (e) => safeIndex(e.detail?.response?.response || e.detail?.response));
     document.addEventListener('yt-page-data-fetched', (e) => safeIndex(e.detail?.pageData?.response));
@@ -578,7 +580,7 @@
 
   // Observe YouTube's own requests without issuing another subscription request.
   // Only apply results after a successful response, not on click or dialog opening.
-  function reportNativeChange(url, body, response) {
+  function reportNativeChange(url, body, response, seq) {
     const match = SUB_URL.exec(url || '');
     if (!match || !response || hasError(response)) return;
     const subscribed = match[1] === 'subscribe';
@@ -591,15 +593,16 @@
     try {
       const data = typeof body === 'string' ? JSON.parse(body) : body;
       const ids = Array.isArray(data?.channelIds) ? data.channelIds.filter(isUC) : [];
-      if (ids.length) { post('subChange', { ids, subscribed }); return; }
+      if (ids.length) { post('subChange', { ids, subscribed, seq }); return; }
     } catch { /* Unknown request body; never guess an ID. */ }
-    post('nativeRefreshRequested');
+    post('nativeRefreshRequested', { seq });
   }
 
   window.fetch = async function (input, init) {
     let url = '';
     try { url = typeof input === 'string' ? input : input?.url || String(input); } catch { /* */ }
     const sub = SUB_URL.test(url);
+    const seq = nativeSequence;
     let body = null;
     if (sub) {
       try { body = init?.body != null ? Promise.resolve(init.body) : input instanceof Request ? input.clone().text() : null; } catch { /* */ }
@@ -610,10 +613,10 @@
     }
     if (res.ok && body) {
       try {
-        Promise.all([body, res.clone().json()]).then(([request, result]) => reportNativeChange(url, request, result)).catch(() => post('nativeRefreshRequested'));
-      } catch { post('nativeRefreshRequested'); }
+        Promise.all([body, res.clone().json()]).then(([request, result]) => reportNativeChange(url, request, result, seq)).catch(() => post('nativeRefreshRequested', { seq }));
+      } catch { post('nativeRefreshRequested', { seq }); }
     } else if (res.ok && sub) {
-      post('nativeRefreshRequested');
+      post('nativeRefreshRequested', { seq });
     }
     return res;
   };
@@ -624,14 +627,15 @@
     XMLHttpRequest.prototype.open = function (method, url) { this.__yousubUrl = String(url || ''); return open.apply(this, arguments); };
     XMLHttpRequest.prototype.send = function (body) {
       const url = this.__yousubUrl || '';
+      const seq = nativeSequence;
       if (INDEX_URL.test(url) || SUB_URL.test(url)) {
         this.addEventListener('load', () => {
           if (this.status < 200 || this.status >= 300) return;
           try {
             const result = this.responseType === 'json' ? this.response : JSON.parse(this.responseText);
             if (INDEX_URL.test(url)) safeIndex(result);
-            if (SUB_URL.test(url)) reportNativeChange(url, body, result);
-          } catch { if (SUB_URL.test(url)) post('nativeRefreshRequested'); }
+            if (SUB_URL.test(url)) reportNativeChange(url, body, result, seq);
+          } catch { if (SUB_URL.test(url)) post('nativeRefreshRequested', { seq }); }
         }, { once: true });
       }
       return send.apply(this, arguments);

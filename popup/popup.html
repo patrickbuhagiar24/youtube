@@ -38,7 +38,7 @@
 
   <!-- Compact Drive actions: only the label and icon buttons -->
   <section class="card drive">
-    <div class="grow">Google Drive sync<small>Linked service account keys accessible by link can be read by anyone with that link.</small></div>
+    <div class="grow">Google Drive sync<small>Keep service account keys private. Use a local manifest containing the key instead of a public link.</small></div>
     <button id="driveSetupBtn" class="icon" title="Open Drive file setup" aria-label="Open Drive file setup">📁</button>
     <button id="driveClearBtn" class="icon hidden" title="Remove saved configuration" aria-label="Remove saved configuration">🗑️</button>
   </section>
@@ -66,10 +66,10 @@
     <label class="field inline"><span>Subscribe <b class="plus">+</b> / unsubscribe <b class="plus minus">−</b> buttons on videos</span><input type="checkbox" id="showSubButton"></label>
     <label class="field inline"><span>Unsubscribed channels first &amp; hide duplicate videos</span><input type="checkbox" id="sortUnsub"></label>
     <label class="field inline">
-      <span>Automatically refresh the list</span>
-      <select id="autoSyncHours">
-        <option value="1">Every hour</option><option value="3">Every 3 hours</option><option value="6">Every 6 hours</option>
-        <option value="12">Every 12 hours</option><option value="24">Every day</option><option value="168">Every week</option>
+      <span>Automatically load videos for sorting</span>
+      <select id="autoloadLimit">
+        <option value="0">Off</option><option value="100">Up to 100</option>
+        <option value="250">Up to 250</option><option value="500">Up to 500</option>
       </select>
     </label>
     <div class="links">

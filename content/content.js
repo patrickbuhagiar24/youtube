@@ -72,6 +72,11 @@
     return () => { clearTimeout(t); t = setTimeout(safe(fn), ms); };
   }
 
+  const nativeRefresh = YousubNativeRefresh.create({
+    ready: () => initialized && !syncing,
+    refresh: () => doSync()
+  });
+
   /* ---------------- communication with the main world ---------------- */
   const pending = new Map();
   let reqSeq = 0;
@@ -94,11 +99,17 @@
       if (type === 'subsError') p.reject(new Error(payload.error)); else p.resolve(payload);
     } else if (type === 'syncProgress') {
       syncProgress = payload.count || 0;
+      notifyState();
     } else if (type === 'subChange') {
-      if (Array.isArray(payload.ids) && typeof payload.subscribed === 'boolean')
-        payload.ids.forEach((id) => updateSub(id, payload.subscribed));
-    } else if ((type === 'nativeButtonChanged' && /^UC[\w-]{10,}$/.test(payload.id || '')) || type === 'nativeRefreshRequested') {
-      scheduleNativeRefresh();
+      if (Array.isArray(payload.ids) && typeof payload.subscribed === 'boolean') {
+        const ids = payload.ids.filter((id) => /^UC[\w-]{10,}$/.test(id || ''));
+        ids.forEach((id) => updateSub(id, payload.subscribed));
+        if (ids.length && initialized && subs.ts) nativeRefresh.confirm(payload.seq, ids, payload.subscribed);
+      }
+    } else if (type === 'nativeButtonChanged' && /^UC[\w-]{10,}$/.test(payload.id || '') && typeof payload.subscribed === 'boolean') {
+      nativeRefresh.buttonChanged(payload.seq, payload.id, payload.subscribed);
+    } else if (type === 'nativeRefreshRequested') {
+      nativeRefresh.request(payload.seq);
     }
   });
 
@@ -248,23 +259,10 @@
     toastTimer = setTimeout(() => { toastHost.shadowRoot.innerHTML = ''; }, 5000);
   }
 
-  // A native button may change optimistically, or YouTube may use a request
-  // format we cannot observe. Confirm from the server rather than recording a
-  // possibly cancelled or failed action. Coalesce rapid changes and wait for
-  // any refresh already running to finish before taking a new snapshot.
-  let nativeRefreshTimer = 0;
-  function scheduleNativeRefresh() {
-    clearTimeout(nativeRefreshTimer);
-    nativeRefreshTimer = setTimeout(async function refresh() {
-      if (!initialized || syncing) { nativeRefreshTimer = setTimeout(refresh, 1000); return; }
-      nativeRefreshTimer = 0;
-      await doSync();
-    }, 2000);
-  }
-
   async function doSync() {
     if (syncing) return;
     syncing = true; syncProgress = 0; lastError = '';
+    notifyState();
     changesDuringSync = new Map();
     const startedAt = Date.now();
     try {
@@ -303,6 +301,7 @@
       changesDuringSync = null;
       syncing = false;
       scheduleScan(true);
+      notifyState();
     }
   }
 
@@ -548,7 +547,7 @@
       placeButton(card, card.__yousubKind);
     };
 
-    for (const card of document.querySelectorAll(CARD_SEL)) {
+    for (const card of (page || document).querySelectorAll(CARD_SEL)) {
       const parent = card.parentElement;
       if (card.localName === 'ytd-rich-item-renderer' && parent?.id === 'contents' && parent.parentElement?.localName === 'ytd-rich-grid-renderer') grids.add(parent);
       // Neither card data (data-yousub-v from main-world.js) nor subscriptions changed; reuse the result
@@ -583,6 +582,7 @@
       const nm = document.querySelector('yt-page-header-renderer h1, #page-header h1, ytd-c4-tabbed-header-renderer #text')?.textContent?.trim() || pk;
       channelPage = { key: pk, name: nm, subscribed: isSubKey(pk) || subs.titles.has(norm(nm)) };
     }
+    notifyState();
   }
 
   /* ---------------- sorting: unsubscribed channels first ---------------- */
@@ -628,7 +628,7 @@
   /* ---------------- autoload before sorting ----------------
    * YouTube loads more videos when ytd-continuation-item-renderer enters the viewport.
    * While yousub-autoload is active, this element is invisible but stays "on screen" (see content.css),
-   * so YouTube keeps loading without scrolling. Stop at AUTOLOAD.limit marked videos (n),
+   * so YouTube keeps loading without scrolling. Stop at the configured limit of marked videos (n),
    * or after AUTOLOAD.stallMs without new items. Normal scrolling then resumes.
    */
   const AUTOLOAD_PATH = /^\/(results|watch)?$/; // Home, Search, and Watch pages
@@ -638,9 +638,10 @@
     const page = location.pathname + location.search;
     if (auto.page !== page) auto = { page, count: -1, since: 0, done: false }; // New page: start again
     let on = false;
-    if (ready && settings.sortUnsub && !auto.done && AUTOLOAD_PATH.test(location.pathname)) {
+    const limit = [0, 100, 250, 500].includes(settings.autoloadLimit) ? settings.autoloadLimit : DEFAULTS.autoloadLimit;
+    if (ready && settings.sortUnsub && limit > 0 && !auto.done && AUTOLOAD_PATH.test(location.pathname)) {
       if (n !== auto.count) { auto.count = n; auto.since = Date.now(); }
-      auto.done = n >= AUTOLOAD.limit || Date.now() - auto.since > AUTOLOAD.stallMs;
+      auto.done = n >= limit || Date.now() - auto.since > AUTOLOAD.stallMs;
       on = !auto.done;
     }
     document.documentElement.classList.toggle('yousub-autoload', on);
@@ -669,6 +670,10 @@
     syncing, syncProgress, lastError, channelPage
   });
 
+  const notifyState = debounce(() => {
+    chrome.runtime.sendMessage({ type: 'yousubStateChanged', state: state() }).catch(() => {});
+  }, 100);
+
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type === 'getState') { sendResponse(state()); return; }
     if (msg?.type === 'sync') { doSync().then(() => { scan(); sendResponse(state()); }); return true; }
@@ -676,7 +681,11 @@
 
   chrome.storage.onChanged.addListener(safe((changes, area) => {
     if (area === 'sync' && changes.yousubSettings) {
-      settings = { ...DEFAULTS, ...changes.yousubSettings.newValue };
+      const next = { ...DEFAULTS, ...changes.yousubSettings.newValue };
+      if (next.autoloadLimit !== settings.autoloadLimit || next.sortUnsub !== settings.sortUnsub) {
+        auto = { page: '', count: -1, since: 0, done: false };
+      }
+      settings = next;
       applySettings();
     }
     if (area !== 'local') return;
@@ -707,11 +716,13 @@
     applySettings();
 
     new MutationObserver((muts) => {
-      if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target))) scheduleScan();
+      if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target) &&
+        (m.attributeName === 'hidden' || !m.target.closest?.('ytd-page-manager > [hidden]')))) scheduleScan();
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-yousub-v', 'hidden'] });
     // Fallback every 10 seconds, or 2.5 seconds during autoload to detect an exhausted list
     let tick = 0;
-    setInterval(() => extAlive && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
+    setInterval(() => extAlive && !document.hidden && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleScan(true); });
     for (const ev of ['pointermove', 'pointerover']) document.addEventListener(ev, onPointer, { capture: true, passive: true });
     document.addEventListener('scroll', queueHover, { capture: true, passive: true });
     window.addEventListener('resize', queueHover, { passive: true });
@@ -725,10 +736,9 @@
     gen++;
     if (hello.loggedIn === false) { scheduleScan(); return; }
 
-    const stale = Date.now() - subs.ts > settings.autoSyncHours * 3600e3;
     const otherAccount = hello.accountId && subs.accountId && hello.accountId !== subs.accountId;
     const oldFormat = subs.ts && !subs.stats?.status; // Legacy data: refresh once
-    if (stale || otherAccount || oldFormat || !subs.list.length) await doSync();
+    if (otherAccount || oldFormat || !subs.ts) await doSync();
     else scheduleScan();
   }
   init().catch((e) => { lastError = friendlyError(e); });

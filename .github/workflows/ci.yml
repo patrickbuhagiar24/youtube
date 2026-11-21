@@ -21,6 +21,7 @@ jobs:
           node --check shared.js
           node --check drive.js
           node --check config-store.js
+          node --check content/native-refresh.js
           node --check content/content.js
           node --check content/main-world.js
           node --check popup/popup.js

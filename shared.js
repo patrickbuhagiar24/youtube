@@ -11,7 +11,7 @@ var YOUSUB = Object.freeze({
     showSubButton: true,
     sortUnsub: true, // Move videos from unsubscribed channels to the top
     leftColor: '#ffd400', // Outline for previously unsubscribed channels
-    autoSyncHours: 6
+    autoloadLimit: 250
   }),
 
   // Card elements to mark
@@ -24,7 +24,7 @@ var YOUSUB = Object.freeze({
   ].join(','),
 
   // Autoload before sorting (Home, Search, watch sidebar): stop at this count or when no more items arrive
-  AUTOLOAD: Object.freeze({ limit: 500, stallMs: 15000 }),
+  AUTOLOAD: Object.freeze({ stallMs: 15000 }),
 
   // Local storage keys in use (other keys are removed on update)
   STORE_KEYS: Object.freeze(['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig']),

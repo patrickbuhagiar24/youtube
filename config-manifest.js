@@ -1,4 +1,4 @@
-/* Load a manifest of publicly downloadable Google Drive JSON files. */
+/* Load a local manifest containing Drive links and optionally a local service account key. */
 var YousubManifest = (() => {
   const names = ['yousub-google-drive.json', 'service-account.json'];
   const limit = 256 * 1024;
@@ -9,6 +9,10 @@ var YousubManifest = (() => {
     catch { throw new Error('The configuration manifest is not valid JSON.'); }
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The configuration manifest must be a JSON object.');
     return names.map((name) => {
+      if (name === 'service-account.json' && data[name] && typeof data[name] === 'object' && !Array.isArray(data[name])) {
+        Drive.parseKey(data[name]);
+        return data[name];
+      }
       let url;
       try { url = new URL(data[name]); } catch { throw new Error(`${name} must contain a Google Drive file link.`); }
       const match = url.protocol === 'https:' && url.hostname === 'drive.google.com' && !url.username && !url.password &&
@@ -37,7 +41,8 @@ var YousubManifest = (() => {
 
   async function load(text, fetcher) {
     const urls = parse(text);
-    const [driveText, keyText] = await Promise.all(urls.map((url) => download(url, fetcher)));
+    const [driveText, keyText] = await Promise.all(urls.map((source) =>
+      typeof source === 'string' ? download(source, fetcher) : JSON.stringify(source)));
     const link = Drive.linkFromConfig(driveText);
     if (!Drive.fileIdOf(link)) throw new Error('The Drive configuration must contain a valid file link.');
     Drive.parseKey(keyText);

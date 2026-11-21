@@ -101,4 +101,8 @@ test('trusted native clicks and subsequent dialog confirmation request a refresh
   click('ytd-subscribe-button-renderer');
   click('ytd-confirm-dialog-renderer');
   assert.deepEqual(messages.map((m) => m.type), ['nativeRefreshRequested', 'nativeRefreshRequested']);
+  assert.equal(messages[0].payload.seq, 1);
+  assert.equal(messages[1].payload.seq, 1); // Dialog confirmation belongs to the same action.
+  click('yt-subscribe-button-view-model');
+  assert.equal(messages[2].payload.seq, 2);
 });

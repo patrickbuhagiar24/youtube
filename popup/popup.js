@@ -16,7 +16,7 @@ const FIELDS = {
   leftColor: ['leftColor', 'value'],
   showSubButton: ['showSubButton', 'checked'],
   sortUnsub: ['sortUnsub', 'checked'],
-  autoSyncHours: ['autoSyncHours', 'value', Number]
+  autoloadLimit: ['autoloadLimit', 'value', Number]
 };
 
 async function loadSettings() {
@@ -90,8 +90,7 @@ $('syncBtn').addEventListener('click', async () => {
   if (tabId === null) return;
   $('syncBtn').disabled = true;
   $('syncBtn').textContent = '⏳ Refreshing…';
-  const poll = setInterval(async () => render(await getState()), 700);
-  try { render(await chrome.tabs.sendMessage(tabId, { type: 'sync' })); } catch { render(null); } finally { clearInterval(poll); }
+  try { render(await chrome.tabs.sendMessage(tabId, { type: 'sync' })); } catch { render(null); }
 });
 
 $('exportBtn').addEventListener('click', async (e) => {
@@ -163,6 +162,12 @@ $('driveClearBtn').addEventListener('click', async () => {
 
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
+  if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
+});
+
+// The active YouTube tab pushes changes instead of being polled continuously.
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type === 'yousubStateChanged' && sender.tab?.id === tabId) render(message.state);
 });
 
 /* The side panel stays open while the active tab changes. */
@@ -182,5 +187,6 @@ chrome.tabs.onUpdated.addListener((id, change) => {
   await renderFromStorage();
   renderDrive();
   await refreshActiveTab();
-  setInterval(async () => { const s = await getState(); if (s) render(s); }, 1500);
+  // Slow fallback for messages lost during navigation or extension reload.
+  setInterval(async () => { if (!document.hidden) { const s = await getState(); if (s) render(s); } }, 30000);
 })();

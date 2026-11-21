@@ -7,7 +7,7 @@ function load() {
   const context = vm.createContext({ URL, TextEncoder, AbortController, setTimeout, clearTimeout, Drive: {
     linkFromConfig: (text) => JSON.parse(text).link,
     fileIdOf: (link) => { if (!link?.includes('/file/d/')) throw new Error('Invalid link'); return 'id'; },
-    parseKey: (text) => { if (JSON.parse(text).type !== 'service_account') throw new Error('Invalid key'); }
+    parseKey: (text) => { if ((typeof text === 'string' ? JSON.parse(text) : text).type !== 'service_account') throw new Error('Invalid key'); }
   } });
   vm.runInContext(fs.readFileSync('config-manifest.js', 'utf8'), context);
   return context.YousubManifest;
@@ -33,4 +33,20 @@ test('rejects invalid manifests, unsafe links, inaccessible files and invalid ke
   await assert.rejects(api.load(manifest, async () => response('', 403)), /HTTP 403/);
   await assert.rejects(api.load(manifest, async () => response('<html>sign in</html>')), /not valid JSON/);
   await assert.rejects(api.load(manifest, async (url) => response(url.includes('config123') ? '{"link":"https://drive.google.com/file/d/target/view"}' : '{}')), /Invalid key/);
+});
+
+test('a local manifest can contain the private key without downloading it', async () => {
+  const api = load();
+  const data = JSON.parse(manifest);
+  data['service-account.json'] = { type: 'service_account', private_key: 'LOCAL_KEY' };
+  const seen = [];
+  const config = await api.load(JSON.stringify(data), async (url) => {
+    seen.push(url);
+    return response('{"link":"https://drive.google.com/file/d/target/view"}');
+  });
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /config123/);
+  assert.equal(JSON.parse(config.keyText).private_key, 'LOCAL_KEY');
+  data['service-account.json'] = { type: 'not_a_service_account' };
+  await assert.rejects(api.load(JSON.stringify(data), async () => { throw new Error('must not fetch'); }), /Invalid key/);
 });

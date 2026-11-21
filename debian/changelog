@@ -1,3 +1,11 @@
+yousub (2.2.9) unstable; urgency=medium
+
+  * Reduce scanning and polling, and make sorting autoload configurable.
+  * Remove periodic subscription list refresh and support local private keys.
+  * Avoid unnecessary full refreshes after native YouTube actions.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
+
 yousub (2.2.8) unstable; urgency=medium
 
   * Refresh subscription data after native YouTube button and dialog actions.

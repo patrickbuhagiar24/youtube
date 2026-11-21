@@ -157,16 +157,16 @@ Google Drive sync is disabled until a manifest is selected. Unsubscribe history 
    {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}
    ```
 
-4. Upload that configuration JSON and the service account key JSON to Drive. Create a local manifest with links to the two files, then select it with 📁:
+4. Upload the configuration JSON to Drive and make that file downloadable by link. Create a **local** manifest containing its link and the entire downloaded service account JSON object. Select the local manifest with 📁. For example (replace the placeholder object with the complete key):
 
    ```json
    {
      "yousub-google-drive.json": "https://drive.google.com/file/d/CONFIG_ID/view",
-     "service-account.json": "https://drive.google.com/file/d/KEY_ID/view"
+     "service-account.json": { "type": "service_account", "client_email": "...", "private_key": "..." }
    }
    ```
 
-The linked files must be downloadable without signing in. **Security warning:** making a service account key accessible by link exposes its private key to anyone who obtains that link. They can act as the service account and access files shared with it. Prefer a dedicated, least-privilege account, restrict access wherever possible, and revoke/rotate the key if exposed. The manifest is read once; both downloaded values are stored in `chrome.storage.local` in this browser profile, not automatically reloaded from the links. Local extension storage is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
+Keep the manifest private and never commit or upload it. The local private key is not downloaded from Drive. Existing manifests with a `service-account.json` Drive link still work, but **anyone with access to such a link can obtain the key** and act as the service account; revoke or rotate exposed keys. The manifest is read once and settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
 
 The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 
@@ -176,9 +176,11 @@ Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, a
 
 ## Privacy and behavior
 
-Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results, up to the built-in limit. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
+Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists are loaded on first use, when changing accounts, manually, and after detected subscription actions; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
 
 ## Development
+
+For performance measurements, record a Chrome DevTools Performance trace on the same YouTube page, account, and scroll sequence before and after changes. Compare main-thread scripting time, long tasks, network requests, and memory with the side panel both open and closed; repeat with sorting and autoload disabled and enabled. YouTube layouts and connection speeds vary, so measure on the target browser rather than assuming fixed savings.
 
 No build step is required. Check and test the source with Node.js 18 or newer:
 
@@ -187,6 +189,7 @@ node --check background.js
 node --check shared.js
 node --check drive.js
 node --check config-store.js
+node --check content/native-refresh.js
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js
