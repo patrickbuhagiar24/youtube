@@ -3,6 +3,8 @@ importScripts('shared.js', 'drive.js', 'config-store.js');
 
 const SYNC_ALARM = 'yousub-drive-sync';
 
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
 chrome.runtime.onInstalled.addListener(async () => {
   const { yousubSettings } = await chrome.storage.sync.get('yousubSettings');
   const s = { ...YOUSUB.DEFAULTS };

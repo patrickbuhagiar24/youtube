@@ -501,7 +501,7 @@
     scanButtons(buttons);
   }
 
-  /** 3) Trust YouTube Subscribe buttons initially marked subscribed, or state changes on the same button (user click). */
+  /** 3) Cache button state without treating optimistic UI changes as confirmed actions. */
   function scanButtons(buttons) {
     for (const el of buttons) {
       const d = getData(el);
@@ -509,8 +509,7 @@
       const prev = btnCache.get(el);
       if (prev && prev.id === d.channelId && prev.sub === d.subscribed) continue;
       btnCache.set(el, { id: d.channelId, sub: d.subscribed });
-      const sameBtn = prev && prev.id === d.channelId;
-      if (sameBtn || d.subscribed) post('subState', { id: d.channelId, subscribed: d.subscribed });
+      // Button state can be optimistic or stale; confirmed network responses update subscriptions.
     }
   }
 
@@ -540,36 +539,60 @@
   const INDEX_URL = /\/youtubei\/v1\/(next|browse|search|reel)/;
   const SUB_URL = /\/youtubei\/v1\/subscription\/(subscribe|unsubscribe)/;
 
+  // Observe YouTube's own requests without issuing another subscription request.
+  // Only apply results after a successful response, not on click or dialog opening.
+  function reportNativeChange(url, body, response) {
+    const match = SUB_URL.exec(url || '');
+    if (!match || !response || hasError(response)) return;
+    const subscribed = match[1] === 'subscribe';
+    let state = null;
+    walk(response, (o) => {
+      const action = o.updateSubscribeButtonAction;
+      if (typeof action?.subscribed === 'boolean') state = action.subscribed;
+    });
+    if (state !== null && state !== subscribed) return;
+    try {
+      const data = typeof body === 'string' ? JSON.parse(body) : body;
+      const ids = Array.isArray(data?.channelIds) ? data.channelIds.filter(isUC) : [];
+      if (ids.length) post('subChange', { ids, subscribed });
+    } catch { /* Unknown request body; never guess an ID. */ }
+  }
+
   window.fetch = async function (input, init) {
     let url = '';
     try { url = typeof input === 'string' ? input : input?.url || String(input); } catch { /* */ }
-    const sub = SUB_URL.exec(url);
+    const sub = SUB_URL.test(url);
     let body = null;
     if (sub) {
-      try { body = init?.body ? Promise.resolve(init.body) : input instanceof Request ? input.clone().text() : null; } catch { /* */ }
+      try { body = init?.body != null ? Promise.resolve(init.body) : input instanceof Request ? input.clone().text() : null; } catch { /* */ }
     }
     const res = await origFetch(input, init);
     if (res.ok && INDEX_URL.test(url)) {
       try { res.clone().json().then(safeIndex, () => {}); } catch { /* */ }
     }
     if (res.ok && body) {
-      body.then((b) => {
-        const ids = JSON.parse(typeof b === 'string' ? b : '{}').channelIds;
-        if (Array.isArray(ids) && ids.length) post('subChange', { ids, subscribed: sub[1] === 'subscribe' });
-      }).catch(() => {});
+      try {
+        Promise.all([body, res.clone().json()]).then(([request, result]) => reportNativeChange(url, request, result)).catch(() => {});
+      } catch { /* Response unavailable. */ }
     }
     return res;
   };
 
-  // Some YouTube requests use XHR
+  // Some YouTube requests use XHR instead of fetch.
   try {
     const { open, send } = XMLHttpRequest.prototype;
     XMLHttpRequest.prototype.open = function (method, url) { this.__yousubUrl = String(url || ''); return open.apply(this, arguments); };
-    XMLHttpRequest.prototype.send = function () {
-      if (INDEX_URL.test(this.__yousubUrl || '')) {
+    XMLHttpRequest.prototype.send = function (body) {
+      const url = this.__yousubUrl || '';
+      if (INDEX_URL.test(url) || SUB_URL.test(url)) {
         this.addEventListener('load', () => {
-          try { safeIndex(this.responseType === 'json' ? this.response : JSON.parse(this.responseText)); } catch { /* */ }
-        });
+          if (this.status < 200 || this.status >= 300) return;
+          try {
+            const result = this.responseType === 'json' ? this.response : JSON.parse(this.responseText);
+            if (INDEX_URL.test(url)) safeIndex(result);
+            if (SUB_URL.test(url)) reportNativeChange(url, body, result);
+          } catch { /* Ignore non-JSON or inaccessible responses. */ }
+        }, { once: true });
       }
       return send.apply(this, arguments);
     };

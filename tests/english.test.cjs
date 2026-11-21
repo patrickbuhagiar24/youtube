@@ -60,44 +60,25 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.2.5');
+  assert.equal(manifest.version, '2.2.6');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
   assert.match(fs.readFileSync('popup/popup.html', 'utf8'), /<html lang="en">/);
-  const assets = [manifest.background.service_worker, manifest.action.default_popup,
+  const assets = [manifest.background.service_worker, manifest.side_panel.default_path,
     ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon),
     ...manifest.content_scripts.flatMap((script) => [...script.js, ...(script.css || [])])];
   for (const asset of assets) assert.ok(fs.existsSync(asset), `Missing asset: ${asset}`);
 });
 
-test('Google Drive settings are selected from a folder, not typed or read per file', () => {
-  const popup = fs.readFileSync('popup/popup.html', 'utf8');
-  assert.match(popup, /id="driveSetupBtn"[^>]*class="icon"/);
-  assert.match(popup, /id="driveClearBtn"[^>]*class="icon hidden"/);
-  assert.doesNotMatch(popup, /<details class="card" id="driveDetails">/);
-  assert.doesNotMatch(popup, /id="driveLink"/);
-  const setup = fs.readFileSync('setup.html', 'utf8');
-  assert.doesNotMatch(setup, /type="file"/);
-  assert.match(setup, /id="folderBtn"/);
-  assert.doesNotMatch(setup, /Select both files/);
-  const setupJs = fs.readFileSync('setup.js', 'utf8');
-  assert.match(setupJs, /showDirectoryPicker/);
-  assert.match(setupJs, /findConfigFiles/);
-  assert.match(setupJs, /chrome\.storage\.local\.set/);
-  assert.match(setupJs, /yousub-google-drive\.json/);
-  assert.match(setupJs, /service-account\.json/);
-  assert.doesNotMatch(setupJs, /driveLinkFile/);
-  assert.match(fs.readFileSync('popup/popup.js', 'utf8'), /YOUSUB\.CONFIG_KEY/);
-  assert.match(fs.readFileSync('shared.js', 'utf8'), /STORE_KEYS:.*yousubDriveConfig/);
-  assert.match(fs.readFileSync('content/content.js', 'utf8'), /readDriveConfigured/);
-  assert.match(fs.readFileSync('background.js', 'utf8'), /clearHistoryWhenUnconfigured/);
-  assert.match(fs.readFileSync('background.js', 'utf8'), /case 'driveClear'/);
-  assert.match(fs.readFileSync('popup/popup.js', 'utf8'), /type: 'driveClear'/);
-  assert.match(fs.readFileSync('config-store.js', 'utf8'), /clearFolderHandle/);
-  assert.doesNotMatch(setup, /select the two files below|old name/);
-  assert.doesNotMatch(fs.readFileSync('popup/popup.css', 'utf8'), /\.filebtn|\.fileinput/);
-  assert.match(fs.readFileSync('README.md', 'utf8'), /extension-only `\.deb`/);
+test('Google Drive setup opens a single manifest picker from the side panel', () => {
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.ok(manifest.permissions.includes('sidePanel'));
+  assert.equal(manifest.side_panel.default_path, 'popup/popup.html');
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  assert.match(js, /showOpenFilePicker/);
+  assert.match(js, /YousubManifest\.load/);
+  assert.match(js, /chrome\.storage\.local\.set/);
 });
 
 

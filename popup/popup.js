@@ -134,7 +134,28 @@ async function syncNow() {
 }
 
 $('driveSyncBtn').addEventListener('click', syncNow);
-$('driveSetupBtn').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }));
+$('driveSetupBtn').addEventListener('click', async () => {
+  if (!window.showOpenFilePicker) {
+    $('driveStatus').textContent = 'This browser does not support the file picker.';
+    return;
+  }
+  try {
+    // Start the picker immediately in the click gesture. The side panel stays open on Linux.
+    const [handle] = await window.showOpenFilePicker({
+      multiple: false,
+      types: [{ description: 'JSON configuration manifest', accept: { 'application/json': ['.json'] } }]
+    });
+    const file = await handle.getFile();
+    if (file.size > 256 * 1024) throw new Error('The manifest is too large (maximum 256 KB).');
+    $('driveStatus').textContent = 'Loading linked configuration files…';
+    const config = await YousubManifest.load(await file.text());
+    await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
+    await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
+    await renderDrive();
+  } catch (e) {
+    if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not load configuration: ' + (e.message || String(e));
+  }
+});
 $('driveClearBtn').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'driveClear' }).catch(() => {});
   renderDrive();
@@ -144,13 +165,22 @@ chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
 });
 
+/* The side panel stays open while the active tab changes. */
+async function refreshActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  tabId = YT_URL.test(tab?.url || '') ? tab.id : null;
+  render(await getState());
+}
+chrome.tabs.onActivated.addListener(refreshActiveTab);
+chrome.tabs.onUpdated.addListener((id, change) => {
+  if (change.url || change.status === 'complete') refreshActiveTab();
+});
+
 /* ---------------- startup ---------------- */
 (async () => {
   await loadSettings();
   await renderFromStorage();
   renderDrive();
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (YT_URL.test(tab?.url || '')) tabId = tab.id;
-  render(await getState());
+  await refreshActiveTab();
   setInterval(async () => { const s = await getState(); if (s) render(s); }, 1500);
 })();

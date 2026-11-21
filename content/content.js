@@ -25,6 +25,9 @@
   const subs = { list: [], ids: new Set(), keys: new Set(), titles: new Set(), ts: 0, accountId: null, loggedIn: null, stats: null };
   let channelPage = null; // { key, name, subscribed }
   let syncing = false, syncProgress = 0;
+  let initialized = false;
+  const earlyChanges = [];
+  let changesDuringSync = null;
   let lastError = '';
   let extAlive = true;
   // Unsubscribe history (synced to Google Drive by the background worker): { [id]: { s: 'unsub'|'resub', at, title, url } }
@@ -92,7 +95,8 @@
     } else if (type === 'syncProgress') {
       syncProgress = payload.count || 0;
     } else if (type === 'subChange') {
-      payload.ids.forEach((id) => updateSub(id, payload.subscribed));
+      if (Array.isArray(payload.ids) && typeof payload.subscribed === 'boolean')
+        payload.ids.forEach((id) => updateSub(id, payload.subscribed));
     } else if (type === 'subState') {
       updateSub(payload.id, payload.subscribed);
     }
@@ -138,7 +142,9 @@
   }
 
   function updateSub(id, subscribed, info) {
-    if (!id) return;
+    if (!/^UC[\w-]{10,}$/.test(id || '') || typeof subscribed !== 'boolean') return;
+    if (!initialized) { earlyChanges.push({ id, subscribed, info }); return; }
+    if (changesDuringSync) changesDuringSync.set(id, { subscribed, info });
     recordEvent(id, subscribed ? 'resub' : 'unsub', info);
     if (setSubscribed(id, subscribed, info)) scheduleScan(true);
   }
@@ -245,6 +251,7 @@
   async function doSync() {
     if (syncing) return;
     syncing = true; syncProgress = 0; lastError = '';
+    changesDuringSync = new Map();
     const startedAt = Date.now();
     try {
       // The only source: youtube.com/feed/channels (all pages)
@@ -263,19 +270,23 @@
       const okStatus = (st) => st?.status === 'complete' || st?.status === 'merged';
       const now = new Set(list.map((c) => c.id));
       if (okStatus(subs.stats) && okStatus(r.stats) && subs.accountId === r.accountId && subs.list.length) {
-        const gone = subs.list.filter((c) => c.id && !now.has(c.id));
+        const gone = subs.list.filter((c) => c.id && !now.has(c.id) && !changesDuringSync.has(c.id));
         // Safety guard: too many missing channels at once may be a YouTube outage; do not record them
         if (gone.length <= Math.max(20, subs.list.length * 0.25)) gone.forEach((c) => recordEvent(c.id, 'unsub', c));
       }
-      for (const c of list) if (unsubs[c.id]?.s === 'unsub' && unsubs[c.id].at < startedAt) recordEvent(c.id, 'resub', c);
+      for (const c of list) if (!changesDuringSync.has(c.id) && unsubs[c.id]?.s === 'unsub' && unsubs[c.id].at < startedAt) recordEvent(c.id, 'resub', c);
 
       const data = { list, ts: startedAt, accountId: r.accountId, stats: r.stats };
       loadSubs(data);
+      // A subscription action during the refresh is newer than the snapshot.
+      for (const [id, change] of changesDuringSync) setSubscribed(id, change.subscribed, change.info);
+      data.list = subs.list;
       await chrome.storage.local.set({ yousubSubs: data });
       lastError = !list.length ? 'You are not subscribed to any channels.' : r.stats?.note || '';
     } catch (e) {
       lastError = friendlyError(e);
     } finally {
+      changesDuringSync = null;
       syncing = false;
       scheduleScan(true);
     }
@@ -676,6 +687,8 @@
     safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // Pull changes from other devices
     settings = { ...DEFAULTS, ...yousubSettings };
     loadSubs(yousubSubs);
+    initialized = true;
+    for (const change of earlyChanges.splice(0)) updateSub(change.id, change.subscribed, change.info);
     reconcile();
     applySettings();
 

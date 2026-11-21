@@ -147,18 +147,26 @@ Reinstalling with the same key keeps the ID and browser storage. Clearing the Ch
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until the configuration folder is chosen on the setup page. Unsubscribe history is kept locally **only while Drive sync is configured**: without a configuration, new unsubscribe events are not stored and any existing local history is removed. Removing the configuration clears that history as well. The `yousub-google-drive.json` and `service-account.json` files are discovered by choosing their folder once on the **Drive file setup** page, opened from **Google Drive sync** in the popup. This is a real extension tab because Linux popups close when a folder/file chooser opens; the files are read locally in the browser and saved as the extension settings. No files outside the browser and no helper application are used.
+Google Drive sync is disabled until a manifest is selected. Unsubscribe history is kept locally **only while Drive sync is configured**; removing the configuration clears it. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to open the JSON file picker directly. The side panel remains open when a file dialog appears on Linux.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
-3. Upload `YouTube.json` to **your own** Google Drive. Share that file with the service account's `client_email` as an **Editor**. A new service account cannot create files using its own storage quota.
-4. Open the popup → **Google Drive sync** → 📁, then click **Choose configuration folder** and select the folder containing `yousub-google-drive.json` (the file with the shared **file** link, not a folder link) and `service-account.json`. YOUSUB finds them automatically and saves/syncs their settings. There is no per-file picker and no manual text entry. A folder configuration such as `{"folder_url": "..."}` from another project is **not** accepted; YOUSUB reads and writes one specific file. Folder access uses `showDirectoryPicker()` and may need to be granted again after a browser restart. Use:
+3. Upload `YouTube.json` to **your own** Google Drive and share it with the service account's `client_email` as an **Editor**. Put its file link in a JSON file such as `yousub-google-drive.json`:
 
    ```json
    {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}
    ```
 
-Both values are saved in `chrome.storage.local` for this browser profile only; the key is never placed in `chrome.storage.sync`, in source code, or in the extension archive. **Local extension storage is not encrypted**: keep your Chrome profile private, remove personal keys before sharing a profile, and never commit a real key to a repository. The 🗑️ button in the popup deletes both values and the local unsubscribe history.
+4. Upload that configuration JSON and the service account key JSON to Drive. Create a local manifest with links to the two files, then select it with 📁:
+
+   ```json
+   {
+     "yousub-google-drive.json": "https://drive.google.com/file/d/CONFIG_ID/view",
+     "service-account.json": "https://drive.google.com/file/d/KEY_ID/view"
+   }
+   ```
+
+The linked files must be downloadable without signing in. **Security warning:** making a service account key accessible by link exposes its private key to anyone who obtains that link. They can act as the service account and access files shared with it. Prefer a dedicated, least-privilege account, restrict access wherever possible, and revoke/rotate the key if exposed. The manifest is read once; both downloaded values are stored in `chrome.storage.local` in this browser profile, not automatically reloaded from the links. Local extension storage is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
 
 The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 
@@ -182,7 +190,7 @@ node --check config-store.js
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js
-node --check setup.js
+node --check config-manifest.js
 node --test tests/*.test.cjs
 ```
 

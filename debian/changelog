@@ -1,3 +1,10 @@
+yousub (2.2.6) unstable; urgency=medium
+
+  * Load Drive settings from a single manifest via a side panel.
+  * Update subscriptions after successful native YouTube actions.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
+
 yousub (2.2.5) unstable; urgency=medium
 
   * Clear Drive settings, local history, and the saved folder handle together.

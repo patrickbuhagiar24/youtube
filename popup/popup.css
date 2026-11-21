@@ -1,7 +1,7 @@
 :root { --accent: #ff3d00; --left: #ffd400; }
 * { box-sizing: border-box; }
 body {
-  width: 340px; margin: 0; padding: 10px;
+  width: 100%; min-width: 260px; margin: 0; padding: 10px;
   background: #0f0f0f; color: #f1f1f1;
   font: 13px/1.45 Roboto, "Segoe UI", Arial, sans-serif;
 }
