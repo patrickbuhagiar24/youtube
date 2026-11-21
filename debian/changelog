@@ -1,3 +1,9 @@
+yousub (2.2.8) unstable; urgency=medium
+
+  * Refresh subscription data after native YouTube button and dialog actions.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
+
 yousub (2.2.7) unstable; urgency=medium
 
   * Refresh subscriptions after stable native YouTube button changes.

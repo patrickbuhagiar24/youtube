@@ -530,6 +530,26 @@
     }
   }
 
+  // YouTube also uses newer button view models and may replace the renderer
+  // instead of changing its data. Treat clicks as a reason to check the server,
+  // never as evidence that a subscription actually changed.
+  const NATIVE_SUB_BUTTON = 'ytd-subscribe-button-renderer, yt-subscribe-button-view-model, yt-subscribe-button-renderer';
+  const CONFIRM_BUTTON = 'ytd-confirm-dialog-renderer #confirm-button, yt-confirm-dialog-renderer #confirm-button, ytd-confirm-dialog-renderer #confirm, yt-confirm-dialog-renderer #confirm';
+  let nativeClickAt = 0;
+  document.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
+    const path = event.composedPath?.() || [event.target];
+    const matches = (selector) => path.some((node) => node?.matches?.(selector) || node?.closest?.(selector));
+    if (matches('.yousub-subbtn')) return;
+    if (matches(NATIVE_SUB_BUTTON)) {
+      nativeClickAt = Date.now();
+      post('nativeRefreshRequested');
+    } else if (nativeClickAt && Date.now() - nativeClickAt < 120000 && matches(CONFIRM_BUTTON)) {
+      nativeClickAt = 0;
+      post('nativeRefreshRequested');
+    }
+  }, true);
+
   let scanTimer = 0;
   const scheduleScan = () => { if (!scanTimer) scanTimer = setTimeout(() => { scanTimer = 0; scan(); }, 250); };
 
@@ -571,8 +591,9 @@
     try {
       const data = typeof body === 'string' ? JSON.parse(body) : body;
       const ids = Array.isArray(data?.channelIds) ? data.channelIds.filter(isUC) : [];
-      if (ids.length) post('subChange', { ids, subscribed });
+      if (ids.length) { post('subChange', { ids, subscribed }); return; }
     } catch { /* Unknown request body; never guess an ID. */ }
+    post('nativeRefreshRequested');
   }
 
   window.fetch = async function (input, init) {
@@ -589,8 +610,10 @@
     }
     if (res.ok && body) {
       try {
-        Promise.all([body, res.clone().json()]).then(([request, result]) => reportNativeChange(url, request, result)).catch(() => {});
-      } catch { /* Response unavailable. */ }
+        Promise.all([body, res.clone().json()]).then(([request, result]) => reportNativeChange(url, request, result)).catch(() => post('nativeRefreshRequested'));
+      } catch { post('nativeRefreshRequested'); }
+    } else if (res.ok && sub) {
+      post('nativeRefreshRequested');
     }
     return res;
   };
@@ -608,7 +631,7 @@
             const result = this.responseType === 'json' ? this.response : JSON.parse(this.responseText);
             if (INDEX_URL.test(url)) safeIndex(result);
             if (SUB_URL.test(url)) reportNativeChange(url, body, result);
-          } catch { /* Ignore non-JSON or inaccessible responses. */ }
+          } catch { if (SUB_URL.test(url)) post('nativeRefreshRequested'); }
         }, { once: true });
       }
       return send.apply(this, arguments);

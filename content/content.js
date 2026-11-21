@@ -97,7 +97,7 @@
     } else if (type === 'subChange') {
       if (Array.isArray(payload.ids) && typeof payload.subscribed === 'boolean')
         payload.ids.forEach((id) => updateSub(id, payload.subscribed));
-    } else if (type === 'nativeButtonChanged' && /^UC[\w-]{10,}$/.test(payload.id || '')) {
+    } else if ((type === 'nativeButtonChanged' && /^UC[\w-]{10,}$/.test(payload.id || '')) || type === 'nativeRefreshRequested') {
       scheduleNativeRefresh();
     }
   });
@@ -259,7 +259,7 @@
       if (!initialized || syncing) { nativeRefreshTimer = setTimeout(refresh, 1000); return; }
       nativeRefreshTimer = 0;
       await doSync();
-    }, 500);
+    }, 2000);
   }
 
   async function doSync() {

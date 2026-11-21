@@ -42,7 +42,8 @@ test('native XHR requires success and a valid channel ID', () => {
   assert.equal(h.messages.length, 1);
   const bad = new h.XHR(); bad.open('POST', url); bad.send(body); bad.finish(403, {});
   const invalid = new h.XHR(); invalid.open('POST', url); invalid.send('{"channelIds":["invalid"]}'); invalid.finish(200, {});
-  assert.equal(h.messages.length, 1);
+  assert.equal(h.messages.length, 2);
+  assert.equal(h.messages[1].type, 'nativeRefreshRequested');
 });
 
 test('native renderer changes request a server refresh only after a stable transition', () => {
@@ -75,4 +76,29 @@ test('native renderer changes request a server refresh only after a stable trans
   button.data = { channelId: id, subscribed: false }; // Optimistic transition reverted.
   for (const cb of [...timers.values()]) cb();
   assert.equal(messages.length, 0);
+});
+
+test('unknown request body triggers server refresh instead of guessing', async () => {
+  const h = harness();
+  await h.window.fetch(url, { body: '{"differentShape":true}' });
+  await tick();
+  assert.equal(h.messages.length, 1);
+  assert.equal(h.messages[0].type, 'nativeRefreshRequested');
+});
+
+test('trusted native clicks and subsequent dialog confirmation request a refresh', () => {
+  const listeners = {}, messages = [];
+  class XHR { open() {} send() {} }
+  const window = { fetch: async () => {}, postMessage: (m) => messages.push(m), addEventListener() {} };
+  const document = { readyState: 'loading', addEventListener: (name, cb) => { listeners[name] = cb; } };
+  const context = vm.createContext({ window, document, location: { origin: 'https://www.youtube.com' }, YOUSUB: { CARD_SEL: '' }, XMLHttpRequest: XHR, Request, URL, setTimeout, clearTimeout, setInterval });
+  vm.runInContext(fs.readFileSync('content/main-world.js', 'utf8'), context);
+  const node = (kind) => ({ matches: (selector) => selector.includes(kind), closest: () => null });
+  const click = (kind, isTrusted = true) => listeners.click({ isTrusted, composedPath: () => [node(kind)] });
+  click('ytd-confirm-dialog-renderer'); // No preceding subscription click.
+  click('ytd-subscribe-button-renderer', false);
+  assert.equal(messages.length, 0);
+  click('ytd-subscribe-button-renderer');
+  click('ytd-confirm-dialog-renderer');
+  assert.deepEqual(messages.map((m) => m.type), ['nativeRefreshRequested', 'nativeRefreshRequested']);
 });
