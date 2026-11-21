@@ -44,3 +44,35 @@ test('native XHR requires success and a valid channel ID', () => {
   const invalid = new h.XHR(); invalid.open('POST', url); invalid.send('{"channelIds":["invalid"]}'); invalid.finish(200, {});
   assert.equal(h.messages.length, 1);
 });
+
+test('native renderer changes request a server refresh only after a stable transition', () => {
+  const messages = [], timers = new Map(), events = {}, intervals = [];
+  let next = 0;
+  const button = { localName: 'ytd-subscribe-button-renderer', data: { channelId: id, subscribed: true }, isConnected: true };
+  const document = {
+    readyState: 'loading', documentElement: {},
+    addEventListener: (name, fn) => { events[name] = fn; },
+    querySelectorAll: () => [button], getElementsByTagName: () => [button]
+  };
+  class XHR { open() {} send() {} }
+  class MutationObserver { observe() {} }
+  const window = { fetch: async () => {}, postMessage: (m) => messages.push(m), addEventListener() {} };
+  const setTimeout = (cb) => { const key = ++next; timers.set(key, cb); return key; };
+  const context = vm.createContext({ window, document, location: { origin: 'https://www.youtube.com' }, YOUSUB: { CARD_SEL: '' }, XMLHttpRequest: XHR, Request, URL, MutationObserver, setTimeout, clearTimeout: (key) => timers.delete(key), setInterval: (cb) => intervals.push(cb) });
+  vm.runInContext(fs.readFileSync('content/main-world.js', 'utf8'), context);
+  events.DOMContentLoaded();
+  assert.equal(messages.length, 0); // Initial renderer is not an action.
+  button.data = { channelId: id, subscribed: false };
+  intervals[0]();
+  for (const cb of [...timers.values()]) cb();
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].type, 'nativeButtonChanged');
+  assert.equal(messages[0].payload.id, id);
+
+  timers.clear(); messages.length = 0;
+  button.data = { channelId: id, subscribed: true };
+  intervals[0]();
+  button.data = { channelId: id, subscribed: false }; // Optimistic transition reverted.
+  for (const cb of [...timers.values()]) cb();
+  assert.equal(messages.length, 0);
+});

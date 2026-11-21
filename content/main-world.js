@@ -501,15 +501,32 @@
     scanButtons(buttons);
   }
 
-  /** 3) Cache button state without treating optimistic UI changes as confirmed actions. */
+  /** A stable native button transition is a fallback signal, not proof of success.
+   * Ask the isolated script to refresh the server list instead of trusting an
+   * optimistic button state. Initial render and recycled nodes are ignored. */
   function scanButtons(buttons) {
     for (const el of buttons) {
       const d = getData(el);
-      if (!d?.channelId || typeof d.subscribed !== 'boolean') continue;
+      if (!isUC(d?.channelId) || typeof d.subscribed !== 'boolean') continue;
       const prev = btnCache.get(el);
-      if (prev && prev.id === d.channelId && prev.sub === d.subscribed) continue;
-      btnCache.set(el, { id: d.channelId, sub: d.subscribed });
-      // Button state can be optimistic or stale; confirmed network responses update subscriptions.
+      if (!prev || prev.id !== d.channelId) {
+        if (prev?.timer) clearTimeout(prev.timer);
+        btnCache.set(el, { id: d.channelId, sub: d.subscribed, timer: 0 });
+        continue;
+      }
+      if (prev.sub === d.subscribed) continue;
+      if (prev.timer) clearTimeout(prev.timer);
+      const id = d.channelId, subscribed = d.subscribed;
+      const entry = { id, sub: subscribed, timer: 0 };
+      entry.timer = setTimeout(() => {
+        const current = getData(el);
+        if (el.isConnected && btnCache.get(el) === entry &&
+            current?.channelId === id && current.subscribed === subscribed) {
+          post('nativeButtonChanged', { id });
+        }
+        entry.timer = 0;
+      }, 1500);
+      btnCache.set(el, entry);
     }
   }
 

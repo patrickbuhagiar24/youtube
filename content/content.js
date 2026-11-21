@@ -97,8 +97,8 @@
     } else if (type === 'subChange') {
       if (Array.isArray(payload.ids) && typeof payload.subscribed === 'boolean')
         payload.ids.forEach((id) => updateSub(id, payload.subscribed));
-    } else if (type === 'subState') {
-      updateSub(payload.id, payload.subscribed);
+    } else if (type === 'nativeButtonChanged' && /^UC[\w-]{10,}$/.test(payload.id || '')) {
+      scheduleNativeRefresh();
     }
   });
 
@@ -246,6 +246,20 @@
     </style><div class="t">${html}</div>`;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toastHost.shadowRoot.innerHTML = ''; }, 5000);
+  }
+
+  // A native button may change optimistically, or YouTube may use a request
+  // format we cannot observe. Confirm from the server rather than recording a
+  // possibly cancelled or failed action. Coalesce rapid changes and wait for
+  // any refresh already running to finish before taking a new snapshot.
+  let nativeRefreshTimer = 0;
+  function scheduleNativeRefresh() {
+    clearTimeout(nativeRefreshTimer);
+    nativeRefreshTimer = setTimeout(async function refresh() {
+      if (!initialized || syncing) { nativeRefreshTimer = setTimeout(refresh, 1000); return; }
+      nativeRefreshTimer = 0;
+      await doSync();
+    }, 500);
   }
 
   async function doSync() {
