@@ -157,16 +157,16 @@ Google Drive sync is disabled until a manifest is selected. Unsubscribe history 
    {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}
    ```
 
-4. Upload the configuration JSON to Drive and make that file downloadable by link. Create a **local** manifest containing its link and the entire downloaded service account JSON object. Select the local manifest with 📁. For example (replace the placeholder object with the complete key):
+4. Upload both the configuration JSON and the service account JSON key to Drive. Create one local manifest containing links to both files, and select it with 📁:
 
    ```json
    {
      "yousub-google-drive.json": "https://drive.google.com/file/d/CONFIG_ID/view",
-     "service-account.json": { "type": "service_account", "client_email": "...", "private_key": "..." }
+     "service-account.json": "https://drive.google.com/file/d/KEY_ID/view"
    }
    ```
 
-Keep the manifest private and never commit or upload it. The local private key is not downloaded from Drive. Existing manifests with a `service-account.json` Drive link still work, but **anyone with access to such a link can obtain the key** and act as the service account; revoke or rotate exposed keys. The manifest is read once and settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
+Both linked files must be downloadable without signing in. **Security warning:** anyone with access to the service account key link can obtain the private key and act as the service account. Use a dedicated account with the minimum required access, and revoke or rotate any exposed key. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
 
 The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 

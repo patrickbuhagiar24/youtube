@@ -35,18 +35,9 @@ test('rejects invalid manifests, unsafe links, inaccessible files and invalid ke
   await assert.rejects(api.load(manifest, async (url) => response(url.includes('config123') ? '{"link":"https://drive.google.com/file/d/target/view"}' : '{}')), /Invalid key/);
 });
 
-test('a local manifest can contain the private key without downloading it', async () => {
+test('a manifest requires links rather than embedded service account keys', async () => {
   const api = load();
   const data = JSON.parse(manifest);
   data['service-account.json'] = { type: 'service_account', private_key: 'LOCAL_KEY' };
-  const seen = [];
-  const config = await api.load(JSON.stringify(data), async (url) => {
-    seen.push(url);
-    return response('{"link":"https://drive.google.com/file/d/target/view"}');
-  });
-  assert.equal(seen.length, 1);
-  assert.match(seen[0], /config123/);
-  assert.equal(JSON.parse(config.keyText).private_key, 'LOCAL_KEY');
-  data['service-account.json'] = { type: 'not_a_service_account' };
-  await assert.rejects(api.load(JSON.stringify(data), async () => { throw new Error('must not fetch'); }), /Invalid key/);
+  await assert.rejects(api.load(JSON.stringify(data), async () => { throw new Error('must not fetch'); }), /service-account\.json must contain a Google Drive file link/);
 });
