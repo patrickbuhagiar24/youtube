@@ -1,44 +1,25 @@
-# YOUSUB
+# Yousub
 
-A Google Chrome browser extension (Manifest V3) that marks videos and channels you are not subscribed to across YouTube. All interface text, source comments, documentation, and exported data are in English.
-
-This project is **only a Chrome extension**, distributed as a signed CRX and an extension-only `.deb` that registers it. There is no CLI command or native messaging host.
+A Chrome extension (Manifest V3) that marks videos and channels you are **not subscribed to** across YouTube, so you can see at a glance what you are missing. All interface text is in English. It is installed from the signed APT repository below.
 
 ## Features
 
-- Highlight channels you are not subscribed to, or previously unsubscribed from.
+- Highlight channels you are not subscribed to, or mark previously unsubscribed channels with a yellow outline only.
 - Subscribe and unsubscribe directly from video thumbnails, including collaboration videos.
+- Get the same subscribe/unsubscribe button to the right of YouTube's own button on watch pages and channel cards. YouTube's own button keeps its behavior.
 - Put unsubscribed channels first and hide duplicate videos.
 - Dim or hide selected subscription groups.
-- Refresh your subscription list and export it as CSV.
+- Export your subscription list as CSV.
 - Optionally sync unsubscribe history between devices using a JSON file in your own Google Drive.
 
 ## Requirements
 
-- Google Chrome 111 or newer (Manifest V3).
+- Google Chrome 116 or newer (or Chromium).
 - A YouTube account for subscription detection.
-
-## Install from source
-
-1. Download or clone this repository.
-2. Open `chrome://extensions` in Chrome and enable **Developer mode**.
-3. Click **Load unpacked** and select this repository's root folder (the folder that contains `manifest.json`).
-4. Pin **YOUSUB** to the toolbar, open <https://www.youtube.com>, and sign in.
-
-A source checkout needs no installer. Signed packages are distributed only through the APT repository below; no GitHub Releases are published.
-
-## Signed builds
-
-The **Build signed YOUSUB extension** workflow (`.github/workflows/build-extension.yml`) runs on manual dispatch and on `v*` tags. It uses the repository secret **`YOUSUB_CRX_PRIVATE_KEY`** — a dedicated RSA private key in PEM format — to sign a CRX3, writes the matching public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact; the APT publisher consumes that artifact directly.
-
-
-**Do not reuse the signing key of another extension project.** Chrome derives the ID from the public key, so two projects using the same key get the same ID and both packages try to register the same `/usr/share/*/extensions/<id>.json` file. That collision prevents Chrome and `dpkg` from distinguishing them. Generate a separate key for YOUSUB and back it up privately; the resulting ID is printed in the build log, stored in `/usr/share/yousub/yousub-id.txt`, and published as `https://patrickbuhagiar24.github.io/youtube/extension-id.txt`.
-
-Because every build uses the same secret key, all users get the **same extension ID**, and reinstalling or upgrading keeps that ID and the browser storage that belongs to it. The private key is written only to a temporary runner file with `0600` permissions; it is never printed, committed, or included in an artifact.
 
 ## Install from the APT repository
 
-The **Publish signed APT repository** workflow publishes a signed repository to <https://patrickbuhagiar24.github.io/youtube/> whenever a `v*` tag is pushed. The `stable` suite is architecture-independent; the older `stonking` suite is also published as an alias for configurations created by earlier versions.
+The signed repository is published at <https://patrickbuhagiar24.github.io/youtube/>. The `stable` suite is architecture-independent; the older `stonking` suite is kept as an alias for earlier configurations.
 
 Obtain the **full 40-character signing-key fingerprint** from a trusted maintainer channel independent of this website. Do not use a fingerprint downloaded only from the same site as your sole verification. The commands below require Bash, `curl`, `gpg` (from `gnupg`), and `sudo`; they download the key into a private temporary directory and ask you to confirm the trusted fingerprint before changing system files.
 
@@ -70,84 +51,26 @@ Obtain the **full 40-character signing-key fingerprint** from a trusted maintain
 )
 ```
 
-Restart **all** Chrome windows, then open <https://www.youtube.com> and sign in. If the extension does not appear, check `chrome://extensions` with Developer mode enabled; external registrations are read from `/usr/share/google-chrome/extensions/` (and `/etc/chromium/extensions/` for Chromium) at browser startup. To remove the registration later, run `sudo apt remove yousub`; Chrome profile data is left untouched.
+Afterwards, upgrades arrive with `sudo apt update && sudo apt upgrade`, and `sudo apt remove yousub` removes the registration; Chrome profile data (settings, subscription list, history) is left untouched.
 
-The package only places the signed CRX under `/usr/share/yousub` and registers it for Chrome and Chromium. It installs **no CLI command, native messaging host, or per-user configuration files**. Because the CRX is signed with the repository key, every machine that installs this package gets the same extension ID.
+Restart **all** Chrome windows, then open <https://www.youtube.com> and sign in. If the extension does not appear, check `chrome://extensions` with Developer mode enabled; external registrations are read from `/usr/share/google-chrome/extensions/` (and `/etc/chromium/extensions/` for Chromium) at browser startup.
 
 ### If the extension is not added automatically
 
 Chrome reads the registration file **only at browser startup** and only in the Chrome build that uses the system paths. Check the browser first:
 
 ```bash
-google-chrome --version
-readlink -f "$(command -v google-chrome)"
-pgrep -a chrome
+dpkg -L yousub          # files installed by the package
+cat /usr/share/yousub/yousub-id.txt
 ```
 
-The path must be the Google Chrome `.deb` binary (normally `/opt/google/chrome/chrome`). Snap/Flatpak Chrome and Chromium do not read the Google Chrome registration path. If several Chrome processes are still listed, close them all before starting the browser again.
-
-To confirm that the package registration itself works, start Chrome with a new, empty profile:
-
-```bash
-mkdir -p /tmp/yousub-chrome-profile
-google-chrome --user-data-dir=/tmp/yousub-chrome-profile --no-first-run --no-default-browser-check
-```
-
-Open `chrome://extensions` in that window. If YOUSUB appears there, the package is fine and the regular profile has blocked the external installation. Chrome does this when an externally installed extension was previously removed through the Extensions page; it stores the ID in `extensions.external_uninstalls` and never re-adds it automatically.
-
-Close **all** Chrome windows, back up the profile preferences, and remove only that ID from the blocklist:
-
-```bash
-python3 - <<'PY'
-import json
-import pathlib
-import shutil
-
-root = pathlib.Path.home() / '.config/google-chrome'
-ident = open('/usr/share/yousub/yousub-id.txt').read().strip()
-for pref in [root / 'Default/Preferences', *root.glob('Profile */Preferences')]:
-    if not pref.exists():
-        continue
-    data = json.loads(pref.read_text())
-    ext = data.get('extensions', {})
-    entries = ext.get('external_uninstalls')
-    if isinstance(entries, dict):
-        changed = entries.pop(ident, None) is not None
-    elif isinstance(entries, list):
-        kept = [x for x in entries if (x.get('id') if isinstance(x, dict) else x) != ident]
-        changed = len(kept) != len(entries)
-        ext['external_uninstalls'] = kept
-    else:
-        continue
-    if changed:
-        shutil.copy2(pref, str(pref) + '.yousub-backup')
-        pref.write_text(json.dumps(data, separators=(',', ':')))
-        print(f'Unblocked YOUSUB in {pref}')
-PY
-```
-
-Start Chrome again and check `chrome://extensions`. The preferences backup can be restored while Chrome is closed if needed. A fresh Chrome profile is a supported alternative if you do not want to edit preferences.
-
-## Extension ID and the CRX key
-
-A Chrome extension ID is derived from its **public signing key**: Chrome takes the first 16 bytes of the SHA-256 hash of the DER-encoded public key and maps each nibble to `a`–`p`. The ID therefore stays the same when the extension is reinstalled **as long as the same key is used**. If the key changes or is lost, the ID changes and Chrome treats it as a different extension, so its browser storage (settings, subscription list, and local unsubscribe history) does not carry over.
-
-- **Unpacked installation (as above):** the signed ZIP built by the workflow already contains the `key` field, so it keeps the build ID wherever it is extracted. A raw source checkout has no `key`: Chrome then derives the ID from the folder path, and moving or renaming the folder can change it. To pin the ID of a source build, generate a key pair once and add the public key to the manifest:
-
-  ```bash
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out yousub.pem
-  openssl pkey -in yousub.pem -pubout -outform DER | base64 -w0
-  ```
-
-  Put the printed value in a top-level `"key": "..."` field in `manifest.json`. Keep `yousub.pem` private and backed up; it is ignored by Git. Every installation that uses the same public key gets the same ID, even from a different folder.
-
-- **Packed CRX:** sign every new CRX with the same private key (for example `chrome.exe --pack-extension=<folder> --pack-extension-key=yousub.pem`). Chrome Web Store uploads likewise keep the ID when the same upload key is reused.
-
-Reinstalling with the same key keeps the ID and browser storage. Clearing the Chrome profile, removing the extension together with its site data, or switching keys does not. Data written to your own Google Drive file is independent of the extension ID.
+- If `chrome://extensions` lists the extension but it is disabled, enable it there.
+- If Chrome removed it earlier through the Extensions page, Chrome stores it in `extensions.external_uninstalls` and never re-adds it on its own. Close Chrome, edit the profile's `Preferences` and remove the extension ID from that list, then start Chrome again.
+- A fresh Chrome profile is a supported alternative if you do not want to edit preferences.
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until a manifest is selected. Unsubscribe history is kept locally **only while Drive sync is configured**; removing the configuration clears it. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to open the JSON file picker directly. The side panel remains open when a file dialog appears on Linux.
+Google Drive sync is disabled until you choose a configuration manifest. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to pick the JSON manifest. Once a manifest is loaded the row reports `✅ Configured`, the button turns into 🔁 (**Replace the Google Drive configuration**), and a 🔄 button appears to sync immediately.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
@@ -166,21 +89,48 @@ Google Drive sync is disabled until a manifest is selected. Unsubscribe history 
    }
    ```
 
-Both linked files must be downloadable without signing in. **Security warning:** anyone with access to the service account key link can obtain the private key and act as the service account. Use a dedicated account with the minimum required access, and revoke or rotate any exposed key. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
+Both linked files must be downloadable without signing in. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted.
 
-The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
+### When the sync runs
+
+Without any button press, the extension syncs automatically:
+
+- **15-minute alarm** — every 15 minutes in the background.
+- **After a local unsubscribe** — pushed 3 seconds after the last change (rapid changes are batched).
+- **On a YouTube page load** — the first page that opens pulls changes, at most once every 2 minutes.
+- **On browser start and on install/update** — settings are re-read, sync runs once, and local history that exists without a configuration is cleared.
+
+Only one sync runs at a time. It signs in with the service account, reads `YouTube.json`, merges the most recent event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Failures appear in the side panel instead of retrying in a loop.
+
+### Google Drive row in the side panel
+
+- **Status line**: `❌ Not configured` until a manifest is loaded, then `✅ Configured · <service account email>` plus the file name when known, or `⚠️ needs attention` with the error.
+- **📁 / 🔁 button**: 📁 opens a configuration manifest; once configured it becomes 🔁 and replaces the saved configuration.
+- **🔄 button**: appears only when configured and syncs immediately.
+
+### Subscribed channel count
+
+The summary card shows the number of channels in the stored subscription list, formatted with `en-US` separators (for example `1,250`). It is read from browser storage, so it stays visible when the active tab is not YouTube, and it updates whenever the list refreshes or a subscribe/unsubscribe action changes it. `–` means no list has been stored yet; the line below shows the list status (`✅ Complete list` / `⚠️ Incomplete list`) and when it was updated.
 
 ### Data format
 
 Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, and channel fields `id`, `name`, `url`, `status`, and `date`. Status values are `unsubscribed` and `resubscribed`. Only this English format is read and written. Keep a backup of your Drive file before upgrading.
 
+## Sorting, autoload, and how videos are marked
+
+`Unsubscribed channels first & hide duplicate videos` uses CSS `order`, so YouTube elements are never moved. On Home, Search, and watch-page sidebars the extension keeps YouTube's own continuation loader inside a 2 px invisible box, so YouTube fetches the next pages without you scrolling. Fetching stops at the limit chosen under `Automatically load videos for sorting` (Off, 100, 250, or 500 marked videos), after 15 seconds without new items, or when the list is exhausted; normal scrolling then resumes. The setting only applies while sorting is on.
+
+Marking is controlled by `Display mode` and the two colours:
+
+- **Not subscribed** (`unsub`, default red `#ff3d00`): coloured outline plus a `+` button in the thumbnail corner, and the same `+` to the right of YouTube's own Subscribe button.
+- **Previously unsubscribed** (`left`, default yellow `#ffd400`): a channel in the unsubscribe history that is no longer in your subscription list. It gets the yellow outline only — no `+`, `−`, or inline button — and sorts after subscribed channels.
+- **Subscribed** (`sub`): no outline in `highlight` mode; dimmed in `dim` mode and hidden in `only-unsub` mode.
+
 ## Privacy and behavior
 
-Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists are loaded on first use, when changing accounts, manually, and after detected subscription actions; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
+Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists load on first use, when changing accounts, and after detected subscription actions; pressing YouTube's own Subscribe/Unsubscribe button only applies the change YouTube already made, with no extra request or refresh; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
 
-## Development
-
-For performance measurements, record a Chrome DevTools Performance trace on the same YouTube page, account, and scroll sequence before and after changes. Compare main-thread scripting time, long tasks, network requests, and memory with the side panel both open and closed; repeat with sorting and autoload disabled and enabled. YouTube layouts and connection speeds vary, so measure on the target browser rather than assuming fixed savings.
+## Building and development
 
 No build step is required. Check and test the source with Node.js 18 or newer:
 
@@ -188,8 +138,6 @@ No build step is required. Check and test the source with Node.js 18 or newer:
 node --check background.js
 node --check shared.js
 node --check drive.js
-node --check config-store.js
-node --check content/native-refresh.js
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js
@@ -197,7 +145,12 @@ node --check config-manifest.js
 node --test tests/*.test.cjs
 ```
 
-The CI workflow runs the same checks for every push and pull request.
+Release workflows:
+
+- **Build signed Yousub extension** (`.github/workflows/build-extension.yml`) runs on manual dispatch and on `v*` tags. It signs a CRX3 with the repository secret `YOUSUB_CRX_PRIVATE_KEY`, writes the public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact.
+- **Publish signed APT repository** (`.github/workflows/publish-apt.yml`) publishes the signed repository to GitHub Pages whenever a `v*` tag is pushed, consuming that artifact.
+
+Chrome derives the extension ID from the public signing key, so every build keeps the same ID and existing browser storage. The ID is printed in the build log, stored in `/usr/share/yousub/yousub-id.txt`, and published as <https://patrickbuhagiar24.github.io/youtube/extension-id.txt>. Never reuse the signing key of another extension project: two packages with the same key try to register the same file. Run Chrome with the extension loaded unpacked for local testing (`chrome://extensions` → Developer mode → **Load unpacked** → repository root).
 
 ## License
 

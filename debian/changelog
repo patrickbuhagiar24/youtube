@@ -1,3 +1,46 @@
+yousub (2.3.4) unstable; urgency=medium
+
+  * Remove the "Refresh list" and "Sync with Google Drive now" buttons; both
+    happen automatically.
+  * Write the display name as "Yousub" in the interface, package text, and the
+    Drive file header.
+  * Trim the README to what an APT user needs and move release details into a
+    short development section.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
+yousub (2.3.3) unstable; urgency=medium
+
+  * Show whether Google Drive sync is configured in its side panel row, and
+    turn the folder picker into a replace action once a manifest is loaded.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
+yousub (2.3.2) unstable; urgency=medium
+
+  * Remove the "Remove saved configuration" (trash) button and its message
+    handler; the folder-handle store existed only for that button.
+  * Document how sorting autoload and the unsubscribed/previously unsubscribed
+    marking work.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
+yousub (2.3.1) unstable; urgency=medium
+
+  * Leave YouTube's own Subscribe/Unsubscribe button untouched: no extra
+    refresh, dialog, polling, or request is triggered from it.
+  * Mark previously unsubscribed channels yellow only, without a button.
+  * Remove the service account key warning text from the docs and side panel.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
+yousub (2.3.0) unstable; urgency=medium
+
+  * Add a subscribe and unsubscribe button next to YouTube's own button on
+    watch pages and channel cards.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.2.9) unstable; urgency=medium
 
   * Reduce scanning and polling, and make sorting autoload configurable.
@@ -116,7 +159,7 @@ yousub (2.0.1) unstable; urgency=medium
 
 yousub (2.0.0) unstable; urgency=medium
 
-  * Rename the extension to YOUSUB and remove the command-line program.
+  * Rename the extension to Yousub and remove the command-line program.
   * Register the CRX signed with the repository CRX_PRIVATE_KEY secret.
   * Configure Google Drive from JSON files selected in the extension popup.
 

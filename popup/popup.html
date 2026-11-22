@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>YOUSUB</title>
+  <title>Yousub</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
     <img src="../icons/icon48.png" alt="" width="28" height="28">
-    <h1>YOUSUB</h1>
+    <h1>Yousub</h1>
     <label class="switch" title="Enable or disable the extension" aria-label="Enable or disable the extension">
       <input type="checkbox" id="enabled" aria-label="Enable or disable the extension">
       <span></span>
@@ -23,24 +23,24 @@
     <em id="status" class="muted" aria-live="polite">–</em>
     <div id="channelPage" class="chan hidden"></div>
     <div id="error" class="err hidden" role="alert"></div>
-    <button id="syncBtn">🔄 Refresh list</button>
   </section>
 
-  <!-- Unsubscribe history + Google Drive (one row) -->
+  <!-- Unsubscribe history row -->
   <section class="card drive">
     <span class="dotl"></span>
     <div class="grow">
       <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
-      <small id="driveStatus" class="muted" aria-live="polite">Google Drive is not configured</small>
+      <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
     </div>
-    <button id="driveSyncBtn" class="icon hidden" title="Sync with Google Drive now" aria-label="Sync with Google Drive now">🔄</button>
   </section>
 
-  <!-- Compact Drive actions: only the label and icon buttons -->
+  <!-- Drive setup: label, configuration status, and the manifest picker -->
   <section class="card drive">
-    <div class="grow">Google Drive sync<small>Anyone with the service account key link may be able to access the key.</small></div>
+    <div class="grow">
+      <div>Google Drive sync</div>
+      <small id="driveConfig" class="muted" aria-live="polite">❌ Not configured</small>
+    </div>
     <button id="driveSetupBtn" class="icon" title="Open Drive file setup" aria-label="Open Drive file setup">📁</button>
-    <button id="driveClearBtn" class="icon hidden" title="Remove saved configuration" aria-label="Remove saved configuration">🗑️</button>
   </section>
 
   <!-- Collapsible settings -->
@@ -63,7 +63,7 @@
         <label title="Previously unsubscribed"><input type="color" id="leftColor" aria-label="Previously unsubscribed color"> previously left</label>
       </span>
     </div>
-    <label class="field inline"><span>Subscribe <b class="plus">+</b> / unsubscribe <b class="plus minus">−</b> buttons on videos</span><input type="checkbox" id="showSubButton"></label>
+    <label class="field inline"><span>Subscribe <b class="plus">+</b> / unsubscribe <b class="plus minus">−</b> buttons on videos, right of YouTube's button</span><input type="checkbox" id="showSubButton"></label>
     <label class="field inline"><span>Unsubscribed channels first &amp; hide duplicate videos</span><input type="checkbox" id="sortUnsub"></label>
     <label class="field inline">
       <span>Automatically load videos for sorting</span>

@@ -60,18 +60,14 @@ async function renderFromStorage() {
 }
 
 function render(state) {
-  const sync = $('syncBtn');
   if (!state) {
-    const onYt = tabId !== null;
-    sync.disabled = true;
-    sync.textContent = onYt ? 'Reload the YouTube page (F5) first' : 'Open YouTube to refresh';
+    // Keep the stored count, but say what the page state is (the list refreshes by itself).
+    $('status').textContent = tabId === null ? 'Open youtube.com' : 'Reload the YouTube page (F5)';
     return;
   }
   renderSummary(state);
-  sync.disabled = !!state.syncing || state.loggedIn === false;
-  sync.textContent = state.loggedIn === false ? '🔒 Sign in to YouTube first'
-    : state.syncing ? `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) + ' channels' : ''}`
-      : '🔄 Refresh list';
+  if (state.syncing) $('status').textContent = `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) + ' channels' : ''}`;
+  else if (state.loggedIn === false) $('status').textContent = '🔒 Sign in to YouTube first';
 
   $('error').classList.toggle('hidden', !state.lastError);
   $('error').textContent = state.lastError || '';
@@ -86,18 +82,11 @@ function render(state) {
 const getState = () => (tabId === null ? null : chrome.tabs.sendMessage(tabId, { type: 'getState' }).catch(() => null));
 
 /* ---------------- buttons ---------------- */
-$('syncBtn').addEventListener('click', async () => {
-  if (tabId === null) return;
-  $('syncBtn').disabled = true;
-  $('syncBtn').textContent = '⏳ Refreshing…';
-  try { render(await chrome.tabs.sendMessage(tabId, { type: 'sync' })); } catch { render(null); }
-});
-
 $('exportBtn').addEventListener('click', async (e) => {
   e.preventDefault();
   const { yousubSubs } = await chrome.storage.local.get('yousubSubs');
   const list = yousubSubs?.list || [];
-  if (!list.length) { alert('No list yet. Open YouTube, then click "Refresh list".'); return; }
+  if (!list.length) { alert('No list yet. Open youtube.com and sign in; the list loads automatically.'); return; }
   const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const rows = [['No.', 'Channel name', 'Handle', 'URL', 'Channel ID'].map(q).join(',')];
   [...list].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'en'))
@@ -117,22 +106,25 @@ async function renderDrive() {
   const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(keys);
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
-  $('driveSyncBtn').classList.toggle('hidden', !configured);
-  $('driveClearBtn').classList.toggle('hidden', !configured);
-  $('driveStatus').textContent = !configured ? 'Google Drive is not configured — open "Google Drive sync" below'
+  $('driveStatus').textContent = !configured ? 'Unsubscribe history is kept only while Google Drive sync is configured'
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
+  // Configuration status: the row states whether a manifest is loaded and which file it points at.
+  const account = d.email || 'service account';
+  $('driveConfig').textContent = !configured ? '❌ Not configured — open a manifest with 📁'
+    : d.syncing ? `✅ Configured · ${account} · ⏳ syncing…`
+      : d.lastError ? `✅ Configured · ${account} · ⚠️ needs attention`
+        : `✅ Configured · ${account}${d.fileName ? ' · ' + d.fileName : ''}`;
+  // Once configured, the same picker replaces the saved configuration instead of setting it up.
+  const setup = $('driveSetupBtn');
+  const setupLabel = configured ? 'Replace the Google Drive configuration' : 'Open Drive file setup';
+  setup.textContent = configured ? '🔁' : '📁';
+  setup.title = setupLabel;
+  setup.setAttribute('aria-label', setupLabel);
+  setup.classList.toggle('configured', configured);
 }
 
-async function syncNow() {
-  $('driveSyncBtn').disabled = true;
-  await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
-  $('driveSyncBtn').disabled = false;
-  renderDrive();
-}
-
-$('driveSyncBtn').addEventListener('click', syncNow);
 $('driveSetupBtn').addEventListener('click', async () => {
   if (!window.showOpenFilePicker) {
     $('driveStatus').textContent = 'This browser does not support the file picker.';
@@ -155,11 +147,6 @@ $('driveSetupBtn').addEventListener('click', async () => {
     if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not load configuration: ' + (e.message || String(e));
   }
 });
-$('driveClearBtn').addEventListener('click', async () => {
-  await chrome.runtime.sendMessage({ type: 'driveClear' }).catch(() => {});
-  renderDrive();
-});
-
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
   if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();

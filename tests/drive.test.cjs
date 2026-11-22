@@ -36,7 +36,7 @@ test('Drive exports use English fields and round-trip both event types', () => {
   const events = { [id]: { s: 'unsub', at: now, title: 'Example', url: '/@example' } };
   const text = Drive.toFile(events);
   const data = JSON.parse(text);
-  assert.equal(data.application, 'YOUSUB');
+  assert.equal(data.application, 'Yousub');
   assert.equal(data.unsubscribeCount, 1);
   assert.equal(data.channels[0].name, 'Example');
   assert.equal(data.channels[0].url, 'https://www.youtube.com/@example');
@@ -171,7 +171,7 @@ test('a full sync preserves newer local events and writes English data', async (
   const { Drive } = load(storageChrome(store), fetch, cryptoImpl);
   assert.deepEqual(plain(await Drive.sync()), { ok: true });
   const data = JSON.parse(uploaded);
-  assert.equal(data.application, 'YOUSUB');
+  assert.equal(data.application, 'Yousub');
   assert.equal(data.unsubscribeCount, 1);
   assert.equal(data.channels.length, 2);
   assert.ok(data.channels.every((row) => row.name && row.date && ['unsubscribed', 'resubscribed'].includes(row.status)));

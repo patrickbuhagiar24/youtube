@@ -1,4 +1,4 @@
-/* YOUSUB */
+/* Yousub */
 :root { --yousub-color: #ff3d00; --yousub-left: #ffd400; }
 
 /* Outlines: red = not subscribed; yellow = previously unsubscribed (listed in YouTube.json) */
@@ -136,6 +136,79 @@ html.yousub-on.yousub-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-re
 /* Floating button above the hovered video and YouTube preview player */
 .yousub-subbtn.yousub-float { position: fixed; z-index: 2147483000; }
 .yousub-subbtn.yousub-float[hidden] { display: none !important; }
+/* Previously unsubscribed channels: yellow outline only, never a + / − / inline button */
+[data-yousub-state="left"] .yousub-subbtn,
+[data-yousub-state="left"] .yousub-inline-host { display: none !important; }
+
 /* Hide the attached + button while the floating button is active to avoid duplicates */
 [data-yousub-hover] .yousub-subbtn:not(.yousub-float) { visibility: hidden; }
 html:not(.yousub-on) .yousub-subbtn { display: none !important; }
+
+/* Copy of YouTube's Subscribe (+) / Unsubscribe (−) button, placed to the right of the original */
+.yousub-inline-host {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  flex: 0 0 auto;
+}
+.yousub-inlinebtn {
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--yousub-color);
+  /* Hide the +/− text and draw the strokes with CSS for exact, font-independent centering */
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .45);
+  transition: transform .15s, filter .15s;
+}
+.yousub-inlinebtn::before,
+.yousub-inlinebtn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: #fff;
+  border-radius: 2px;
+}
+.yousub-inlinebtn::before { width: 13px; height: 3px; } /* Horizontal stroke */
+.yousub-inlinebtn::after { width: 3px; height: 13px; }  /* Vertical stroke */
+.yousub-inlinebtn:hover { transform: scale(1.12); filter: brightness(1.1); }
+.yousub-inlinebtn:active { transform: scale(.95); }
+/* Processing: a spinner, also exactly centered */
+.yousub-inlinebtn:disabled { cursor: default; transform: none; filter: none; }
+.yousub-inlinebtn:disabled::before {
+  width: 13px;
+  height: 13px;
+  background: none;
+  border: 2.5px solid rgba(255, 255, 255, .35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  animation: yousub-spin .8s linear infinite;
+}
+.yousub-inlinebtn:disabled::after { display: none; }
+/* Fallback when YouTube's container is a block: lay the native button and the copy on one line */
+.yousub-native-row {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.yousub-native-row > .yousub-inline-host { margin-left: 0; }
+/* Blue unsubscribe (−) button */
+.yousub-inlinebtn.yousub-unsubbtn { background: var(--yousub-unsub-btn, #1e88e5); }
+.yousub-inlinebtn.yousub-unsubbtn::after { display: none; } /* Horizontal stroke only = minus sign */
+/* On watch pages YouTube's native button sits in a stacked row; keep the copy aligned with it */
+ytd-video-owner-renderer .yousub-inline-host,
+#owner .yousub-inline-host { align-self: center; }
+html:not(.yousub-on) .yousub-inline-host { display: none !important; }
