@@ -227,6 +227,16 @@ test('the copy also appears where YouTube\'s button is outside the video cards',
   assert.doesNotMatch(main, /nativeButtonClicked|nativeSubscribeClick/);
 });
 
+test('the button is tagged before its channel is asked for', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // askLocalId sends the token, so a token generated after the call would resolve the wrong button.
+  const tag = content.indexOf("el.__yousubLocal ||= 'l'");
+  const ask = content.indexOf('askLocalId(el);');
+  assert.ok(tag > 0 && ask > 0 && tag < ask, 'the data-yousub-local tag must exist before the lookup');
+  // One lookup per button, and the answer does not trigger another one.
+  assert.match(content, /if \(el\.__yousubAsking \|\| !el\.__yousubLocal\) return;/);
+});
+
 test('the channel header is scanned as one channel, not as a video', () => {
   const main = fs.readFileSync('content/main-world.js', 'utf8');
   // A header has no video ID, so it must not join the ad check or the video map.

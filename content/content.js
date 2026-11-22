@@ -690,6 +690,9 @@
       while (card && card.parentElement?.closest?.(CARD_SEL)) card = card.parentElement.closest(CARD_SEL);
       if (card?.__yousubCh || card?.hasAttribute('data-yousub-state')) continue;
       if (!ownerReady) { el.__yousubInlineKind = null; el.__yousubLocal = ''; placeInline(el, null); continue; }
+      // Tag the element first: askLocalId() sends this token to the page world.
+      const tok = el.__yousubLocal ||= 'l' + Math.random().toString(36).slice(2, 10);
+      if (el.getAttribute('data-yousub-local') !== tok) el.setAttribute('data-yousub-local', tok);
       let kind;
       if (el.__yousubId) {
         // Known channel: the subscription list is authoritative (and keeps yellow colour-only)
@@ -700,8 +703,6 @@
         kind = cardSubscribedState(el) ? 'unsub' : 'sub';
         askLocalId(el);
       }
-      const tok = el.__yousubLocal ||= 'l' + Math.random().toString(36).slice(2, 10);
-      if (el.getAttribute('data-yousub-local') !== tok) el.setAttribute('data-yousub-local', tok);
       el.__yousubCh = { key: 'local:' + tok, id: el.__yousubId || '', name: '', url: '', __local: true, localTok: tok };
       el.__yousubInlineKind = kind && inlineAllowed(el, el) ? kind : null;
       placeInline(el, el.__yousubInlineKind);
