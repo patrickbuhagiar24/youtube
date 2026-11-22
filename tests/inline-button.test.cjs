@@ -328,6 +328,16 @@ test('a bare @handle is never used as a channel name', () => {
   assert.match(content, /const parts = String\(hit\?\.textContent \|\| ''\)\.split/);
 });
 
+test('the card name comes from the lockup title, not its first metadata part', () => {
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // metadataParts[0] is often the @handle (e.g. "@almostperfectrestoration"), so the lockup's own
+  // title is used first and handle parts are never taken as a name.
+  assert.match(main, /const own = cleanTitle\(meta\?\.title\?\.content\);/);
+  assert.match(main, /for \(const part of row\.metadataParts \|\| \[\]\) parts\.push\(cleanTitle\(part\?\.text\?\.content\)\);/);
+  assert.doesNotMatch(main, /metadataParts\?\\.\[0\]\?\\.text\?\\.content/);
+  assert.match(main, /ch\.name = cleanTitle\(lockupName\(/);
+});
+
 test('entries saved with a handle as their name repair themselves', () => {
   const content = fs.readFileSync('content/content.js', 'utf8');
   // The handle is kept, the wrong title is dropped, and one background refresh brings the real name.

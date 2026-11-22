@@ -534,8 +534,20 @@
     return found;
   }
 
-  const lockupName = (l) =>
-    (l?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content || '').trim();
+  /**
+   * Channel name shown on a lockup. The first metadata part is often the @handle, not the title,
+   * so the lockup's own title is used first and handle parts are skipped.
+   */
+  const lockupName = (l) => {
+    const meta = l?.metadata?.lockupMetadataViewModel;
+    const own = cleanTitle(meta?.title?.content);
+    if (own) return own;
+    const parts = [];
+    for (const row of meta?.metadata?.contentMetadataViewModel?.metadataRows || []) {
+      for (const part of row.metadataParts || []) parts.push(cleanTitle(part?.text?.content));
+    }
+    return parts.find(Boolean) || '';
+  };
 
   /* ---------- videoId -> channel map (from InnerTube responses) ---------- */
   const videoMap = new Map();
@@ -622,7 +634,7 @@
       }
       const fromMap = vid ? videoMap.get(vid) : null;
       if (fromMap && !ch?.id) ch = { ...fromMap, name: ch?.name || fromMap.name };
-      if (ch && !ch.name) ch.name = lockupName(d?.content?.lockupViewModel || d) || fromMap?.name || '';
+      if (ch && !ch.name) ch.name = cleanTitle(lockupName(d?.content?.lockupViewModel || d)) || fromMap?.name || '';
       const collab = (d && collaborators(d)) || fromMap?.collab || null;
       if (collab && !ch?.id) ch = { id: collab[0].id, url: collab[0].url, name: collab.map((c) => c.name).join(', ') };
       const collabAttr = collab ? JSON.stringify(collab) : '';

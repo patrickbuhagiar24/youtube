@@ -1,3 +1,13 @@
+yousub (2.4.7) unstable; urgency=medium
+
+  * Read a card's channel name from its lockup title instead of the first
+    metadata part: for many cards that part is the @handle, which is how a
+    subscribed channel ended up named "@name".
+  * Never take a handle or channel ID as a name anywhere the card's channel is
+    derived, including the video-to-channel map.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.4.6) unstable; urgency=medium
 
   * Never use a bare @handle as a channel name: YouTube renders the handle in
