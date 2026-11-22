@@ -211,9 +211,11 @@ test('a previously unsubscribed channel is marked yellow only, without any butto
 test('the copy also appears where YouTube\'s button is outside the video cards', () => {
   const content = fs.readFileSync('content/content.js', 'utf8');
   const main = fs.readFileSync('content/main-world.js', 'utf8');
-  // The video owner area and the channel header host YouTube's button but are not cards.
-  assert.match(content, /const OWNER_SEL = 'ytd-video-owner-renderer, yt-page-header-renderer'/);
-  assert.match(content, /querySelectorAll\(OWNER_SEL\)/);
+  // No fixed container list: every native button outside a card gets the copy, whatever wraps it.
+  assert.match(content, /for \(const el of \(page \|\| document\)\.querySelectorAll\(NATIVE_SUB_SEL\)\)/);
+  assert.doesNotMatch(content, /OWNER_SEL/);
+  // A button already handled by the card pass is skipped, so no duplicate copy is placed.
+  assert.match(content, /if \(card\?\.__yousubCh \|\| card\?\.hasAttribute\('data-yousub-state'\)\) continue;/);
   // Their state comes from YouTube's own button, so no channel data is needed to place the copy.
   assert.match(content, /function cardSubscribedState/);
   assert.match(content, /typeof data\?\.subscribed === 'boolean'/);

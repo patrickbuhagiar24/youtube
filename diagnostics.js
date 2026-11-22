@@ -35,15 +35,25 @@
   add('4. page_corner_buttons', document.querySelectorAll('.yousub-subbtn').length);
   add('5. page_inline_buttons', document.querySelectorAll('.yousub-inlinebtn').length);
   add('6. page_native_buttons', document.querySelectorAll('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model').length);
-  // The video owner area and channel header are not video cards; they get the copy on their own.
-  const owners = document.querySelectorAll('ytd-video-owner-renderer, yt-page-header-renderer');
-  add('6b. page_owner_areas', owners.length);
-  add('6c. page_owner_inline', [...owners].filter((o) => o.querySelector('.yousub-inlinebtn')).length);
-  add('6d. page_owner_row', [...owners].map((o) => {
-    const b = o.querySelector('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model');
-    if (!b) return '-';
-    const host = o.querySelector('.yousub-inline-host');
-    return host ? (host.previousElementSibling === b ? 'beside' : 'moved') : 'none';
+  // YouTube's button is not always inside a video card (watch page owner row, channel header).
+  // Those buttons get the copy too, so report them separately from the card buttons.
+  // Same card list as shared.js (YOUSUB is not visible from the page console)
+  const cardSel = ['ytd-rich-item-renderer', 'ytd-video-renderer', 'ytd-compact-video-renderer',
+    'ytd-grid-video-renderer', 'ytd-playlist-renderer', 'ytd-compact-playlist-renderer',
+    'ytd-channel-renderer', 'ytd-grid-channel-renderer', 'ytd-playlist-video-renderer',
+    'ytd-playlist-panel-video-renderer', 'ytd-movie-renderer', 'ytd-compact-movie-renderer',
+    'ytd-video-owner-renderer', 'yt-lockup-view-model'].join(',');
+  const cardEls = [...document.querySelectorAll(cardSel)];
+  const isInCard = (el) => cardEls.some((c) => c.contains(el));
+  const loose = [...document.querySelectorAll('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model')]
+    .filter((b) => !b.parentElement?.matches?.('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model'))
+    .filter((b) => !isInCard(b));
+  add('6b. page_outside_card_buttons', loose.length);
+  add('6c. page_outside_card_inline', loose.filter((b) => b.parentElement?.querySelector('.yousub-inline-host')).length);
+  add('6d. page_outside_card_row', loose.map((b) => {
+    const host = b.parentElement?.querySelector('.yousub-inline-host');
+    if (!host) return 'none';
+    return host.previousElementSibling === b ? 'beside' : 'moved';
   }).join(',') || '-');
 
   const kinds = {};
