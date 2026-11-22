@@ -31,7 +31,7 @@ var Drive = (() => {
     let value;
     try { value = typeof text === 'string' ? JSON.parse(text) : text; }
     catch { throw new Error('yousub-google-drive.json is not valid JSON.'); }
-    const folderError = 'yousub-google-drive.json points to a folder. YOUSUB needs a direct file link to YouTube.json: open the uploaded YouTube.json in Drive, click Share → Copy link, and save {"link": "<file link>"}.';
+    const folderError = 'yousub-google-drive.json points to a folder. Yousub needs a direct file link to YouTube.json: open the uploaded YouTube.json in Drive, click Share → Copy link, and save {"link": "<file link>"}.';
     const placeholderError = 'yousub-google-drive.json still contains the placeholder link. Replace it with the shared YouTube.json file link.';
     let link = '';
     if (typeof value === 'string') {
@@ -178,7 +178,7 @@ var Drive = (() => {
       .map(([id, e]) => ({ id, name: e.title || '', url: e.url ? new URL(e.url, 'https://www.youtube.com').href : `https://www.youtube.com/channel/${id}`, status: LABEL[e.s], date: new Date(e.at).toISOString() }))
       .sort((a, b) => (a.status === b.status ? b.date.localeCompare(a.date) : a.status === LABEL.unsub ? -1 : 1));
     return JSON.stringify({
-      application: 'YOUSUB',
+      application: 'Yousub',
       description: 'YouTube channels you have unsubscribed from. Updated automatically by the extension; avoid editing this file manually.',
       updatedAt: new Date().toISOString(),
       unsubscribeCount: rows.filter((r) => r.status === LABEL.unsub).length,

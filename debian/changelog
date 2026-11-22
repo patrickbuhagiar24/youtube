@@ -1,3 +1,14 @@
+yousub (2.3.4) unstable; urgency=medium
+
+  * Remove the "Refresh list" and "Sync with Google Drive now" buttons; both
+    happen automatically.
+  * Write the display name as "Yousub" in the interface, package text, and the
+    Drive file header.
+  * Trim the README to what an APT user needs and move release details into a
+    short development section.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.3) unstable; urgency=medium
 
   * Show whether Google Drive sync is configured in its side panel row, and
@@ -148,7 +159,7 @@ yousub (2.0.1) unstable; urgency=medium
 
 yousub (2.0.0) unstable; urgency=medium
 
-  * Rename the extension to YOUSUB and remove the command-line program.
+  * Rename the extension to Yousub and remove the command-line program.
   * Register the CRX signed with the repository CRX_PRIVATE_KEY secret.
   * Configure Google Drive from JSON files selected in the extension popup.
 

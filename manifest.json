@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YOUSUB",
-  "short_name": "YOUSUB",
-  "version": "2.3.3",
+  "name": "Yousub",
+  "short_name": "Yousub",
+  "version": "2.3.4",
   "description": "Marks videos and channels you are not subscribed to across YouTube.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -21,7 +21,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "YOUSUB",
+    "default_title": "Yousub",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

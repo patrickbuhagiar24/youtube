@@ -253,7 +253,7 @@
     stats.fromFeed = map.size;
     if (failed) {
       stats.status = 'partial';
-      stats.note = 'Part of the list could not be loaded. Click "Refresh list" to try again.';
+      stats.note = 'Part of the list could not be loaded. It is retried automatically the next time YouTube opens.';
     } else if (capped && map.size <= 1010) {
       stats.status = 'capped';
       stats.note = 'YouTube returned only about 1,000 channels, so some channels may be marked incorrectly.';

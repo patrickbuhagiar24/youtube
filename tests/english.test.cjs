@@ -13,7 +13,25 @@ function walk(dir) {
 
 const isText = (file) => !/\.(?:png|jpg|jpeg|gif|ico|deb|dsc|xz|gz|gpg|asc|pem|key|zip|crx)$/.test(file);
 
-test('project text uses the YOUSUB name and English only', () => {
+test('the display name is "Yousub" and internal identifiers stay unchanged', () => {
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.equal(manifest.name, 'Yousub');
+  assert.equal(manifest.short_name, 'Yousub');
+  assert.equal(manifest.action.default_title, 'Yousub');
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  assert.match(html, /<title>Yousub<\/title>/);
+  assert.match(html, /<h1>Yousub<\/h1>/);
+  // User-facing text only: code identifiers (YOUSUB.*, YOUSUB_CRX_PRIVATE_KEY) and package paths keep their names.
+  // Documentation and package descriptions are user-facing prose; code identifiers such as
+  // YOUSUB.DRIVE_FILE and YOUSUB_CRX_PRIVATE_KEY keep their original spelling.
+  const userFacing = [fs.readFileSync('debian/control', 'utf8'), fs.readFileSync('debian/copyright', 'utf8'),
+    fs.readFileSync('README.md', 'utf8')].join('\n');
+  assert.doesNotMatch(userFacing, /\bYOUSUB\b/);
+  assert.match(fs.readFileSync('shared.js', 'utf8'), /var YOUSUB = Object\.freeze/);
+  assert.match(fs.readFileSync('YouTube.json', 'utf8'), /"application": "Yousub"/);
+});
+
+test('project text uses the Yousub name and English only', () => {
   for (const file of walk('.')) {
     if (!isText(file) || file === 'tests/english.test.cjs') continue;
     const text = fs.readFileSync(file, 'utf8');
@@ -58,9 +76,9 @@ test('the Debian package only registers the signed CRX', () => {
 test('manifest describes the Chrome extension and declares every asset', () => {
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.name, 'YOUSUB');
-  assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.3.3');
+  assert.equal(manifest.name, 'Yousub');
+  assert.equal(manifest.short_name, 'Yousub');
+  assert.equal(manifest.version, '2.3.4');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -81,6 +99,18 @@ test('the side panel removes the saved-configuration button and its wiring', () 
   assert.ok(!fs.existsSync('config-store.js'), 'the folder-handle store existed only for that button');
   const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.doesNotMatch(build, /config-store\.js/);
+});
+
+test('the side panel has no manual refresh or Drive sync buttons', () => {
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  assert.doesNotMatch(html, /syncBtn|Refresh list|driveSyncBtn|Sync with Google Drive now/);
+  assert.doesNotMatch(js, /syncBtn|driveSyncBtn|syncNow/);
+  // The list refreshes by itself, so no message tells the user to press a removed button.
+  assert.doesNotMatch(js + fs.readFileSync('content/main-world.js', 'utf8'), /click "Refresh list"/i);
+  // Drive still exposes the picker (and the automatic sync stays wired in the worker).
+  assert.match(html, /id="driveSetupBtn"/);
+  assert.match(fs.readFileSync('background.js', 'utf8'), /Drive\.sync\(\)/);
 });
 
 test('the Drive row reports the configuration and the picker replaces it once configured', () => {

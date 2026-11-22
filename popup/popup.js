@@ -60,18 +60,14 @@ async function renderFromStorage() {
 }
 
 function render(state) {
-  const sync = $('syncBtn');
   if (!state) {
-    const onYt = tabId !== null;
-    sync.disabled = true;
-    sync.textContent = onYt ? 'Reload the YouTube page (F5) first' : 'Open YouTube to refresh';
+    // Keep the stored count, but say what the page state is (the list refreshes by itself).
+    $('status').textContent = tabId === null ? 'Open youtube.com' : 'Reload the YouTube page (F5)';
     return;
   }
   renderSummary(state);
-  sync.disabled = !!state.syncing || state.loggedIn === false;
-  sync.textContent = state.loggedIn === false ? '🔒 Sign in to YouTube first'
-    : state.syncing ? `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) + ' channels' : ''}`
-      : '🔄 Refresh list';
+  if (state.syncing) $('status').textContent = `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) + ' channels' : ''}`;
+  else if (state.loggedIn === false) $('status').textContent = '🔒 Sign in to YouTube first';
 
   $('error').classList.toggle('hidden', !state.lastError);
   $('error').textContent = state.lastError || '';
@@ -86,18 +82,11 @@ function render(state) {
 const getState = () => (tabId === null ? null : chrome.tabs.sendMessage(tabId, { type: 'getState' }).catch(() => null));
 
 /* ---------------- buttons ---------------- */
-$('syncBtn').addEventListener('click', async () => {
-  if (tabId === null) return;
-  $('syncBtn').disabled = true;
-  $('syncBtn').textContent = '⏳ Refreshing…';
-  try { render(await chrome.tabs.sendMessage(tabId, { type: 'sync' })); } catch { render(null); }
-});
-
 $('exportBtn').addEventListener('click', async (e) => {
   e.preventDefault();
   const { yousubSubs } = await chrome.storage.local.get('yousubSubs');
   const list = yousubSubs?.list || [];
-  if (!list.length) { alert('No list yet. Open YouTube, then click "Refresh list".'); return; }
+  if (!list.length) { alert('No list yet. Open youtube.com and sign in; the list loads automatically.'); return; }
   const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const rows = [['No.', 'Channel name', 'Handle', 'URL', 'Channel ID'].map(q).join(',')];
   [...list].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'en'))
@@ -117,7 +106,6 @@ async function renderDrive() {
   const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(keys);
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
-  $('driveSyncBtn').classList.toggle('hidden', !configured);
   $('driveStatus').textContent = !configured ? 'Unsubscribe history is kept only while Google Drive sync is configured'
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
@@ -137,14 +125,6 @@ async function renderDrive() {
   setup.classList.toggle('configured', configured);
 }
 
-async function syncNow() {
-  $('driveSyncBtn').disabled = true;
-  await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
-  $('driveSyncBtn').disabled = false;
-  renderDrive();
-}
-
-$('driveSyncBtn').addEventListener('click', syncNow);
 $('driveSetupBtn').addEventListener('click', async () => {
   if (!window.showOpenFilePicker) {
     $('driveStatus').textContent = 'This browser does not support the file picker.';

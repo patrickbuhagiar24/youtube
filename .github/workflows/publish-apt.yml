@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: ID of a successful "Build signed YOUSUB extension" run
+        description: ID of a successful "Build signed Yousub extension" run
         required: false
       tag:
         description: Tag to wait for when no build run ID is given
@@ -95,9 +95,9 @@ jobs:
           cat > index.html <<'EOF'
           <!doctype html>
           <html lang="en">
-          <head><meta charset="utf-8"><title>YOUSUB APT repository</title></head>
+          <head><meta charset="utf-8"><title>Yousub APT repository</title></head>
           <body>
-            <h1>YOUSUB APT repository</h1>
+            <h1>Yousub APT repository</h1>
             <p>Install with <code>sudo apt install yousub</code> after adding
               <code>yousub.sources</code> and the verified archive key. See the
               <a href="https://github.com/patrickbuhagiar24/youtube">installation instructions</a>.</p>
@@ -118,14 +118,14 @@ jobs:
               if not files:
                   raise SystemExit('No package indices were generated.')
               fields = [
-                  'Origin: YOUSUB',
-                  'Label: YOUSUB',
+                  'Origin: Yousub',
+                  'Label: Yousub',
                   f'Suite: {suite}',
                   f'Codename: {suite}',
                   'Date: ' + format_datetime(datetime.now(timezone.utc), usegmt=True),
                   'Architectures: all',
                   'Components: main',
-                  'Description: Signed YOUSUB Chrome extension packages',
+                  'Description: Signed Yousub Chrome extension packages',
                   'Acquire-By-Hash: no',
               ]
               for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):

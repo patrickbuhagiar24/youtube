@@ -1,4 +1,4 @@
-name: Build signed YOUSUB extension
+name: Build signed Yousub extension
 
 on:
   workflow_dispatch:

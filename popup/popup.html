@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>YOUSUB</title>
+  <title>Yousub</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
     <img src="../icons/icon48.png" alt="" width="28" height="28">
-    <h1>YOUSUB</h1>
+    <h1>Yousub</h1>
     <label class="switch" title="Enable or disable the extension" aria-label="Enable or disable the extension">
       <input type="checkbox" id="enabled" aria-label="Enable or disable the extension">
       <span></span>
@@ -23,17 +23,15 @@
     <em id="status" class="muted" aria-live="polite">–</em>
     <div id="channelPage" class="chan hidden"></div>
     <div id="error" class="err hidden" role="alert"></div>
-    <button id="syncBtn">🔄 Refresh list</button>
   </section>
 
-  <!-- Unsubscribe history + Google Drive (one row) -->
+  <!-- Unsubscribe history row -->
   <section class="card drive">
     <span class="dotl"></span>
     <div class="grow">
       <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
       <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
     </div>
-    <button id="driveSyncBtn" class="icon hidden" title="Sync with Google Drive now" aria-label="Sync with Google Drive now">🔄</button>
   </section>
 
   <!-- Drive setup: label, configuration status, and the manifest picker -->
