@@ -126,6 +126,10 @@ Marking is controlled by `Display mode` and the two colours:
 - **Previously unsubscribed** (`left`, default yellow `#ffd400`): a channel in the unsubscribe history that is no longer in your subscription list. It gets the yellow outline only — no `+`, `−`, or inline button — and sorts after subscribed channels.
 - **Subscribed** (`sub`): no outline in `highlight` mode; dimmed in `dim` mode and hidden in `only-unsub` mode.
 
+## If markers do not appear
+
+Run `diagnostics.js` in the YouTube tab: press F12 (Developer tools) → **Console**, paste the whole file, press Enter. It prints which part is missing — extension context, page flag, stored list, marked cards, and whether YouTube's page-world script answers — and changes no settings. Share its output when asking for help.
+
 ## Keyboard
 
 Yousub adds **no keyboard shortcuts or hotkeys** — there is no `commands` entry in the manifest and no key listener in the page or in the side panel. Everything is a mouse/touch action:

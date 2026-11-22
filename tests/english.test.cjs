@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.3.7');
+  assert.equal(manifest.version, '2.3.8');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -185,12 +185,13 @@ test('releases are Pages-only: no release tags and no GitHub Releases', () => {
     assert.doesNotMatch(text, /github\.ref_name|head_branch == \\?"\$TAG/, 'no workflow may resolve a tag');
     assert.doesNotMatch(text, /gh release|softprops\/action-gh-release|actions\/create-release/, 'no GitHub Releases');
   }
-  // Merging to main publishes; the version comes from manifest.json, and it is not rebuilt twice.
-  assert.match(publish, /on:\n  push:\n    branches: \[main\]/);
+  // Merging to main publishes; a manual run can target any branch (verified: Pages accepts it).
+  assert.match(publish, /on:\n  push:\n    branches: \[main\]\n  workflow_dispatch:/);
+  // The version comes from manifest.json, and an unchanged version is not redeployed.
+  assert.doesNotMatch(publish, /github\.ref == 'refs\/heads\/main'/);
   assert.match(publish, /uses: \.\/\.github\/workflows\/build-extension\.yml/);
   // Without this the called workflow cannot see YOUSUB_CRX_PRIVATE_KEY / GPG secrets.
   assert.match(publish, /secrets: inherit/);
-  assert.match(publish, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(publish, /needs: build/);
   assert.match(publish, /already/);
   assert.match(build, /on:\n  workflow_call:\n  workflow_dispatch:/);

@@ -105,8 +105,9 @@
     throw err;
   }
 
+  /** null means "YouTube has not told us yet"; null is never treated as signed out. */
   const accountInfo = () => ({
-    loggedIn: !!cfg('LOGGED_IN'),
+    loggedIn: typeof cfg('LOGGED_IN') === 'boolean' ? cfg('LOGGED_IN') : null,
     accountId: [cfg('DATASYNC_ID') || '', cfg('DELEGATED_SESSION_ID') || '', cfg('SESSION_INDEX') ?? ''].join('|')
   });
 
@@ -595,8 +596,8 @@
     if (e.source !== window || e.data?.source !== IN) return;
     const { type, reqId } = e.data;
     if (type === 'hello') {
-      await waitCfg();
-      post('hello', { reqId, ...accountInfo() });
+      const configured = await waitCfg();
+      post('hello', { reqId, ...accountInfo(), ...(configured ? {} : { loggedIn: null }) });
     } else if (type === 'sync') {
       try { post('subs', { reqId, ...(await fetchSubscriptions()) }); } catch (err) { post('subsError', { reqId, error: String(err?.message || err) }); }
     } else if (type === 'subscription') {

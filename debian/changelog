@@ -1,3 +1,13 @@
+yousub (2.3.8) unstable; urgency=medium
+
+  * Stop hiding every marker when YouTube's page configuration has not loaded
+    yet: an unknown login state is no longer treated as signed out.
+  * Mark videos in hidden tabs too, so a page opened in the background is
+    already marked when it is shown.
+  * Add diagnostics.js to report why markers are missing.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.7) unstable; urgency=medium
 
   * Release without version tags: merging into main builds and publishes the

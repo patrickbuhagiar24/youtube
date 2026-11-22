@@ -83,3 +83,21 @@ test('the content script keeps no fallback refresh tied to the native button', (
   assert.ok(!scripts.includes('content/native-refresh.js'));
   assert.ok(!fs.existsSync('content/native-refresh.js'));
 });
+
+test('an unknown login state is never reported as signed out', () => {
+  const source = fs.readFileSync('content/main-world.js', 'utf8');
+  // ytcfg may not exist yet when the page asks; !!undefined would have said "signed out"
+  // and the isolated script would then hide every marker.
+  assert.match(source, /loggedIn: typeof cfg\('LOGGED_IN'\) === 'boolean' \? cfg\('LOGGED_IN'\) : null/);
+  assert.doesNotMatch(source, /loggedIn: !!cfg\('LOGGED_IN'\)/);
+  assert.match(source, /const configured = await waitCfg\(\);/);
+  assert.match(source, /configured \? \{\} : \{ loggedIn: null \}/);
+});
+
+test('hidden tabs are scanned so markers are ready when the tab is shown', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  assert.match(content, /setInterval\(\(\) => extAlive && \(\+\+tick % 4 === 0 \|\| document\.documentElement\.classList\.contains\('yousub-autoload'\)\) && scheduleScan\(\), 2500\)/);
+  assert.doesNotMatch(content, /extAlive && !document\.hidden/);
+  // Autoload itself stays visible-only: it must not load pages in the background.
+  assert.match(content, /!auto\.done && !document\.hidden && AUTOLOAD_PATH/);
+});

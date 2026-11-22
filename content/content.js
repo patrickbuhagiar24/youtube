@@ -590,6 +590,8 @@
   }
 
   function scan() {
+    // Hidden tabs are still marked: they do not paint, so this costs little and the
+    // markers are ready the moment the tab is shown.
     const ready = settings.enabled && subs.loggedIn !== false && subs.ts > 0;
     document.documentElement.classList.toggle('yousub-on', ready);
     // Traverse the DOM once (YouTube may have tens of thousands of elements), also counting grids and videos
@@ -707,7 +709,7 @@
     if (auto.page !== page) auto = { page, count: -1, since: 0, done: false }; // New page: start again
     let on = false;
     const limit = [0, 100, 250, 500].includes(settings.autoloadLimit) ? settings.autoloadLimit : DEFAULTS.autoloadLimit;
-    if (ready && settings.sortUnsub && limit > 0 && !auto.done && AUTOLOAD_PATH.test(location.pathname)) {
+    if (ready && settings.sortUnsub && limit > 0 && !auto.done && !document.hidden && AUTOLOAD_PATH.test(location.pathname)) {
       if (n !== auto.count) { auto.count = n; auto.since = Date.now(); }
       auto.done = n >= limit || Date.now() - auto.since > AUTOLOAD.stallMs;
       on = !auto.done;
@@ -787,9 +789,10 @@
       if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target) &&
         (m.attributeName === 'hidden' || !m.target.closest?.('ytd-page-manager > [hidden]')))) scheduleScan();
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-yousub-v', 'hidden'] });
-    // Fallback every 10 seconds, or 2.5 seconds during autoload to detect an exhausted list
+    // Fallback every 10 seconds (4 ticks of 2.5 s), every tick during autoload. Runs in hidden
+    // tabs too, so a background-opened page is already marked when it is shown.
     let tick = 0;
-    setInterval(() => extAlive && !document.hidden && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
+    setInterval(() => extAlive && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleScan(true); });
     for (const ev of ['pointermove', 'pointerover']) document.addEventListener(ev, onPointer, { capture: true, passive: true });
     document.addEventListener('scroll', queueHover, { capture: true, passive: true });
