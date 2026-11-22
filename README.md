@@ -8,6 +8,7 @@ This project is **only a Chrome extension**, distributed as a signed CRX and an 
 
 - Highlight channels you are not subscribed to, or previously unsubscribed from.
 - Subscribe and unsubscribe directly from video thumbnails, including collaboration videos.
+- Get the same subscribe/unsubscribe button to the right of YouTube's own button on watch pages and channel cards.
 - Put unsubscribed channels first and hide duplicate videos.
 - Dim or hide selected subscription groups.
 - Refresh your subscription list and export it as CSV.

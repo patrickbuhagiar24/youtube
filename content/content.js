@@ -20,6 +20,10 @@
     '[class*="metadata-row"]:first-child > span', '[class*="MetadataRow"]:first-child > span'
   ].join(', ');
   const CHANNEL_LINK = 'a[href^="/@"], a[href^="/channel/"], a[href^="/c/"], a[href^="/user/"]';
+  // YouTube's own subscribe/unsubscribe button (classic renderer and newer view models)
+  const NATIVE_SUB_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';
+  /** YouTube's subscribe/unsubscribe button inside a card, or null when the card has none. */
+  const nativeSubButton = (card) => card?.querySelector?.(NATIVE_SUB_SEL) || null;
 
   let settings = { ...DEFAULTS };
   const subs = { list: [], ids: new Set(), keys: new Set(), titles: new Set(), ts: 0, accountId: null, loggedIn: null, stats: null };
@@ -234,11 +238,12 @@
   }
 
   function refreshButtons() {
-    for (const b of document.querySelectorAll('.yousub-subbtn')) {
+    for (const b of document.querySelectorAll('.yousub-subbtn, .yousub-inlinebtn')) {
       const card = b.__yousubCard || b.closest('[data-yousub-state]');
       const on = busy.has(card?.__yousubCh?.key);
       b.disabled = on;
       b.textContent = on ? '⏳' : b.classList.contains('yousub-unsubbtn') ? '−' : '+';
+      b.setAttribute('aria-busy', on ? 'true' : 'false');
     }
   }
 
@@ -381,21 +386,28 @@
   }
 
   /**
-   * Button in the top-left corner of a thumbnail:
+   * Buttons:
    *  kind 'sub'   -> "+" (subscribe), for channels not yet subscribed
-   *  kind 'unsub' -> blue "−" (unsubscribe), shown on hover for subscribed channels
+   *  kind 'unsub' -> blue "−" (unsubscribe), for subscribed channels
+   *  cls  'yousub-subbtn'    -> round button in the top-left corner of a thumbnail (floats on hover)
+   *  cls  'yousub-inlinebtn' -> button placed to the right of YouTube's own Subscribe/Unsubscribe button
    */
   const BTN = {
-    sub: { cls: 'yousub-subbtn', text: '+', label: 'Subscribe to this channel' },
-    unsub: { cls: 'yousub-subbtn yousub-unsubbtn', text: '−', label: 'Unsubscribe from this channel' }
+    sub: { cls: 'yousub-subbtn', inlineCls: 'yousub-inlinebtn', text: '+', label: 'Subscribe to this channel' },
+    unsub: { cls: 'yousub-subbtn yousub-unsubbtn', inlineCls: 'yousub-inlinebtn yousub-unsubbtn', text: '−', label: 'Unsubscribe from this channel' }
   };
-  /** Watch pages and channel cards already have their own YouTube Subscribe button. */
-  const buttonAllowed = (card) => settings.showSubButton && !card.matches('ytd-video-owner-renderer') && !card.querySelector('ytd-subscribe-button-renderer');
+  /** Thumbnail cards hide their button when YouTube already offers its own; that button gets the inline copy instead. */
+  const buttonAllowed = (card, native = nativeSubButton(card)) => settings.showSubButton &&
+    !card.matches('ytd-video-owner-renderer') && !native;
+  /** YouTube's native button works on a single channel; collaboration cards use the thumbnail button. */
+  const inlineAllowed = (card, native = nativeSubButton(card)) => settings.showSubButton &&
+    !!native && !card.__yousubCh?.collab;
 
   /** Create a button. getCard() returns the card this button currently acts on. */
-  function makeButton(getCard) {
+  function makeButton(getCard, inline = false) {
     const btn = document.createElement('button');
     btn.type = 'button';
+    btn.__yousubInline = inline;
     // Do not let a button click also open the video
     for (const ev of ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) btn.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', (e) => {
@@ -413,7 +425,7 @@
     const d = BTN[kind];
     btn.__yousubKind = kind;
     btn.__yousubCard = card;
-    btn.className = d.cls + extraCls;
+    btn.className = (btn.__yousubInline ? d.inlineCls : d.cls) + extraCls;
     btn.title = d.label;
     btn.setAttribute('aria-label', d.label);
     const on = busy.has(card.__yousubCh?.key);
@@ -421,7 +433,7 @@
     btn.textContent = on ? '⏳' : d.text;
   }
 
-  /** The "+" button is attached to the card. The "−" button floats (see updateHover). */
+  /** The corner "+"/"−" button is attached to the card. The floating copy follows the cursor (see updateHover). */
   function placeButton(card, kind) {
     let btn = card.__yousubBtn;
     if (kind !== 'sub') {
@@ -436,12 +448,52 @@
     host.appendChild(btn);
   }
 
+  /** True when both buttons sit on the same text line (0-width in a hidden layout counts as yes). */
+  function sideBySide(a, b) {
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    if (!ra.width || !rb.width) return true;
+    return Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
+  }
+
+  /**
+   * Copy of the button placed directly to the right of YouTube's own
+   * Subscribe/Unsubscribe button, so the state can be changed in place.
+   */
+  function placeInline(card, kind) {
+    let btn = card.__yousubInlineBtn;
+    if (!kind && !btn) return; // Nothing placed yet and nothing to place
+    const anchor = nativeSubButton(card);
+    if (!kind || !anchor) {
+      if (btn) { btn.remove(); card.__yousubInlineBtn = null; }
+      const host = card.__yousubInlineHost;
+      if (host) {
+        host.parentElement?.classList.remove('yousub-native-row'); // Undo the one-line fallback
+        host.remove();
+        card.__yousubInlineHost = null;
+      }
+      return;
+    }
+    btn ||= card.__yousubInlineBtn = makeButton(() => card, true);
+    setKind(btn, kind, card);
+    const parent = anchor.parentElement; // Same row as YouTube's button
+    if (!parent) return;
+    const host = card.__yousubInlineHost ||= Object.assign(document.createElement('span'), { className: 'yousub-inline-host' });
+    if (host.parentElement !== parent || host.previousElementSibling !== anchor) {
+      parent.insertBefore(host, anchor.nextSibling);
+      // A block container would drop the copy below YouTube's button; lay that row out as one line instead
+      parent.classList.toggle('yousub-native-row', !sideBySide(host, anchor));
+    }
+    if (btn.parentElement !== host) host.appendChild(btn);
+  }
+
   function clearCard(card) {
     if (card.hasAttribute('data-yousub-state')) card.removeAttribute('data-yousub-state');
     if (card.hasAttribute('data-yousub-dup')) card.removeAttribute('data-yousub-dup');
     card.__yousubKind = null;
+    card.__yousubInlineKind = null;
     card.__yousubSig = '';
     placeButton(card, null);
+    placeInline(card, null);
   }
 
   /* ---------------- floating button while hovering over a video ----------------
@@ -504,7 +556,8 @@
     }
     const key = card?.__yousubCh?.key;
     if (lockKey && key !== lockKey) lockKey = null;
-    const kind = card?.__yousubKind;
+    // No floating copy when the inline button next to YouTube's own button is visible
+    const kind = card?.__yousubInlineKind ? null : card?.__yousubKind;
     if (!card || !kind || !card.isConnected || (lockKey && key === lockKey)) return hideFloat();
     const host = card.querySelector(THUMB_SEL) || card.firstElementChild || card;
     const r = host.getBoundingClientRect();
@@ -545,6 +598,7 @@
       if (card.hasAttribute('data-yousub-dup') !== dup) card.toggleAttribute('data-yousub-dup', dup);
       if (shown && !dup) marked++;
       placeButton(card, card.__yousubKind);
+      placeInline(card, card.__yousubInlineKind);
     };
 
     for (const card of (page || document).querySelectorAll(CARD_SEL)) {
@@ -565,7 +619,10 @@
       // Only offer unsubscribe for a confirmed subscribed ID, avoiding mismatches from duplicate names
       const canUnsub = state === 'sub' && (r.subCollab ? r.subCollab.length > 0 : subs.ids.has(r.id));
       const kind = state === 'unsub' ? 'sub' : canUnsub ? 'unsub' : null;
-      card.__yousubKind = kind && buttonAllowed(card) ? kind : null;
+      const native = nativeSubButton(card); // YouTube's own button, if this card has one
+      card.__yousubKind = kind && buttonAllowed(card, native) ? kind : null;
+      // No copy for previously unsubscribed channels (their native button already says Subscribe)
+      card.__yousubInlineKind = kind && state !== 'left' && inlineAllowed(card, native) ? kind : null;
       // Cache only confirmed channel IDs; reevaluate cards identified only by page text
       card.__yousubSig = r.id ? sig : '';
       done(card, parent);

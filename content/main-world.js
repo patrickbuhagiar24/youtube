@@ -541,7 +541,7 @@
     if (!event.isTrusted) return;
     const path = event.composedPath?.() || [event.target];
     const matches = (selector) => path.some((node) => node?.matches?.(selector) || node?.closest?.(selector));
-    if (matches('.yousub-subbtn')) return;
+    if (matches('.yousub-subbtn, .yousub-inlinebtn')) return;
     if (matches(NATIVE_SUB_BUTTON)) {
       nativeClickAt = Date.now();
       post('nativeRefreshRequested', { seq: ++nativeSequence });
