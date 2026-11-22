@@ -87,6 +87,20 @@ test('the content script keeps no fallback refresh tied to the native button', (
   assert.ok(!fs.existsSync('content/native-refresh.js'));
 });
 
+test('the identity lookup reads a tagged button element, not only its children', () => {
+  const source = fs.readFileSync('content/main-world.js', 'utf8');
+  // Regression: the content script tags the button element itself, and querySelectorAll never
+  // returns the element it is called on, so the lookup used to answer nothing at all.
+  assert.match(source, /if \(scope\.matches\?\.\(NATIVE_BTN_SEL\)\) found\.unshift\(scope\);/);
+  assert.match(source, /const NATIVE_BTN_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';/);
+  // It must fall back to channel data the page already has, so no click is left without an ID.
+  assert.match(source, /function pageChannelId\(\)/);
+  assert.match(source, /ytInitialPlayerResponse\?\.videoDetails\?\.channelId/);
+  // And a request without an ID is resolved from the page (video on /watch, URL on a channel page).
+  assert.match(source, /function pageHint\(hint = \{\}\)/);
+  assert.match(source, /ids = \[await resolveChannelId\(pageHint\(hint\)\)\]/);
+});
+
 test('an unknown login state is never reported as signed out', () => {
   const source = fs.readFileSync('content/main-world.js', 'utf8');
   // ytcfg may not exist yet when the page asks; !!undefined would have said "signed out"

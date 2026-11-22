@@ -272,6 +272,7 @@
 
   /** Check whether a value is a channel ID (UC...). */
   const isUC = (x) => /^UC[\w-]{10,}$/.test(x || '');
+  const NATIVE_BTN_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';
   const cmpName = (s) => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 
   /**
@@ -313,13 +314,25 @@
     throw new Error('Could not find this channel ID. Open the channel page and click Subscribe there.');
   }
 
+  /**
+   * Fill in what the caller did not send: on a watch page the video identifies the channel through
+   * the usual resolution (player / next), on a channel page the address bar does.
+   */
+  function pageHint(hint = {}) {
+    const out = { ...hint };
+    const path = location.pathname;
+    if (!out.vid && path === '/watch') out.vid = new URLSearchParams(location.search).get('v') || '';
+    if (!out.url && /^\/(@|channel\/|c\/|user\/)/.test(path)) out.url = path;
+    return out;
+  }
+
   /** Subscribe or unsubscribe one or more channels (collaborations). Return successful IDs. */
   async function changeSubscription(action, ids, hint = {}) {
     if (!SUB_PARAMS[action]) throw new Error('Unknown action');
     if (!(await waitCfg(5000))) throw new Error(NOT_READY);
     if (!cfg('LOGGED_IN')) throw new Error('Please sign in to YouTube first.');
     ids = (Array.isArray(ids) ? ids : [ids]).filter(isUC);
-    if (!ids.length) ids = [await resolveChannelId(hint)];
+    if (!ids.length) ids = [await resolveChannelId(pageHint(hint))];
     const done = [];
     let err = null;
     for (const id of ids) { // One at a time, like YouTube's Collaborators dialog
@@ -346,21 +359,63 @@
   function localSubscribeIdentity(local) {
     // The content script tags the element whose button is in use, so the right channel is read
     // even when the page shows several Subscribe buttons.
-    let root = document;
+    let root = null;
     if (local) {
-      try { root = [...document.querySelectorAll('[data-yousub-local]')].find((el) => el.getAttribute('data-yousub-local') === local) || document; } catch { /* */ }
+      try { root = [...document.querySelectorAll('[data-yousub-local]')].find((el) => el.getAttribute('data-yousub-local') === local) || null; } catch { /* */ }
     }
-    let out = null;
-    for (const el of root.querySelectorAll('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model')) {
-      walk(getData(el), (o) => {
-        const s = o.subscribeButton || o.buttonViewModel || o;
-        if (isUC(s?.channelId)) { out = { id: s.channelId }; return true; }
-        // Only the page-data side of the button; never walk the whole document.
-        return false;
+    const buttons = (scope) => {
+      const found = [...scope.querySelectorAll(NATIVE_BTN_SEL)];
+      // The tagged element is usually the button itself, which querySelectorAll never returns
+      if (scope.matches?.(NATIVE_BTN_SEL)) found.unshift(scope);
+      return found;
+    };
+    // 1) The button the copy belongs to
+    if (root) {
+      const id = firstChannelId(buttons(root).map(getData));
+      if (id) return { id };
+    }
+    // 2) The page itself (owner area, channel header, player response)
+    const pageId = pageChannelId();
+    if (pageId) return { id: pageId };
+    return null;
+  }
+
+  /** First channel ID found in page data, wherever the page happens to keep it. */
+  function firstChannelId(roots) {
+    for (const data of roots) {
+      if (!isObj(data)) continue;
+      let id = '';
+      walk(data, (o) => {
+        if (isUC(o.channelId)) id = o.channelId;
+        else if (isUC(o.targetId)) id = o.targetId;
+        else if (isUC(o.navigationEndpoint?.browseEndpoint?.browseId)) id = o.navigationEndpoint.browseEndpoint.browseId;
+        else if (isUC(o.endpoint?.browseEndpoint?.browseId)) id = o.endpoint.browseEndpoint.browseId;
+        else if (isUC(o.browseEndpoint?.browseId)) id = o.browseEndpoint.browseId;
+        return !!id;
       }, null, 4000);
-      if (out) break;
+      if (id) return id;
     }
-    return out;
+    return '';
+  }
+
+  /**
+   * Channel of the page currently shown: the watch page's video owner, or the channel page in the
+   * address bar. Read from data the page already has, so no request is made.
+   */
+  function pageChannelId() {
+    const fromPlayer = window.ytInitialPlayerResponse?.videoDetails?.channelId;
+    if (isUC(fromPlayer)) return fromPlayer;
+    for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer', 'ytd-c4-tabbed-header-renderer', '#owner']) {
+      const id = firstChannelId([...document.querySelectorAll(sel)].map(getData));
+      if (id) return id;
+    }
+    const path = location.pathname;
+    if (/^\/(@|channel\/|c\/|user\/)/.test(path)) {
+      const html = document.querySelector('link[rel="canonical"]')?.href || '';
+      const id = html.match(/\/channel\/(UC[\w-]{10,})/)?.[1] || '';
+      if (isUC(id)) return id;
+    }
+    return '';
   }
 
   /* ================================================================== */

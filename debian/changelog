@@ -1,3 +1,15 @@
+yousub (2.4.4) unstable; urgency=medium
+
+  * Fix "Could not find this channel ID" when clicking the copy beside
+    YouTube's own button: the tagged element is the button itself, and the page
+    world only searched its children, so it answered with no channel at all.
+  * Fall back to channel data the page already has (the watch page's video
+    owner, the channel page, the player response) before any request is made.
+  * Resolve a request sent without an ID from the page itself: the video on a
+    watch page, the address bar on a channel page.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.4.3) unstable; urgency=medium
 
   * Stop the +/− copy from moving: a row YouTube already lays out horizontally

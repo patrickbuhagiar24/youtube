@@ -218,7 +218,11 @@
       try {
         const info = await request('identityLocal', 15000, { local: ch.localTok || '' });
         if (info?.id) Object.assign(ch, { id: info.id, name: ch.name || info.name || '', url: ch.url || info.url || '' });
-      } catch { /* Fall back to the usual resolution below */ }
+        // The page world can still resolve the channel from the page itself (video or channel URL),
+        // so a click is never sent with nothing to work with.
+        else if (location.pathname === '/watch') ch.vid = new URLSearchParams(location.search).get('v') || '';
+        else ch.url = location.pathname;
+      } catch { /* The page world resolves it from the page instead */ }
     }
     const k = ch.key || ch.id || ch.url || (ch.__local ? 'local-button' : '');
     if (!k || busy.has(k)) return false;
