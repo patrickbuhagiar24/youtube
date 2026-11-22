@@ -118,6 +118,13 @@
   const SUBS_SKIP = new Set(['header', 'topbar', 'sidebar', 'frameworkUpdates', 'responseContext', 'microformat',
     'metadata', 'trackingParams', 'thumbnail', 'thumbnails', 'accessibility', 'menu', 'loggingDirectives']);
 
+  /** A name must be a real title: a bare @handle is not a name, and an ID is not a name. */
+  const isHandle = (t) => /^@\S+$/.test(String(t || '').trim());
+  const cleanTitle = (t) => {
+    const s = String(t || '').replace(/\s+/g, ' ').trim();
+    return !s || isHandle(s) || isUC(s) ? '' : s;
+  };
+
   function entryFromLockup(l) {
     const ch = findChannel(l) || {};
     const id = l.contentId?.startsWith?.('UC') ? l.contentId : /CHANNEL/.test(l.contentType || '') ? ch.id : null;
@@ -128,14 +135,15 @@
       for (const p of r.metadataParts || []) if (!handle && /^@\S+$/.test(p?.text?.content || '')) handle = p.text.content;
     }
     const url = ch.url || (handle ? '/' + handle : '');
-    return { id, title: meta?.title?.content || ch.name || '', url, handle: handle || (url.startsWith('/@') ? url.slice(1) : '') };
+    const title = cleanTitle(meta?.title?.content) || cleanTitle(ch.name);
+    return { id, title, url, handle: handle || (url.startsWith('/@') ? url.slice(1) : '') };
   }
 
   function entryFromRenderer(cr) {
     const url = cr.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '';
     let handle = url.startsWith('/@') ? url.slice(1) : '';
     if (!handle) for (const t of [textOf(cr.subscriberCountText), textOf(cr.videoCountText)]) if (/^@\S+$/.test(t)) handle = t;
-    return { id: cr.channelId, title: textOf(cr.title), url, handle };
+    return { id: cr.channelId, title: cleanTitle(textOf(cr.title)), url, handle };
   }
 
   /** Find continuationCommand / nextContinuationData within a node in any format. */
@@ -168,7 +176,10 @@
     const add = (e) => {
       if (!e?.id) return;
       if (!map.has(e.id)) added++;
-      map.set(e.id, { ...map.get(e.id), ...e });
+      // A later page may know the real title where an earlier one only had the @handle.
+      const prev = map.get(e.id);
+      const title = e.title || prev?.title || '';
+      map.set(e.id, { ...prev, ...e, title, name: title });
     };
     walk(root, (o) => {
       const cr = o.channelRenderer || o.gridChannelRenderer;
@@ -389,7 +400,7 @@
     if (id && fromPlayer?.channelId === id && fromPlayer.author) return String(fromPlayer.author);
     for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer', '#owner', 'ytd-c4-tabbed-header-renderer']) {
       for (const el of document.querySelectorAll(sel)) {
-        const shown = el.querySelector('#channel-name a, #channel-name #text, ytd-channel-name a, h1 yt-formatted-string, h1')?.textContent?.trim();
+        const shown = cleanTitle(el.querySelector('#channel-name a, #channel-name #text, ytd-channel-name a, h1 yt-formatted-string, h1')?.textContent);
         if (shown) return shown;
       }
     }
@@ -398,8 +409,8 @@
       for (const el of document.querySelectorAll(sel)) {
         let name = '';
         walk(getData(el), (o) => {
-          if (typeof o.text === 'string' && o.text.trim() && !/^UC[\w-]{10,}$/.test(o.text) && !/^https?:|^\//.test(o.text)) {
-            name = o.text.trim();
+          if (typeof o.text === 'string' && cleanTitle(o.text) && !/^https?:|^\//.test(o.text)) {
+            name = cleanTitle(o.text);
             return true;
           }
           if (o.channelId && o.channelId !== id) return true; // Never cross into another channel
@@ -483,11 +494,11 @@
       seen.add(o);
       if (o.adSlotRenderer || o.promotedSparklesWebRenderer) return { ad: true };
       if (typeof o.channelId === 'string' && o.channelId.startsWith('UC') && (o.title || o.subscriberCountText)) {
-        return { id: o.channelId, url: o.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '', name: textOf(o.title) };
+        return { id: o.channelId, url: o.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '', name: cleanTitle(textOf(o.title)) };
       }
       const ne = o.navigationEndpoint?.browseEndpoint;
       if (ne?.browseId?.startsWith?.('UC')) {
-        return { id: ne.browseId, url: ne.canonicalBaseUrl || '', name: typeof o.text === 'string' ? o.text : textOf(o.title) };
+        return { id: ne.browseId, url: ne.canonicalBaseUrl || '', name: cleanTitle(typeof o.text === 'string' ? o.text : textOf(o.title)) };
       }
       const be = o.browseEndpoint;
       if (be?.browseId?.startsWith?.('UC')) return { id: be.browseId, url: be.canonicalBaseUrl || '', name: '' };

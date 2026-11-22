@@ -123,11 +123,25 @@
   });
 
   /* ---------------- data subscription ---------------- */
+  /** Set when a stored entry had to drop a name; the list is then refreshed once in the background. */
+  let subsNeedsSync = false;
+
   function loadSubs(data) {
     subs.list = Array.isArray(data?.list) ? data.list : [];
     subs.ts = data?.ts || 0;
     subs.accountId = data?.accountId ?? null;
     subs.stats = data?.stats || null;
+    // Entries saved by an earlier version could hold an @handle as the title. The handle is kept,
+    // the title is cleared, and the next sync fills in the real name.
+    let fixed = 0;
+    for (const c of subs.list) {
+      if (c.title && !isName(c.title)) {
+        if (!c.handle && isHandle(c.title)) c.handle = c.title.slice(1);
+        c.title = '';
+        fixed++;
+      }
+    }
+    if (fixed) subsNeedsSync = true;
     rebuildSets();
   }
   function rebuildSets() {
@@ -145,6 +159,9 @@
   }, 500);
 
   const isSubKey = (k) => (k.startsWith('UC') ? subs.ids : subs.keys).has(k);
+  /** A channel name is a title, never a bare @handle or an ID (YouTube shows handles bylines). */
+  const isHandle = (t) => /^@\S+$/.test(String(t || '').trim());
+  const isName = (t) => { const s = String(t || '').trim(); return !!s && !isHandle(s) && !/^UC[\w-]{10,}$/.test(s); };
 
   /** Add or remove one channel from the stored subscription list. */
   function setSubscribed(id, subscribed, info) {
@@ -381,6 +398,7 @@
     const id = card.getAttribute('data-yousub-cid') || '';
     let url = card.getAttribute('data-yousub-url') || '';
     let name = card.getAttribute('data-yousub-name') || '';
+    if (!isName(name)) name = '';
     const keys = id ? [id] : [];
     const uk = keyFromPath(url); if (uk && uk !== id) keys.push(uk);
 
@@ -389,7 +407,14 @@
       const k = a && keyFromPath(a.getAttribute('href'));
       if (k) { keys.push(k); url ||= a.getAttribute('href'); name ||= a.textContent.trim(); }
     }
-    if (!name) name = card.querySelector(NAME_SEL)?.textContent.trim() || '';
+    if (!name || !isName(name)) {
+      // Card bylines render the @handle next to the title; only the title is a name.
+      const parts = [card.querySelector(NAME_SEL), ...card.querySelectorAll('#' + 'channel-name a, ytd-channel-name a, #channel-name #text, #channel-name')]
+        .map((n) => n?.textContent?.trim() || '')
+        .flatMap((t) => t.split(/\n|\s{2,}/).map((x) => x.trim()))
+        .filter(isName);
+      name = parts[0] || (isName(name) ? name : '');
+    }
     if (!keys.length && !name) return null;
 
     const subscribed = keys.some(isSubKey) || (!!name && subs.titles.has(norm(name)));
@@ -519,8 +544,13 @@
   function nameNearButton(el) {
     const scope = el.closest?.('ytd-video-owner-renderer, yt-page-header-renderer, #owner, #page-header') ||
       el.parentElement?.parentElement;
+    const link = scope?.querySelector?.('#channel-name a, ytd-channel-name a, #owner a[href^="/@"], #owner a[href^="/channel/"]');
+    const title = link?.textContent?.trim();
+    if (isName(title)) return title;
+    // A byline can hold the @handle in the same text node: keep only the title lines.
     const hit = scope?.querySelector?.(NAME_SEL) || el.closest?.('ytd-video-owner-renderer, #owner')?.querySelector?.('#channel-name, ytd-channel-name, h1');
-    return hit?.textContent?.trim() || '';
+    const parts = String(hit?.textContent || '').split(/\n|\s{2,}/).map((t) => t.trim()).filter(isName);
+    return parts[0] || '';
   }
 
   /** State reported by YouTube's own button, used where the card itself is not marked. */
@@ -947,6 +977,9 @@
     settings = { ...DEFAULTS, ...yousubSettings };
     loadSubs(yousubSubs);
     initialized = true;
+    // A stored entry lost its name (it held an @handle): refresh the list once so the real title
+    // comes back, without waiting for the user to press anything.
+    if (subsNeedsSync && subs.ts) setTimeout(safe(doSync), 3000);
     for (const change of earlyChanges.splice(0)) updateSub(change.id, change.subscribed, change.info);
     reconcile();
     applySettings();

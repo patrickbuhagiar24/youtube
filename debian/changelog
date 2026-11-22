@@ -1,3 +1,18 @@
+yousub (2.4.6) unstable; urgency=medium
+
+  * Never use a bare @handle as a channel name: YouTube renders the handle in
+    the byline of some cards, so the name shown for a subscribed channel could
+    read "@name" instead of the channel's title.
+  * Read only the title line of a byline (card, video owner area, channel
+    header) and ignore names that are handles or channel IDs.
+  * Drop handles stored as names in an existing list, keep the handle for
+    matching, and refresh the list once in the background so the real titles
+    come back on their own.
+  * A later page of the channel list can now improve a title instead of keeping
+    an older, incomplete one.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.4.5) unstable; urgency=medium
 
   * Use the exact channel name everywhere: for a subscribed channel the name

@@ -315,6 +315,31 @@ test('a card without channel data is resolved from its own button, not sent with
   assert.match(content, /if \(!ch\.id && !targetHasId\(ch\)\) \{/);
 });
 
+test('a bare @handle is never used as a channel name', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // YouTube renders the byline as "@handle" for some cards: that is not the channel's name.
+  assert.match(content, /const isHandle = \(t\) => \/\^@\\S\+\$\/\.test\(String\(t \|\| ''\)\.trim\(\)\);/);
+  assert.match(content, /const isName = \(t\) =>/);
+  assert.match(content, /if \(!isName\(name\)\) name = '';/);
+  assert.match(main, /const cleanTitle = \(t\) =>/);
+  assert.match(main, /return !s \|\| isHandle\(s\) \|\| isUC\(s\) \? '' : s;/);
+  // A byline is split so only the title line can be the name.
+  assert.match(content, /const parts = String\(hit\?\.textContent \|\| ''\)\.split/);
+});
+
+test('entries saved with a handle as their name repair themselves', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // The handle is kept, the wrong title is dropped, and one background refresh brings the real name.
+  assert.match(content, /if \(!c\.handle && isHandle\(c\.title\)\) c\.handle = c\.title\.slice\(1\);/);
+  assert.match(content, /c\.title = '';/);
+  assert.match(content, /if \(fixed\) subsNeedsSync = true;/);
+  assert.match(content, /if \(subsNeedsSync && subs\.ts\) setTimeout\(safe\(doSync\), 3000\);/);
+  // And a later page of the list may improve a title instead of keeping the old one.
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  assert.match(main, /const title = e\.title \|\| prev\?\.title \|\| '';/);
+});
+
 test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);
