@@ -62,7 +62,7 @@ async function renderFromStorage() {
 function render(state) {
   if (!state) {
     // Keep the stored count, but say what the page state is (the list refreshes by itself).
-    $('status').textContent = tabId === null ? 'Open youtube.com' : 'Reload the YouTube page (F5)';
+    $('status').textContent = tabId === null ? 'Open youtube.com' : 'Waiting for this YouTube tab…';
     return;
   }
   renderSummary(state);

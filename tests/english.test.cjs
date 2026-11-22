@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.3.5');
+  assert.equal(manifest.version, '2.3.6');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -99,6 +99,24 @@ test('the side panel removes the saved-configuration button and its wiring', () 
   assert.ok(!fs.existsSync('config-store.js'), 'the folder-handle store existed only for that button');
   const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.doesNotMatch(build, /config-store\.js/);
+});
+
+test('no message asks the user to press F5 or to reload by hand', () => {
+  const files = ['content/content.js', 'content/main-world.js', 'popup/popup.js', 'popup/popup.html', 'README.md'];
+  for (const file of files) {
+    const text = fs.readFileSync(file, 'utf8');
+    // Only what the user can actually see: quoted UI strings, not developer code comments.
+    const shown = [...text.matchAll(/'([^'\n]*)'|`([^`]*)`/g)].map((m) => m[1] ?? m[2]).join('\n');
+    assert.doesNotMatch(shown, /\bF5\b/, `${file} must not show F5 to the user`);
+    assert.doesNotMatch(shown, /reload (the|this) (page|tab)/i, `${file} must not tell the user to reload by hand`);
+  }
+  // Recovery is automatic instead: a back/forward-cache restore reloads once, and a failed
+  // list refresh retries on its own while the stored list stays usable.
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  assert.match(content, /if \(event\.persisted\) location\.reload\(\)/);
+  assert.match(content, /syncRetryTimer = setTimeout\(safe\(\(\) => \{ if \(extAlive && !syncing && subs\.loggedIn !== false\) doSync\(\); \}\), 20000\)/);
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  assert.match(main, /YouTube did not finish loading this page\. Go back to YouTube and try again\./);
 });
 
 test('the side panel has no manual refresh or Drive sync buttons', () => {

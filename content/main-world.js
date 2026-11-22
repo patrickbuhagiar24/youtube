@@ -48,6 +48,8 @@
     }
     return false;
   }
+  /** The page data is missing (for example restored from the back/forward cache). */
+  const NOT_READY = 'YouTube did not finish loading this page. Go back to YouTube and try again.';
   function getCookie(name) {
     const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
     return m ? decodeURIComponent(m[1]) : null;
@@ -194,7 +196,7 @@
   }
 
   async function fetchSubscriptions() {
-    if (!(await waitCfg())) throw new Error('The YouTube page is not ready. Reload it (F5), then try again.');
+    if (!(await waitCfg())) throw new Error(NOT_READY);
     const info = accountInfo();
     if (!info.loggedIn) return { ...info, list: [] };
 
@@ -313,7 +315,7 @@
   /** Subscribe or unsubscribe one or more channels (collaborations). Return successful IDs. */
   async function changeSubscription(action, ids, hint = {}) {
     if (!SUB_PARAMS[action]) throw new Error('Unknown action');
-    if (!(await waitCfg(5000))) throw new Error('The YouTube page is not ready. Reload it (F5), then try again.');
+    if (!(await waitCfg(5000))) throw new Error(NOT_READY);
     if (!cfg('LOGGED_IN')) throw new Error('Please sign in to YouTube first.');
     ids = (Array.isArray(ids) ? ids : [ids]).filter(isUC);
     if (!ids.length) ids = [await resolveChannelId(hint)];

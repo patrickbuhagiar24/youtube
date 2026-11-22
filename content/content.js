@@ -39,7 +39,7 @@
   let settings = { ...DEFAULTS };
   const subs = { list: [], ids: new Set(), keys: new Set(), titles: new Set(), ts: 0, accountId: null, loggedIn: null, stats: null };
   let channelPage = null; // { key, name, subscribed }
-  let syncing = false, syncProgress = 0;
+  let syncing = false, syncProgress = 0, syncRetryTimer = 0;
   let initialized = false;
   const earlyChanges = [];
   let changesDuringSync = null;
@@ -304,6 +304,10 @@
       lastError = !list.length ? 'You are not subscribed to any channels.' : r.stats?.note || '';
     } catch (e) {
       lastError = friendlyError(e);
+      // The stored list is still valid. Retry quietly in 20 seconds; the page is never
+      // reloaded for this, and the user is not asked to do anything.
+      clearTimeout(syncRetryTimer);
+      syncRetryTimer = setTimeout(safe(() => { if (extAlive && !syncing && subs.loggedIn !== false) doSync(); }), 20000);
     } finally {
       changesDuringSync = null;
       syncing = false;
@@ -793,6 +797,20 @@
     document.documentElement.addEventListener('mouseleave', () => { pointer = null; leave(); });
     window.addEventListener('blur', () => { pointer = null; leave(); });
     document.addEventListener('yt-navigate-finish', () => scheduleScan(true));
+
+    // Back/forward cache: Chrome restores the document without rerunning the page scripts, so
+    // YouTube's own data is missing. Reload the page once automatically (never in a loop).
+    const pageRestored = (event) => {
+      if (event.persisted) location.reload();
+    };
+    window.addEventListener('pageshow', pageRestored);
+    // If that reload fails to produce page data within 30 seconds, explain it in one line.
+    setTimeout(safe(() => {
+      if (initialized && subs.loggedIn === null && !document.querySelector('ytd-app')) {
+        lastError = 'YouTube is not responding on this tab. Open youtube.com in a new tab and try again.';
+        notifyState();
+      }
+    }), 30000);
 
     let hello;
     try { hello = await request('hello', 30000); } catch { hello = { loggedIn: null }; }
