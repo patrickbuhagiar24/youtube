@@ -135,7 +135,7 @@ Run `diagnostics.js` in the YouTube tab: press F12 (Developer tools) → **Conso
 Yousub adds **no keyboard shortcuts or hotkeys** — there is no `commands` entry in the manifest and no key listener in the page or in the side panel. Everything is a mouse/touch action:
 
 - Click the `+` / `−` in a thumbnail corner (the `−` follows the cursor when hovering a subscribed video).
-- Click the `+` / `−` placed to the right of YouTube's own Subscribe button.
+- Click the `+` / `−` placed to the right of YouTube's own Subscribe button, including the one on a watch page (video owner area) and on a channel header.
 - Toggle the extension, change modes and colours, or pick the Drive manifest in the side panel.
 
 YouTube's own shortcuts (space, `k`, `j`, `l`, `f`, `m`, `c`, `shift+n`, etc.) keep working untouched.

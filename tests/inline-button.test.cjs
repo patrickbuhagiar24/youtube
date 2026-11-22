@@ -208,6 +208,31 @@ test('a previously unsubscribed channel is marked yellow only, without any butto
   assert.match(css, /\[data-yousub-state="left"\] \.yousub-inline-host \{ display: none !important; \}/);
 });
 
+test('the copy also appears where YouTube\'s button is outside the video cards', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // The video owner area and the channel header host YouTube's button but are not cards.
+  assert.match(content, /const OWNER_SEL = 'ytd-video-owner-renderer, yt-page-header-renderer'/);
+  assert.match(content, /querySelectorAll\(OWNER_SEL\)/);
+  // Their state comes from YouTube's own button, so no channel data is needed to place the copy.
+  assert.match(content, /function cardSubscribedState/);
+  assert.match(content, /typeof data\?\.subscribed === 'boolean'/);
+  // A click there resolves the channel from that very button in the page world.
+  assert.match(main, /identityLocal/);
+  assert.match(main, /function localSubscribeIdentity/);
+  assert.match(main, /data-yousub-local/);
+  // Nothing is bound to or clicked on that button: it is only read.
+  assert.doesNotMatch(main, /nativeButtonClicked|nativeSubscribeClick/);
+});
+
+test('the channel header is scanned as one channel, not as a video', () => {
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // A header has no video ID, so it must not join the ad check or the video map.
+  assert.match(main, /const singleChannel = el\.localName === 'yt-page-header-renderer'/);
+  // Its own data shape is read first: description links would otherwise be found instead.
+  assert.match(main, /function ownerChannel/);
+});
+
 test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);

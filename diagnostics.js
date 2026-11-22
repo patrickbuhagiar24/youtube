@@ -35,6 +35,16 @@
   add('4. page_corner_buttons', document.querySelectorAll('.yousub-subbtn').length);
   add('5. page_inline_buttons', document.querySelectorAll('.yousub-inlinebtn').length);
   add('6. page_native_buttons', document.querySelectorAll('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model').length);
+  // The video owner area and channel header are not video cards; they get the copy on their own.
+  const owners = document.querySelectorAll('ytd-video-owner-renderer, yt-page-header-renderer');
+  add('6b. page_owner_areas', owners.length);
+  add('6c. page_owner_inline', [...owners].filter((o) => o.querySelector('.yousub-inlinebtn')).length);
+  add('6d. page_owner_row', [...owners].map((o) => {
+    const b = o.querySelector('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model');
+    if (!b) return '-';
+    const host = o.querySelector('.yousub-inline-host');
+    return host ? (host.previousElementSibling === b ? 'beside' : 'moved') : 'none';
+  }).join(',') || '-');
 
   const kinds = {};
   for (const element of document.querySelectorAll('[data-yousub-state]')) {

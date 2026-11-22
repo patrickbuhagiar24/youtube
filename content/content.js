@@ -24,6 +24,8 @@
   const CHANNEL_LINK = 'a[href^="/@"], a[href^="/channel/"], a[href^="/c/"], a[href^="/user/"]';
   // YouTube's own subscribe/unsubscribe button (classic renderer and newer view models)
   const NATIVE_SUB_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';
+  // Elements that host YouTube's Subscribe button without being a video card
+  const OWNER_SEL = 'ytd-video-owner-renderer, yt-page-header-renderer';
   /** YouTube's subscribe/unsubscribe button inside a card, or null when the card has none. */
   const nativeSubButton = (card) => card?.querySelector?.(NATIVE_SUB_SEL) || null;
   /** Where the copy goes: next to YouTube's button element itself, so no inner wrapper can clip it. */
@@ -211,7 +213,15 @@
    * Collaborations: subscribe to all missing collaborators, or unsubscribe from all subscribed collaborators.
    */
   async function changeSub(ch, action = 'subscribe') {
-    const k = ch.key || ch.id || ch.url;
+    // The channel header carries no channel data of its own in some layouts. Ask the MAIN world to
+    // read it from that exact button (yt-subscribe-button), so the click still works.
+    if (ch.__local && !ch.id) {
+      try {
+        const info = await request('identityLocal', 15000, { local: ch.localTok || '' });
+        if (info?.id) Object.assign(ch, { id: info.id, name: ch.name || info.name || '', url: ch.url || info.url || '' });
+      } catch { /* Fall back to the usual resolution below */ }
+    }
+    const k = ch.key || ch.id || ch.url || (ch.__local ? 'local-button' : '');
     if (!k || busy.has(k)) return false;
     const sub = action === 'subscribe';
     const group = sub ? ch.collab : ch.subCollab;
@@ -410,6 +420,8 @@
   /** YouTube's native button works on a single channel; collaboration cards use the thumbnail button. */
   const inlineAllowed = (card, native = nativeSubButton(card)) => settings.showSubButton &&
     !!native && !card.__yousubCh?.collab;
+  /** Markers only make sense once the list is known, but the inline copy does not depend on it. */
+  const listReady = () => settings.enabled && subs.loggedIn !== false && subs.ts > 0;
 
   /** Create a button. getCard() returns the card this button currently acts on. */
   function makeButton(getCard, inline = false) {
@@ -454,6 +466,17 @@
     const host = card.querySelector(THUMB_SEL) || card.firstElementChild || card;
     host.classList.add('yousub-host');
     host.appendChild(btn);
+  }
+
+  /** State reported by YouTube's own button, used where the card itself is not marked. */
+  function cardSubscribedState(card) {
+    const el = nativeSubButton(card);
+    const data = el?.data || el?.__data?.data || el?.polymerController?.data || el?.inst?.data;
+    if (typeof data?.subscribed === 'boolean') return data.subscribed;
+    // Without page data, infer from the label YouTube renders ("Subscribe" vs "Subscribed").
+    const label = (el?.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!label) return false;
+    return !/^(subscribe|subscri|abon|s\'abonner|inscri|登録|구독|订阅|訂閱|suscrib|iscriv|assinar|abone|inscreva)/.test(label);
   }
 
   /** True when both buttons sit on one text line and neither is clipped by the row it lives in. */
@@ -641,6 +664,28 @@
       // Cache only confirmed channel IDs; reevaluate cards identified only by page text
       card.__yousubSig = r.id ? sig : '';
       done(card, parent);
+    }
+
+    // YouTube's own Subscribe button is also outside the video cards (video owner area, channel
+    // header). Those elements are not markers, but they can still carry the inline copy.
+    const ownerReady = listReady();
+    for (const el of (page || document).querySelectorAll(OWNER_SEL)) {
+      const native = nativeSubButton(el);
+      // The video owner area is also a card: the loop above usually decided already, and the yellow
+      // "Pernah unsubscribe" state must stay color-only. Otherwise YouTube's own button decides.
+      if (el.__yousubInlineKind || el.getAttribute('data-yousub-state') === 'left' || !native) {
+        if (!el.__yousubInlineKind) placeInline(el, null);
+        continue;
+      }
+      if (!ownerReady) { el.__yousubInlineKind = null; placeInline(el, null); continue; }
+      // The native button itself says which state it is in, so no channel data is needed here.
+      const kind = cardSubscribedState(el) ? 'unsub' : 'sub';
+      // Tag this element so a click can resolve the channel from its own button (see identityLocal)
+      const tok = el.__yousubLocal ||= 'l' + Math.random().toString(36).slice(2, 10);
+      if (el.getAttribute('data-yousub-local') !== tok) el.setAttribute('data-yousub-local', tok);
+      el.__yousubCh ||= { key: 'local:' + tok, id: '', name: '', url: '', __local: true, localTok: tok };
+      el.__yousubInlineKind = inlineAllowed(el, native) ? kind : null;
+      placeInline(el, el.__yousubInlineKind);
     }
 
     fixGridColumns(grids, ready && !!settings.sortUnsub);

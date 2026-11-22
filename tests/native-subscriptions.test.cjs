@@ -70,7 +70,10 @@ test('the native Subscribe button gets no click, dialog, or polling hooks', () =
   assert.doesNotMatch(source, /CONFIRM_BUTTON|confirm-dialog-renderer/);
   assert.doesNotMatch(source, /nativeButtonChanged|nativeRefreshRequested|scanButtons|getElementsByTagName/);
   assert.doesNotMatch(source, /addEventListener\('click'/);
-  assert.doesNotMatch(source, /subscribe-button-renderer|yt-subscribe-button-view-model/);
+  assert.doesNotMatch(source, /CONFIRM_BUTTON|nativeButtonChanged|nativeRefreshRequested|scanButtons/);
+  // Its element may only be read (see localSubscribeIdentity): never hooked or clicked here.
+  assert.doesNotMatch(source, /(subscribe-button-renderer|yt-subscribe-button-view-model)[^\n]*addEventListener/);
+  assert.doesNotMatch(source, /\.click\(\)/);
   // YouTube's button is not polled: the safety-net interval only rescans cards.
   assert.match(source, /setInterval\(\(\) => \{ if \(!document\.hidden\) scan\(\); \}, 10000\)/);
 });

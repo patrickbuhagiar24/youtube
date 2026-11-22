@@ -338,6 +338,31 @@
     return done;
   }
 
+  /**
+   * Channel behind the Subscribe button this page is showing, read from the button's own data
+   * (`yt-subscribe-button`). Used where the element has no channel of its own (video owner area,
+   * channel header) and from there resolved like any other unconfirmed channel.
+   */
+  function localSubscribeIdentity(local) {
+    // The content script tags the element whose button is in use, so the right channel is read
+    // even when the page shows several Subscribe buttons.
+    let root = document;
+    if (local) {
+      try { root = [...document.querySelectorAll('[data-yousub-local]')].find((el) => el.getAttribute('data-yousub-local') === local) || document; } catch { /* */ }
+    }
+    let out = null;
+    for (const el of root.querySelectorAll('ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model')) {
+      walk(getData(el), (o) => {
+        const s = o.subscribeButton || o.buttonViewModel || o;
+        if (isUC(s?.channelId)) { out = { id: s.channelId }; return true; }
+        // Only the page-data side of the button; never walk the whole document.
+        return false;
+      }, null, 4000);
+      if (out) break;
+    }
+    return out;
+  }
+
   /* ================================================================== */
   /* Channel owning each card                                           */
   /* ================================================================== */
@@ -351,6 +376,17 @@
 
   function getData(el) {
     try { return el.data || el.__data?.data || el.polymerController?.data || el.inst?.data || null; } catch { return null; }
+  }
+
+  /**
+   * Channel of the video owner area. The owner data can be very deep (description, links), so read
+   * the known shape first and only fall back to a bounded search.
+   */
+  function ownerChannel(d) {
+    const v = d.videoOwnerRenderer || d.videoOwner || d;
+    let id = '';
+    walk(v, (x) => { const b = x.navigationEndpoint?.browseEndpoint?.browseId; if (isUC(b)) id = b; return !!id; }, null, 3000);
+    return id ? { id, name: textOf(v.title) || '' } : null;
   }
 
   /** First channel in the data, depth-first in original key order. */
@@ -454,7 +490,9 @@
   }
 
   const CONTAINERS = new Set(['ytd-watch-next-secondary-results-renderer', 'ytd-item-section-renderer',
-    'ytd-rich-grid-renderer', 'ytd-section-list-renderer', 'ytd-playlist-panel-renderer', 'ytd-watch-flexy']);
+    'ytd-rich-grid-renderer', 'ytd-section-list-renderer', 'ytd-playlist-panel-renderer', 'ytd-watch-flexy',
+    // Channel header: it carries YouTube's Subscribe button but is not a card.
+    'yt-page-header-renderer']);
   const SCAN_SEL = [...CONTAINERS, CARD_SEL].join(',');
 
   function scan() {
@@ -464,19 +502,22 @@
 
     // 1) Index changed container data (watch sidebar, home grid, search results)
     for (const c of containers) {
-      const d = getData(c) || (c.localName === 'ytd-watch-flexy' ? c.__data?.watchNextData || c.watchNextData : null);
+      const d = getData(c) || (c.localName === 'ytd-watch-flexy' ? c.__data?.watchNextData || c.watchNextData : null) ||
+        (c.localName === 'yt-page-header-renderer' ? c.__data?.pageHeaderData || c.pageHeaderData : null);
       if (d && containerCache.get(c) !== d) { containerCache.set(c, d); try { indexData(d); } catch { /* */ } }
     }
 
     // 2) Channel owning each card
     for (const el of cards) {
       const d = getData(el);
-      const vid = videoIdOf(el, d);
+      // A channel header describes one channel, not a video: no ad or video lookup.
+      const singleChannel = el.localName === 'yt-page-header-renderer';
+      const vid = singleChannel ? '' : videoIdOf(el, d);
       const prev = dataCache.get(el);
       if (prev && prev.d === d && prev.vid === vid && (prev.resolved || prev.mv === mapVersion)) continue;
 
-      let ch = d ? findChannel(d) : null;
-      if (ch?.ad) {
+      let ch = (d && (el.localName === 'ytd-video-owner-renderer' ? ownerChannel(d) : null)) || (d ? findChannel(d) : null);
+      if (ch?.ad && !singleChannel) {
         dataCache.set(el, { d, vid, mv: mapVersion, resolved: true });
         setAttr(el, 'data-yousub-ad', '1');
         el.setAttribute('data-yousub-v', String(++ver));
@@ -600,6 +641,8 @@
       post('hello', { reqId, ...accountInfo(), ...(configured ? {} : { loggedIn: null }) });
     } else if (type === 'sync') {
       try { post('subs', { reqId, ...(await fetchSubscriptions()) }); } catch (err) { post('subsError', { reqId, error: String(err?.message || err) }); }
+    } else if (type === 'identityLocal') {
+      post('identityLocal', { reqId, ...(localSubscribeIdentity(e.data.local) || {}) });
     } else if (type === 'subscription') {
       try { post('subscriptionDone', { reqId, ids: await changeSubscription(e.data.action, e.data.ids, { url: e.data.url, vid: e.data.vid, name: e.data.name }) }); } catch (err) { post('subsError', { reqId, error: String(err?.message || err) }); }
     } else if (type === 'rescan') {
