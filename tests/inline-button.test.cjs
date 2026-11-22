@@ -13,6 +13,7 @@ function harness({ subbed = false, left = false } = {}) {
   const pending = new Map();
   let nextId = 0;
 
+  const boxes = { host: null };
   const make = (tag, attrs = {}) => {
     const el = {
       tagName: tag.toUpperCase(), localName: tag, children: [], parentElement: null, style: {},
@@ -39,11 +40,22 @@ function harness({ subbed = false, left = false } = {}) {
       contains(node) { for (let n = node; n; n = n.parentElement) if (n === this) return true; return false; },
       querySelector() { return null; }, querySelectorAll() { return []; },
       addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); },
-      getBoundingClientRect() { return { left: 0, top: 0, bottom: 0, width: 0, height: 0 }; },
+      // Boxes are set by the harness so a test can simulate YouTube layouts (no box = zero width).
+      getBoundingClientRect() {
+        const box = (String(this.className).includes('yousub-inline-host') && boxes.host) || this.__box;
+        if (!box) return { left: 0, top: 0, bottom: 0, width: 0, height: 0 };
+        return { ...box, width: box.right - box.left, height: box.bottom - box.top };
+      },
+      get previousElementSibling() {
+        const at = this.parentElement?.children.indexOf(this) ?? -1;
+        return at > 0 ? this.parentElement.children[at - 1] : null;
+      },
       matches() { return false; }, closest() { return null; },
       getClientRects() { return []; }
     };
     const classes = new Set();
+    el.__box = { left: 0, top: 0, right: 100, bottom: 40 };
+    if (attrs.className === 'yousub-inline-host' && boxes.host) el.__box = boxes.host;
     el.classList = {
       add(...names) { names.forEach((n) => classes.add(n)); },
       remove(...names) { names.forEach((n) => classes.delete(n)); },
@@ -124,7 +136,7 @@ function harness({ subbed = false, left = false } = {}) {
     for (let i = 0; i < rounds; i++) { await new Promise((resolve) => setImmediate(resolve)); flush(); }
     await new Promise((resolve) => setImmediate(resolve));
   };
-  return { card, row, thumb, nativeBtn, document, messages, pending, flush, run };
+  return { card, row, thumb, nativeBtn, document, messages, pending, flush, run, __boxes: boxes };
 }
 
 test('the copy is placed directly after YouTube\'s own subscribe button', async () => {
@@ -160,6 +172,29 @@ test('clicks on the copy never reach YouTube, so the video does not open', async
   assert.equal(h.messages.some((m) => m.type === 'subscription'), true);
 });
 
+test('the copy lands beside YouTube\'s own button element, never inside it', async () => {
+  const h = harness();
+  await h.run();
+  const host = h.row.children.find((el) => String(el.className).includes('yousub-inline-host'));
+  assert.ok(host);
+  assert.equal(h.nativeBtn.contains(host), false, 'the copy must not be nested inside YouTube\'s button');
+  assert.equal(host.previousElementSibling, h.nativeBtn, 'the copy must come right after it');
+});
+
+test('a row that would clip the copy is laid out on one line instead', async () => {
+  const h = harness();
+  // The copy starts at x=90 but the row ends at x=100: YouTube's wrapper would clip it.
+  h.__boxes.host = { left: 90, top: 0, right: 120, bottom: 30 };
+  await h.run();
+  const row = h.row;
+  assert.equal(row.classList.contains('yousub-native-row'), true, 'the row must switch to the one-line fallback');
+  assert.equal(row.children.indexOf(h.nativeBtn) + 1, row.children.indexOf(h.row.children.find((el) => String(el.className).includes('yousub-inline-host'))));
+  // CSS keeps that fallback from clipping the glyph.
+  const css = fs.readFileSync('content/content.css', 'utf8');
+  assert.match(css, /\.yousub-native-row \{[^}]*overflow: visible !important;/);
+  assert.match(css, /\.yousub-native-row \{[^}]*max-height: none !important;/);
+});
+
 test('a previously unsubscribed channel is marked yellow only, without any button', async () => {
   const h = harness({ left: true });
   await h.run();
@@ -177,4 +212,22 @@ test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);
   assert.match(css, /\.yousub-inline-host/);
+  // The +/− strokes are -absolute- inside the button, so the button is the containing block,
+  // and neither the glyph nor the button can be blanked or hidden by YouTube's rules.
+  const button = css.slice(css.indexOf('.yousub-inlinebtn {'), css.indexOf('.yousub-inlinebtn::before'));
+  assert.match(button, /position: relative !important;/);
+  assert.match(button, /visibility: visible !important;/);
+  assert.match(button, /background: var\(--yousub-color\) !important;/);
+  assert.match(css, /\.yousub-inlinebtn::before,\s*\n\.yousub-inlinebtn::after \{[^}]*position: absolute;/);
+  assert.match(css, /background: #fff !important;/);
+  assert.match(css, /\.yousub-inlinebtn\.yousub-unsubbtn::after \{ display: none; \}/);
+});
+
+test('there are no keyboard shortcuts or hotkeys', () => {
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.equal('commands' in manifest, false);
+  for (const file of ['content/content.js', 'content/main-world.js', 'popup/popup.js']) {
+    const source = fs.readFileSync(file, 'utf8');
+    assert.doesNotMatch(source, /addEventListener\('key(down|up|press)'|accessKey|KeyboardEvent|event\.key\b/, `${file} must not bind a keyboard shortcut`);
+  }
 });

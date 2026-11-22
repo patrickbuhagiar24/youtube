@@ -154,16 +154,24 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   flex: 0 0 auto;
 }
 .yousub-inlinebtn {
+  /* The strokes are positioned against the button, so it must be their containing block */
+  position: relative !important;
+  display: inline-block !important;
+  flex: 0 0 auto;
+  visibility: visible !important;
+  opacity: 1 !important;
   box-sizing: border-box;
   width: 30px;
   height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   margin: 0;
   padding: 0;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: var(--yousub-color);
+  background: var(--yousub-color) !important;
   /* Hide the +/− text and draw the strokes with CSS for exact, font-independent centering */
-  color: transparent;
+  color: transparent !important;
   font-size: 0;
   line-height: 0;
   overflow: hidden;
@@ -177,11 +185,13 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   position: absolute;
   inset: 0;
   margin: auto;
-  background: #fff;
+  width: 13px;
+  height: 3px;
   border-radius: 2px;
+  background: #fff !important; /* YouTube's own button styles must not blank the stroke */
+  pointer-events: none;
 }
-.yousub-inlinebtn::before { width: 13px; height: 3px; } /* Horizontal stroke */
-.yousub-inlinebtn::after { width: 3px; height: 13px; }  /* Vertical stroke */
+.yousub-inlinebtn::after { width: 3px; height: 13px; }  /* Vertical stroke turns the bar into a plus */
 .yousub-inlinebtn:hover { transform: scale(1.12); filter: brightness(1.1); }
 .yousub-inlinebtn:active { transform: scale(.95); }
 /* Processing: a spinner, also exactly centered */
@@ -197,14 +207,20 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   animation: yousub-spin .8s linear infinite;
 }
 .yousub-inlinebtn:disabled::after { display: none; }
-/* Fallback when YouTube's container is a block: lay the native button and the copy on one line */
+/* Fallback when YouTube's container is a block or too narrow: lay the button and the copy on one line */
 .yousub-native-row {
   display: flex !important;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  overflow: visible !important; /* Never clip the +/− away */
+  height: auto !important;
+  max-height: none !important;
+  min-width: calc(30px + 8px); /* Room for the copy even inside a narrow wrapper */
 }
 .yousub-native-row > .yousub-inline-host { margin-left: 0; }
+/* A wrapper that still hides or clips its children must not hide the copy */
+.yousub-native-row > .yousub-inline-host .yousub-inlinebtn { clip-path: none !important; }
 /* Blue unsubscribe (−) button */
 .yousub-inlinebtn.yousub-unsubbtn { background: var(--yousub-unsub-btn, #1e88e5); }
 .yousub-inlinebtn.yousub-unsubbtn::after { display: none; } /* Horizontal stroke only = minus sign */

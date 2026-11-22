@@ -70,7 +70,7 @@ cat /usr/share/yousub/yousub-id.txt
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until you choose a configuration manifest. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to pick the JSON manifest. Once a manifest is loaded the row reports `✅ Configured`, the button turns into 🔁 (**Replace the Google Drive configuration**), and a 🔄 button appears to sync immediately.
+Google Drive sync is disabled until you choose a configuration manifest. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to pick the JSON manifest. Once a manifest is loaded the row reports `✅ Configured` and the button turns into 🔁 (**Replace the Google Drive configuration**); syncing itself is automatic.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
@@ -106,7 +106,7 @@ Only one sync runs at a time. It signs in with the service account, reads `YouTu
 
 - **Status line**: `❌ Not configured` until a manifest is loaded, then `✅ Configured · <service account email>` plus the file name when known, or `⚠️ needs attention` with the error.
 - **📁 / 🔁 button**: 📁 opens a configuration manifest; once configured it becomes 🔁 and replaces the saved configuration.
-- **🔄 button**: appears only when configured and syncs immediately.
+- **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress.
 
 ### Subscribed channel count
 
@@ -125,6 +125,16 @@ Marking is controlled by `Display mode` and the two colours:
 - **Not subscribed** (`unsub`, default red `#ff3d00`): coloured outline plus a `+` button in the thumbnail corner, and the same `+` to the right of YouTube's own Subscribe button.
 - **Previously unsubscribed** (`left`, default yellow `#ffd400`): a channel in the unsubscribe history that is no longer in your subscription list. It gets the yellow outline only — no `+`, `−`, or inline button — and sorts after subscribed channels.
 - **Subscribed** (`sub`): no outline in `highlight` mode; dimmed in `dim` mode and hidden in `only-unsub` mode.
+
+## Keyboard
+
+Yousub adds **no keyboard shortcuts or hotkeys** — there is no `commands` entry in the manifest and no key listener in the page or in the side panel. Everything is a mouse/touch action:
+
+- Click the `+` / `−` in a thumbnail corner (the `−` follows the cursor when hovering a subscribed video).
+- Click the `+` / `−` placed to the right of YouTube's own Subscribe button.
+- Toggle the extension, change modes and colours, or pick the Drive manifest in the side panel.
+
+YouTube's own shortcuts (space, `k`, `j`, `l`, `f`, `m`, `c`, `shift+n`, etc.) keep working untouched.
 
 ## Privacy and behavior
 

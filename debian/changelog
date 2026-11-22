@@ -1,3 +1,11 @@
+yousub (2.3.5) unstable; urgency=medium
+
+  * Keep the +/- glyph of the button beside YouTube's own Subscribe button
+    visible: anchor it to the button element itself, never inside a wrapper
+    that can clip it, and fall back to a one-line row when space is tight.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.4) unstable; urgency=medium
 
   * Remove the "Refresh list" and "Sync with Google Drive now" buttons; both

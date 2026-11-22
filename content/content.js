@@ -24,6 +24,17 @@
   const NATIVE_SUB_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';
   /** YouTube's subscribe/unsubscribe button inside a card, or null when the card has none. */
   const nativeSubButton = (card) => card?.querySelector?.(NATIVE_SUB_SEL) || null;
+  /** Where the copy goes: next to YouTube's button element itself, so no inner wrapper can clip it. */
+  const nativeRowAnchor = (card) => {
+    const el = nativeSubButton(card);
+    if (!el) return null;
+    let node = el;
+    for (let up = el.parentElement; node !== card && up && up !== card; up = up.parentElement) {
+      if (!up.matches?.(NATIVE_SUB_SEL)) break;
+      node = up; // Nested renderers: use the outermost button node inside the card
+    }
+    return node;
+  };
 
   let settings = { ...DEFAULTS };
   const subs = { list: [], ids: new Set(), keys: new Set(), titles: new Set(), ts: 0, accountId: null, loggedIn: null, stats: null };
@@ -439,11 +450,14 @@
     host.appendChild(btn);
   }
 
-  /** True when both buttons sit on the same text line (0-width in a hidden layout counts as yes). */
+  /** True when both buttons sit on one text line and neither is clipped by the row it lives in. */
   function sideBySide(a, b) {
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-    if (!ra.width || !rb.width) return true;
-    return Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
+    if (!ra.width || !rb.width) return true; // Hidden layout: cannot judge, keep the CSS alone
+    const sameLine = Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
+    const parent = a.parentElement?.getBoundingClientRect();
+    const insideRow = !parent || (ra.left >= parent.left - 2 && ra.right <= parent.right + 2);
+    return sameLine && insideRow;
   }
 
   /**
@@ -453,7 +467,7 @@
   function placeInline(card, kind) {
     let btn = card.__yousubInlineBtn;
     if (!kind && !btn) return; // Nothing placed yet and nothing to place
-    const anchor = nativeSubButton(card);
+    const anchor = nativeRowAnchor(card);
     if (!kind || !anchor) {
       if (btn) { btn.remove(); card.__yousubInlineBtn = null; }
       const host = card.__yousubInlineHost;
@@ -471,7 +485,8 @@
     const host = card.__yousubInlineHost ||= Object.assign(document.createElement('span'), { className: 'yousub-inline-host' });
     if (host.parentElement !== parent || host.previousElementSibling !== anchor) {
       parent.insertBefore(host, anchor.nextSibling);
-      // A block container would drop the copy below YouTube's button; lay that row out as one line instead
+      // A block container would drop the copy onto its own line, and a narrow YouTube wrapper
+      // would clip it. Lay that row out on one line instead, so the +/− stays visible.
       parent.classList.toggle('yousub-native-row', !sideBySide(host, anchor));
     }
     if (btn.parentElement !== host) host.appendChild(btn);
@@ -589,6 +604,7 @@
       if (card.hasAttribute('data-yousub-dup') !== dup) card.toggleAttribute('data-yousub-dup', dup);
       if (shown && !dup) marked++;
       placeButton(card, card.__yousubKind);
+      // Cheap when nothing changed; re-attaches the copy if YouTube re-rendered the button row.
       placeInline(card, card.__yousubInlineKind);
     };
 
