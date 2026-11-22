@@ -148,7 +148,7 @@ Reinstalling with the same key keeps the ID and browser storage. Clearing the Ch
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until a manifest is selected. Unsubscribe history is kept locally **only while Drive sync is configured**; removing the configuration clears it. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to open the JSON file picker directly. The side panel remains open when a file dialog appears on Linux.
+Google Drive sync is disabled until a manifest is selected. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to open the JSON file picker directly. The side panel remains open when a file dialog appears on Linux.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
@@ -167,13 +167,23 @@ Google Drive sync is disabled until a manifest is selected. Unsubscribe history 
    }
    ```
 
-Both linked files must be downloadable without signing in. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
+Both linked files must be downloadable without signing in. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted.
 
 The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 
 ### Data format
 
 Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, and channel fields `id`, `name`, `url`, `status`, and `date`. Status values are `unsubscribed` and `resubscribed`. Only this English format is read and written. Keep a backup of your Drive file before upgrading.
+
+## Sorting, autoload, and how videos are marked
+
+`Unsubscribed channels first & hide duplicate videos` uses CSS `order`, so YouTube elements are never moved. Sorting matters most on a freshly opened page, where YouTube has rendered only about the first screen of results; on Home, Search, and watch-page sidebars the extension therefore keeps YouTube's own continuation loader inside a 2 px invisible box, which makes YouTube fetch the next pages without you scrolling. Fetching stops at the limit chosen under `Automatically load videos for sorting` (Off, 100, 250, or 500 marked videos), after 15 seconds without new items, or when the list is exhausted; normal scrolling then resumes. The setting only applies while sorting is on.
+
+Marking is controlled by `Display mode` and the two colours:
+
+- **Not subscribed** (`unsub`, default red `#ff3d00`): coloured outline plus a `+` button in the thumbnail corner, and the same `+` to the right of YouTube's own Subscribe button.
+- **Previously unsubscribed** (`left`, default yellow `#ffd400`): a channel in the unsubscribe history that is no longer in your subscription list. It gets the yellow outline only — no `+`, `−`, or inline button — and sorts after subscribed channels.
+- **Subscribed** (`sub`): no outline in `highlight` mode; dimmed in `dim` mode and hidden in `only-unsub` mode.
 
 ## Privacy and behavior
 
@@ -189,7 +199,7 @@ No build step is required. Check and test the source with Node.js 18 or newer:
 node --check background.js
 node --check shared.js
 node --check drive.js
-node --check config-store.js
+node --check
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js

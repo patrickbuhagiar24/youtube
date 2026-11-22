@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.3.1');
+  assert.equal(manifest.version, '2.3.2');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -69,6 +69,18 @@ test('manifest describes the Chrome extension and declares every asset', () => {
     ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon),
     ...manifest.content_scripts.flatMap((script) => [...script.js, ...(script.css || [])])];
   for (const asset of assets) assert.ok(fs.existsSync(asset), `Missing asset: ${asset}`);
+});
+
+test('the side panel removes the saved-configuration button and its wiring', () => {
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  const background = fs.readFileSync('background.js', 'utf8');
+  assert.doesNotMatch(html, /driveClearBtn|Remove saved configuration|🗑️/);
+  assert.doesNotMatch(js, /driveClearBtn|driveClear/);
+  assert.doesNotMatch(background, /driveClear|clearDriveSettings|config-store\.js/);
+  assert.ok(!fs.existsSync('config-store.js'), 'the folder-handle store existed only for that button');
+  const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
+  assert.doesNotMatch(build, /config-store\.js/);
 });
 
 test('Google Drive setup opens a single manifest picker from the side panel', () => {

@@ -1,3 +1,12 @@
+yousub (2.3.2) unstable; urgency=medium
+
+  * Remove the "Remove saved configuration" (trash) button and its message
+    handler; the folder-handle store existed only for that button.
+  * Document how sorting autoload and the unsubscribed/previously unsubscribed
+    marking work.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.1) unstable; urgency=medium
 
   * Leave YouTube's own Subscribe/Unsubscribe button untouched: no extra

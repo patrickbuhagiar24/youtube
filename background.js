@@ -1,5 +1,5 @@
 // Service worker (Manifest V3): default settings, stale data cleanup, and Google Drive sync.
-importScripts('shared.js', 'drive.js', 'config-store.js');
+importScripts('shared.js', 'drive.js');
 
 const SYNC_ALARM = 'yousub-drive-sync';
 
@@ -30,11 +30,6 @@ async function clearHistoryWhenUnconfigured() {
   if (!configured) await chrome.storage.local.remove('yousubUnsubs');
 }
 
-async function clearDriveSettings() {
-  await chrome.storage.local.remove([YOUSUB.CONFIG_KEY, 'yousubDrive', 'yousubUnsubs']);
-  await YousubConfigStore.clearFolderHandle().catch(() => {});
-}
-
 // Unsubscribe history changed on this device -> send it to Drive (debounced to batch rapid changes).
 let pushTimer = 0;
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -53,9 +48,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return;
     case 'driveSync':
       Drive.sync().then(sendResponse);
-      return true;
-    case 'driveClear':
-      clearDriveSettings().then(sendResponse);
       return true;
   }
 });

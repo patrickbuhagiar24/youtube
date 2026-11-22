@@ -118,7 +118,6 @@ async function renderDrive() {
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
   $('driveSyncBtn').classList.toggle('hidden', !configured);
-  $('driveClearBtn').classList.toggle('hidden', !configured);
   $('driveStatus').textContent = !configured ? 'Google Drive is not configured — open "Google Drive sync" below'
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
@@ -155,11 +154,6 @@ $('driveSetupBtn').addEventListener('click', async () => {
     if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not load configuration: ' + (e.message || String(e));
   }
 });
-$('driveClearBtn').addEventListener('click', async () => {
-  await chrome.runtime.sendMessage({ type: 'driveClear' }).catch(() => {});
-  renderDrive();
-});
-
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
   if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
