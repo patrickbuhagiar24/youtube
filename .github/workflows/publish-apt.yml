@@ -16,10 +16,14 @@ concurrency:
 
 jobs:
   build:
+    # A called workflow does not inherit the caller's secrets implicitly.
     uses: ./.github/workflows/build-extension.yml
+    secrets: inherit
 
   publish:
     needs: build
+    # GitHub Pages only accepts deployments from the default branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

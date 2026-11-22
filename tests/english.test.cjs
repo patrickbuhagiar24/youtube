@@ -188,6 +188,9 @@ test('releases are Pages-only: no release tags and no GitHub Releases', () => {
   // Merging to main publishes; the version comes from manifest.json, and it is not rebuilt twice.
   assert.match(publish, /on:\n  push:\n    branches: \[main\]/);
   assert.match(publish, /uses: \.\/\.github\/workflows\/build-extension\.yml/);
+  // Without this the called workflow cannot see YOUSUB_CRX_PRIVATE_KEY / GPG secrets.
+  assert.match(publish, /secrets: inherit/);
+  assert.match(publish, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(publish, /needs: build/);
   assert.match(publish, /already/);
   assert.match(build, /on:\n  workflow_call:\n  workflow_dispatch:/);
