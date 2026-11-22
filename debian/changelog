@@ -1,3 +1,11 @@
+yousub (2.3.7) unstable; urgency=medium
+
+  * Release without version tags: merging into main builds and publishes the
+    signed package to GitHub Pages in one run, and an unchanged version is
+    skipped instead of being redeployed.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.6) unstable; urgency=medium
 
   * Remove every "press F5 / reload the page" message. A page restored from

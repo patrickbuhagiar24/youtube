@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.3.6');
+  assert.equal(manifest.version, '2.3.7');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -177,12 +177,30 @@ test('the APT repository workflow is signed and deployed through Pages', () => {
   assert.doesNotMatch(text, /gh release/);
 });
 
+test('releases are Pages-only: no release tags and no GitHub Releases', () => {
+  const publish = fs.readFileSync('.github/workflows/publish-apt.yml', 'utf8');
+  const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
+  for (const text of [publish, build]) {
+    assert.doesNotMatch(text, /tags: \['v\*'\]/, 'no workflow may trigger on version tags');
+    assert.doesNotMatch(text, /github\.ref_name|head_branch == \\?"\$TAG/, 'no workflow may resolve a tag');
+    assert.doesNotMatch(text, /gh release|softprops\/action-gh-release|actions\/create-release/, 'no GitHub Releases');
+  }
+  // Merging to main publishes; the version comes from manifest.json, and it is not rebuilt twice.
+  assert.match(publish, /on:\n  push:\n    branches: \[main\]/);
+  assert.match(publish, /uses: \.\/\.github\/workflows\/build-extension\.yml/);
+  assert.match(publish, /needs: build/);
+  assert.match(publish, /already/);
+  assert.match(build, /on:\n  workflow_call:\n  workflow_dispatch:/);
+  // The publish job receives its artifact from the build job of the same run.
+  assert.match(publish, /gh run download "\$\{\{ github\.run_id \}\}"/);
+});
+
 test('the build workflow signs the CRX and does not publish a GitHub Release', () => {
   const text = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.match(text, /YOUSUB_CRX_PRIVATE_KEY: \$\{\{ secrets\.YOUSUB_CRX_PRIVATE_KEY \}\}/);
   assert.match(text, /'dgst', '-sha256', '-sign'/);
   assert.match(text, /manifest\['key'\] = public_key/);
-  assert.match(text, /on:\n  workflow_dispatch:/);
+  assert.match(text, /on:\n  workflow_call:\n  workflow_dispatch:/);
   assert.doesNotMatch(text, /echo[^\n]*\$YOUSUB_CRX_PRIVATE_KEY/);
 });
 

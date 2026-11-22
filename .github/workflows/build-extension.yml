@@ -1,9 +1,10 @@
 name: Build signed Yousub extension
 
+# No release tags: the version comes from manifest.json and the signed build is produced
+# in the same run that publishes the APT repository to GitHub Pages.
 on:
+  workflow_call:
   workflow_dispatch:
-  push:
-    tags: ['v*']
 
 permissions:
   contents: read
