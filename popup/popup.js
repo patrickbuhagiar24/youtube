@@ -118,10 +118,23 @@ async function renderDrive() {
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
   $('driveSyncBtn').classList.toggle('hidden', !configured);
-  $('driveStatus').textContent = !configured ? 'Google Drive is not configured — open "Google Drive sync" below'
+  $('driveStatus').textContent = !configured ? 'Unsubscribe history is kept only while Google Drive sync is configured'
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
+  // Configuration status: the row states whether a manifest is loaded and which file it points at.
+  const account = d.email || 'service account';
+  $('driveConfig').textContent = !configured ? '❌ Not configured — open a manifest with 📁'
+    : d.syncing ? `✅ Configured · ${account} · ⏳ syncing…`
+      : d.lastError ? `✅ Configured · ${account} · ⚠️ needs attention`
+        : `✅ Configured · ${account}${d.fileName ? ' · ' + d.fileName : ''}`;
+  // Once configured, the same picker replaces the saved configuration instead of setting it up.
+  const setup = $('driveSetupBtn');
+  const setupLabel = configured ? 'Replace the Google Drive configuration' : 'Open Drive file setup';
+  setup.textContent = configured ? '🔁' : '📁';
+  setup.title = setupLabel;
+  setup.setAttribute('aria-label', setupLabel);
+  setup.classList.toggle('configured', configured);
 }
 
 async function syncNow() {

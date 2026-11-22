@@ -31,14 +31,17 @@
     <span class="dotl"></span>
     <div class="grow">
       <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
-      <small id="driveStatus" class="muted" aria-live="polite">Google Drive is not configured</small>
+      <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
     </div>
     <button id="driveSyncBtn" class="icon hidden" title="Sync with Google Drive now" aria-label="Sync with Google Drive now">🔄</button>
   </section>
 
-  <!-- Drive setup: label plus the manifest picker -->
+  <!-- Drive setup: label, configuration status, and the manifest picker -->
   <section class="card drive">
-    <div class="grow">Google Drive sync</div>
+    <div class="grow">
+      <div>Google Drive sync</div>
+      <small id="driveConfig" class="muted" aria-live="polite">❌ Not configured</small>
+    </div>
     <button id="driveSetupBtn" class="icon" title="Open Drive file setup" aria-label="Open Drive file setup">📁</button>
   </section>
 

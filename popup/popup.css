@@ -70,3 +70,6 @@ input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
 
 body.setup { width: 420px; padding: 14px; }
 body.setup .card { margin-top: 12px; }
+
+/* Drive setup button: 📁 sets up, 🔁 replaces an existing configuration */
+.icon.configured { border-color: var(--accent); }

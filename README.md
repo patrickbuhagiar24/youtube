@@ -169,7 +169,26 @@ Google Drive sync is disabled until a manifest is selected. Unsubscribe history 
 
 Both linked files must be downloadable without signing in. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted.
 
-The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
+### When the sync runs
+
+The 🔄 button in the side panel starts an immediate sync. Without it, the service worker syncs automatically:
+
+- **15-minute alarm** — every 15 minutes in the background, so changes made on another device reach this browser.
+- **After a local unsubscribe** — a local history change is pushed 3 seconds after the last change (rapid changes are batched).
+- **On a YouTube page load** — the first page that opens pulls changes at most once every 2 minutes.
+- **On browser start and on install/update** — settings are re-read, sync runs once, and local history that exists without a configuration is cleared.
+
+A sync is single-flight: while one is running, further requests reuse it. It signs in with the service account, validates the file once per link (or after a failure), reads `YouTube.json`, merges by newest event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Failures are recorded and shown in the side panel instead of retrying in a loop.
+
+### Google Drive row in the side panel
+
+- **Status line**: `❌ Not configured` until a manifest is loaded, then `✅ Configured · <service account email>` plus the file name when known, or `⚠️ needs attention` with the error.
+- **📁 / 🔁 button**: 📁 opens a configuration manifest. Once configured the same button becomes 🔁 and replaces the saved configuration instead of setting it up again.
+- **🔄 button**: appears only when configured and syncs now.
+
+### Subscribed channel count
+
+The summary card shows the number of channels in the stored subscription list (`yousubSubs.list`), formatted with `en-US` separators, e.g. `1,250`. It is read from browser storage, so it stays visible when the active tab is not YouTube, and it updates whenever a list refresh finishes or a subscribe/unsubscribe action changes the list. `–` means no list has been stored yet, and the line below it shows the list status (`✅ Complete list` / `⚠️ Incomplete list`) and when it was updated.
 
 ### Data format
 

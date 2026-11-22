@@ -60,7 +60,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'YOUSUB');
   assert.equal(manifest.short_name, 'YOUSUB');
-  assert.equal(manifest.version, '2.3.2');
+  assert.equal(manifest.version, '2.3.3');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -81,6 +81,20 @@ test('the side panel removes the saved-configuration button and its wiring', () 
   assert.ok(!fs.existsSync('config-store.js'), 'the folder-handle store existed only for that button');
   const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.doesNotMatch(build, /config-store\.js/);
+});
+
+test('the Drive row reports the configuration and the picker replaces it once configured', () => {
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  assert.match(html, /id="driveConfig"/); // Status line inside the "Google Drive sync" row
+  assert.match(html, /Google Drive sync/);
+  assert.match(js, /\$\('driveConfig'\)\.textContent = !configured \? '❌ Not configured/);
+  assert.match(js, /✅ Configured · /);
+  // Unconfigured: setup with 📁. Configured: the same button replaces the configuration.
+  assert.match(js, /'Open Drive file setup'/);
+  assert.match(js, /'Replace the Google Drive configuration'/);
+  assert.match(js, /setup\.textContent = configured \? '🔁' : '📁'/);
+  assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
 });
 
 test('Google Drive setup opens a single manifest picker from the side panel', () => {
