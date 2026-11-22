@@ -152,6 +152,9 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   vertical-align: middle;
   margin-left: 8px;
   flex: 0 0 auto;
+  /* The copy must never widen or reshape the row it is placed in: that is what made it move */
+  box-shadow: none;
+  contain: layout style;
 }
 .yousub-inlinebtn {
   /* The strokes are positioned against the button, so it must be their containing block */
@@ -207,10 +210,10 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   animation: yousub-spin .8s linear infinite;
 }
 .yousub-inlinebtn:disabled::after { display: none; }
-/* Fallback when YouTube's container is a block or too narrow: lay the button and the copy on one line */
+/* Fallback, used only when YouTube's own container stacks its children: put the button and the
+   copy on one line. A container YouTube already lays out horizontally is never restyled. */
 .yousub-native-row {
   display: flex !important;
-  /* A row YouTube stacked (block or column flex) must put the copy beside the button, not under it */
   flex-direction: row !important;
   flex-wrap: nowrap !important;
   align-items: center;
@@ -220,18 +223,18 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   overflow: visible !important; /* Never clip the +/− away */
   height: auto !important;
   max-height: none !important;
-  min-width: calc(30px + 8px); /* Room for the copy even inside a narrow wrapper */
 }
-/* The button must not stretch or shrink inside that row */
+/* The button keeps its size: the copy sits next to it, and the row is never resized by the copy */
 .yousub-native-row > ytd-subscribe-button-renderer,
 .yousub-native-row > yt-subscribe-button-renderer,
 .yousub-native-row > yt-subscribe-button-view-model {
-  flex: 0 1 auto;
-  min-width: 0; /* May shrink instead of pushing the copy onto a new line */
+  flex: 0 0 auto;
   width: auto !important;
   max-width: none !important;
 }
 .yousub-native-row > .yousub-inline-host { margin-left: 0; }
+/* The copy is a direct child of a row that already lays out its children on one line */
+.yousub-inline-anchor-row { display: flex; align-items: center; }
 /* A wrapper that still hides or clips its children must not hide the copy */
 .yousub-native-row > .yousub-inline-host .yousub-inlinebtn { clip-path: none !important; }
 /* Blue unsubscribe (−) button */

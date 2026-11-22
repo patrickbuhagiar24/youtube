@@ -62,7 +62,8 @@
     if (!parent) return '-';
     const style = getComputedStyle(parent);
     return `${style.display}/${style.flexDirection || '-'}/${style.flexWrap || '-'}` +
-      (parent.classList.contains('yousub-native-row') ? '/fixed' : '');
+      (parent.classList.contains('yousub-native-row') ? '/fixed' : '') +
+      (parent.__yousubRowFixed ? '/decided' : '');
   }).join(',') || '-');
 
   const kinds = {};

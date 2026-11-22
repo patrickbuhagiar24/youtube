@@ -7,7 +7,8 @@ const vm = require('node:vm');
  * Run the isolated-world content script inside a DOM built from a plain object tree,
  * so the inline button can be placed next to a native Subscribe button.
  */
-function harness({ subbed = false, left = false } = {}) {
+function harness({ subbed = false, left = false, stacked = false, clip = false } = {}) {
+  const layout = { stacked, clip };
   const listeners = {};
   const messages = [];
   const pending = new Map();
@@ -122,6 +123,11 @@ function harness({ subbed = false, left = false } = {}) {
   const context = vm.createContext({
     window, document, chrome, location: { origin: 'https://www.youtube.com', pathname: '/', search: '' },
     MutationObserver: class { observe() {} }, HTMLElement: class {}, HTMLButtonElement: class {},
+    // Every row in this harness is a horizontal flex row, like YouTube's button rows, unless a
+    // test declares the row as a stacked container.
+    getComputedStyle: () => (layout.stacked
+      ? { display: 'flex', flexDirection: 'column', flexWrap: 'nowrap' }
+      : { display: 'flex', flexDirection: 'row', flexWrap: 'nowrap' }),
     requestAnimationFrame: (fn) => fn(), setTimeout: setTimeoutStub, clearTimeout() {}, setInterval: () => 0,
     YOUSUB: {
       DEFAULTS: { enabled: true, mode: 'highlight', color: '#ff3d00', showSubButton: true, sortUnsub: false, leftColor: '#ffd400', autoloadLimit: 250 },
@@ -181,18 +187,36 @@ test('the copy lands beside YouTube\'s own button element, never inside it', asy
   assert.equal(host.previousElementSibling, h.nativeBtn, 'the copy must come right after it');
 });
 
-test('a row that would clip the copy is laid out on one line instead', async () => {
+test('a row YouTube already lays out on one line is never restyled', async () => {
   const h = harness();
-  // The copy starts at x=90 but the row ends at x=100: YouTube's wrapper would clip it.
-  h.__boxes.host = { left: 90, top: 0, right: 120, bottom: 30 };
+  await h.run();
+  assert.equal(h.row.classList.contains('yousub-native-row'), false, 'no layout change when the row is fine');
+  // The copy still sits right after the button, and stays there over repeated scans.
+  const host = h.row.children.find((el) => String(el.className).includes('yousub-inline-host'));
+  assert.equal(host.previousElementSibling, h.nativeBtn);
+  const before = h.row.children.slice();
+  await h.run(6);
+  assert.deepEqual(h.row.children, before, 'the copy must not move between scans');
+});
+
+test('a stacked row gets the one-line fallback, and it is stable', async () => {
+  const h = harness({ stacked: true });
   await h.run();
   const row = h.row;
-  assert.equal(row.classList.contains('yousub-native-row'), true, 'the row must switch to the one-line fallback');
-  assert.equal(row.children.indexOf(h.nativeBtn) + 1, row.children.indexOf(h.row.children.find((el) => String(el.className).includes('yousub-inline-host'))));
-  // CSS keeps that fallback from clipping the glyph.
+  const host = row.children.find((el) => String(el.className).includes('yousub-inline-host'));
+  assert.ok(host);
+  assert.equal(row.classList.contains('yousub-native-row'), true, 'a column row must be laid out on one line');
+  assert.equal(host.previousElementSibling, h.nativeBtn);
+  const before = row.children.slice();
+  await h.run(6); // Repeated scans must not toggle the class back and forth
+  assert.equal(row.classList.contains('yousub-native-row'), true);
+  assert.deepEqual(row.children, before);
+  // CSS keeps the glyph visible and the button at its own size.
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-native-row \{[^}]*overflow: visible !important;/);
-  assert.match(css, /\.yousub-native-row \{[^}]*max-height: none !important;/);
+  assert.match(css, /\.yousub-native-row \{[^}]*flex-wrap: nowrap !important;/);
+  // The copy itself can never resize the row it was placed in.
+  assert.match(css, /\.yousub-inline-host \{[^}]*contain: layout style;/);
 });
 
 test('a previously unsubscribed channel is marked yellow only, without any button', async () => {
@@ -245,19 +269,22 @@ test('the channel header is scanned as one channel, not as a video', () => {
   assert.match(main, /function ownerChannel/);
 });
 
-test('a row that stacks YouTube\'s button with the copy is laid out on one line', () => {
+test('a stacked row is detected from its declared layout, not from a moving measurement', () => {
   const content = fs.readFileSync('content/content.js', 'utf8');
   const css = fs.readFileSync('content/content.css', 'utf8');
-  // Decided on every scan (a row measured before layout has no size and cannot be judged yet)
-  assert.match(content, /const force = !sideBySide\(host, anchor\) && rowForceable\(parent, anchor\);/);
-  assert.doesNotMatch(content, /__yousubForced/);
-  // A stacked row is detected from the declared layout when it has no measurable box yet
-  assert.match(content, /\/column\/\.test\(style\.flexDirection/);
-  // And the fallback class really makes one line: no vertical direction, no wrapping
+  // Row direction comes from computed style, so it cannot depend on the copy's own position.
+  assert.match(content, /function rowIsHorizontal\(el\)/);
+  assert.match(content, /\/column\/\.test\(style\.flexDirection \|\| ''\)/);
+  // A row YouTube lays out horizontally is used as is: no restyling, so nothing can move.
+  assert.match(content, /const flatRow = horizontalRow\(anchor\);/);
+  assert.match(content, /const parent = flatRow \|\| stackedParent\(anchor\);/);
+  // The fallback is decided once and remembered, never recomputed after it changes the layout.
+  assert.match(content, /if \(!flatRow && !parent\.__yousubRowFixed\) \{/);
+  // Never restyle a page-wide container.
+  assert.match(content, /function stackedParent\(anchor\)/);
+  assert.match(content, /if \(rp\.height && rp\.height > Math\.max\(ra\.height, 30\) \* 3\) return null;/);
+  // The fallback class is only ever added, never toggled by a measurement that it itself changes.
   assert.match(css, /\.yousub-native-row \{[^}]*flex-direction: row !important;/);
-  assert.match(css, /\.yousub-native-row \{[^}]*flex-wrap: nowrap !important;/);
-  // A large container is never re-laid out
-  assert.match(content, /function rowForceable\(parent, anchor\)/);
 });
 
 test('the stylesheet declares the inline button and its host', () => {

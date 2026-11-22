@@ -494,13 +494,7 @@
   /** True when both buttons sit on one text line and neither is clipped by the row it lives in. */
   function sideBySide(a, b) {
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-    if (!ra.width || !rb.width) {
-      // Not laid out yet (hidden page, or the row was just rendered): read the declared layout
-      const style = getComputedStyle(a.parentElement || a);
-      const stacked = /column/.test(style.flexDirection || '') ||
-        (style.display === 'block' || style.display === 'inline' || style.display === 'list-item');
-      return !stacked;
-    }
+    if (!ra.width || !rb.width) return true; // Hidden layout: cannot judge, keep the CSS alone
     const sameLine = Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
     const parent = a.parentElement?.getBoundingClientRect();
     const insideRow = !parent || (ra.left >= parent.left - 2 && ra.right <= parent.right + 2);
@@ -519,7 +513,11 @@
       if (btn) { btn.remove(); card.__yousubInlineBtn = null; }
       const host = card.__yousubInlineHost;
       if (host) {
-        host.parentElement?.classList.remove('yousub-native-row'); // Undo the one-line fallback
+        const parent = host.parentElement;
+        if (parent?.__yousubRowFixed) { // Undo the one-line fallback and forget the decision
+          parent.classList.remove('yousub-native-row');
+          parent.__yousubRowFixed = false;
+        }
         host.remove();
         card.__yousubInlineHost = null;
       }
@@ -527,27 +525,58 @@
     }
     btn ||= card.__yousubInlineBtn = makeButton(() => card, true);
     setKind(btn, kind, card);
-    const parent = anchor.parentElement; // Same row as YouTube's button
-    if (!parent) return;
     const host = card.__yousubInlineHost ||= Object.assign(document.createElement('span'), { className: 'yousub-inline-host' });
-    if (host.parentElement !== parent || host.previousElementSibling !== anchor) parent.insertBefore(host, anchor.nextSibling);
+    // A row YouTube has already laid out horizontally is used as it is: nothing about YouTube's
+    // own layout is touched, so the copy cannot move. Only a stacked row needs help (see below).
+    const flatRow = horizontalRow(anchor);
+    const parent = flatRow || stackedParent(anchor);
+    if (!parent) return;
+    // Only insert once. Re-inserting on sibling changes would make the copy visibly jump on every
+    // scan, so YouTube adding something beside its button never moves the copy again.
+    if (host.parentElement !== parent) parent.insertBefore(host, anchor.nextSibling);
+    if (host.parentElement !== anchor.parentElement && anchor.parentElement) anchor.parentElement.classList.add('yousub-inline-anchor-row');
     if (btn.parentElement !== host) host.appendChild(btn);
-    // Keep it beside the button, not under it. Re-checked on every scan, because the row may be
-    // measured before YouTube has laid it out (no size yet), and a block or column container puts
-    // the copy on its own line without YouTube ever re-rendering that row.
-    const force = !sideBySide(host, anchor) && rowForceable(parent, anchor);
-    if (parent.classList.contains('yousub-native-row') !== force) parent.classList.toggle('yousub-native-row', force);
+    // A container that stacks its children (block or column flex) would put the copy on its own
+    // line. That row is laid out on one line once, and the decision is remembered: measuring again
+    // after changing the layout is exactly what made the copy flip between two positions.
+    if (!flatRow && !parent.__yousubRowFixed) {
+      parent.classList.add('yousub-native-row');
+      parent.__yousubRowFixed = true;
+    }
   }
 
   /**
-   * Whether this row may be laid out on one line. Only a small wrapper around the button is
-   * changed; a large container keeps its own layout.
+   * The row holding YouTube's button, but only when YouTube already lays it out horizontally and
+   * it has not become a page-wide container. Inserting there needs no CSS at all.
    */
-  function rowForceable(parent, anchor) {
-    const kids = parent.children?.length || 0;
-    if (kids <= 3) return true;
+  function horizontalRow(anchor) {
+    const parent = anchor.parentElement;
+    if (!parent || parent === document.body) return null;
+    if (parent.getAttribute('id') === 'content' || parent.getAttribute('id') === 'owner') return null;
+    return rowIsHorizontal(parent) ? parent : null;
+  }
+
+  /** The element wrapping the button, used only when that row stacks its children. */
+  function stackedParent(anchor) {
+    const parent = anchor.parentElement;
+    if (!parent || parent === document.body) return null;
+    // Never restyle a page-wide container: a wrapper taller than a few button rows is not a row
     const rp = parent.getBoundingClientRect(), ra = anchor.getBoundingClientRect();
-    return !rp.height || rp.height <= Math.max(ra.height, 30) * 3;
+    if (rp.height && rp.height > Math.max(ra.height, 30) * 3) return null;
+    return parent;
+  }
+
+  /** True when the element puts its children on one line (row flex, inline, or a short block row). */
+  function rowIsHorizontal(el) {
+    const style = getComputedStyle(el);
+    const display = style.display || '';
+    if (/flex|grid/.test(display)) return !/column/.test(style.flexDirection || '') && !/column/.test(style.gridTemplateColumns || '');
+    if (/inline/.test(display)) return true;
+    // A block wrapper: horizontal only when its children already sit on one line. With a single
+    // child nothing can be compared, and a second child would start a new line.
+    const kids = [...(el.children || [])].filter((k) => k.className !== 'yousub-inline-host');
+    if (kids.length < 2) return false;
+    return sideBySide(kids[1], kids[0]);
   }
 
   function clearCard(card) {
