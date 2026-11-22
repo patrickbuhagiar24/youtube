@@ -55,6 +55,15 @@
     if (!host) return 'none';
     return host.previousElementSibling === b ? 'beside' : 'moved';
   }).join(',') || '-');
+  // Layout of the row holding the copy: a column row (or one that still wraps) is why the copy
+  // would be drawn under the button instead of beside it.
+  add('6e. page_outside_card_layout', loose.map((b) => {
+    const parent = b.parentElement;
+    if (!parent) return '-';
+    const style = getComputedStyle(parent);
+    return `${style.display}/${style.flexDirection || '-'}/${style.flexWrap || '-'}` +
+      (parent.classList.contains('yousub-native-row') ? '/fixed' : '');
+  }).join(',') || '-');
 
   const kinds = {};
   for (const element of document.querySelectorAll('[data-yousub-state]')) {

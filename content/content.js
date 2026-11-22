@@ -494,7 +494,13 @@
   /** True when both buttons sit on one text line and neither is clipped by the row it lives in. */
   function sideBySide(a, b) {
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-    if (!ra.width || !rb.width) return true; // Hidden layout: cannot judge, keep the CSS alone
+    if (!ra.width || !rb.width) {
+      // Not laid out yet (hidden page, or the row was just rendered): read the declared layout
+      const style = getComputedStyle(a.parentElement || a);
+      const stacked = /column/.test(style.flexDirection || '') ||
+        (style.display === 'block' || style.display === 'inline' || style.display === 'list-item');
+      return !stacked;
+    }
     const sameLine = Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
     const parent = a.parentElement?.getBoundingClientRect();
     const insideRow = !parent || (ra.left >= parent.left - 2 && ra.right <= parent.right + 2);
@@ -524,13 +530,24 @@
     const parent = anchor.parentElement; // Same row as YouTube's button
     if (!parent) return;
     const host = card.__yousubInlineHost ||= Object.assign(document.createElement('span'), { className: 'yousub-inline-host' });
-    if (host.parentElement !== parent || host.previousElementSibling !== anchor) {
-      parent.insertBefore(host, anchor.nextSibling);
-      // A block container would drop the copy onto its own line, and a narrow YouTube wrapper
-      // would clip it. Lay that row out on one line instead, so the +/− stays visible.
-      parent.classList.toggle('yousub-native-row', !sideBySide(host, anchor));
-    }
+    if (host.parentElement !== parent || host.previousElementSibling !== anchor) parent.insertBefore(host, anchor.nextSibling);
     if (btn.parentElement !== host) host.appendChild(btn);
+    // Keep it beside the button, not under it. Re-checked on every scan, because the row may be
+    // measured before YouTube has laid it out (no size yet), and a block or column container puts
+    // the copy on its own line without YouTube ever re-rendering that row.
+    const force = !sideBySide(host, anchor) && rowForceable(parent, anchor);
+    if (parent.classList.contains('yousub-native-row') !== force) parent.classList.toggle('yousub-native-row', force);
+  }
+
+  /**
+   * Whether this row may be laid out on one line. Only a small wrapper around the button is
+   * changed; a large container keeps its own layout.
+   */
+  function rowForceable(parent, anchor) {
+    const kids = parent.children?.length || 0;
+    if (kids <= 3) return true;
+    const rp = parent.getBoundingClientRect(), ra = anchor.getBoundingClientRect();
+    return !rp.height || rp.height <= Math.max(ra.height, 30) * 3;
   }
 
   function clearCard(card) {

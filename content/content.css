@@ -210,13 +210,26 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
 /* Fallback when YouTube's container is a block or too narrow: lay the button and the copy on one line */
 .yousub-native-row {
   display: flex !important;
-  flex-wrap: wrap;
+  /* A row YouTube stacked (block or column flex) must put the copy beside the button, not under it */
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
+  white-space: nowrap;
   overflow: visible !important; /* Never clip the +/− away */
   height: auto !important;
   max-height: none !important;
   min-width: calc(30px + 8px); /* Room for the copy even inside a narrow wrapper */
+}
+/* The button must not stretch or shrink inside that row */
+.yousub-native-row > ytd-subscribe-button-renderer,
+.yousub-native-row > yt-subscribe-button-renderer,
+.yousub-native-row > yt-subscribe-button-view-model {
+  flex: 0 1 auto;
+  min-width: 0; /* May shrink instead of pushing the copy onto a new line */
+  width: auto !important;
+  max-width: none !important;
 }
 .yousub-native-row > .yousub-inline-host { margin-left: 0; }
 /* A wrapper that still hides or clips its children must not hide the copy */

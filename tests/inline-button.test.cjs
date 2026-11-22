@@ -245,6 +245,21 @@ test('the channel header is scanned as one channel, not as a video', () => {
   assert.match(main, /function ownerChannel/);
 });
 
+test('a row that stacks YouTube\'s button with the copy is laid out on one line', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const css = fs.readFileSync('content/content.css', 'utf8');
+  // Decided on every scan (a row measured before layout has no size and cannot be judged yet)
+  assert.match(content, /const force = !sideBySide\(host, anchor\) && rowForceable\(parent, anchor\);/);
+  assert.doesNotMatch(content, /__yousubForced/);
+  // A stacked row is detected from the declared layout when it has no measurable box yet
+  assert.match(content, /\/column\/\.test\(style\.flexDirection/);
+  // And the fallback class really makes one line: no vertical direction, no wrapping
+  assert.match(css, /\.yousub-native-row \{[^}]*flex-direction: row !important;/);
+  assert.match(css, /\.yousub-native-row \{[^}]*flex-wrap: nowrap !important;/);
+  // A large container is never re-laid out
+  assert.match(content, /function rowForceable\(parent, anchor\)/);
+});
+
 test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);

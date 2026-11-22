@@ -1,3 +1,16 @@
+yousub (2.4.2) unstable; urgency=medium
+
+  * Put the +/− copy beside YouTube's button instead of under it: the row that
+    holds the button is laid out on one line (row direction, no wrapping) when
+    YouTube stacks it, and the button may shrink rather than push the copy down.
+  * Re-check that placement on every scan, so a row measured before YouTube
+    laid it out is repaired instead of staying stacked.
+  * Only a small wrapper around the button is re-laid out, never a large
+    container.
+  * Diagnostics: report the layout of that row (6e) to spot a stacked row.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.4.1) unstable; urgency=medium
 
   * Place the +/− copy beside every YouTube Subscribe/Unsubscribe button that
