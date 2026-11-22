@@ -7,7 +7,7 @@ const vm = require('node:vm');
  * Run the isolated-world content script inside a DOM built from a plain object tree,
  * so the inline button can be placed next to a native Subscribe button.
  */
-function harness({ html = '', subbed = false } = {}) {
+function harness({ subbed = false, left = false } = {}) {
   const listeners = {};
   const messages = [];
   const pending = new Map();
@@ -87,7 +87,15 @@ function harness({ html = '', subbed = false } = {}) {
     runtime: { onMessage: { addListener() {} }, sendMessage: () => Promise.resolve() },
     storage: {
       sync: { get: async () => ({ yousubSettings: { showSubButton: true } }) },
-      local: { get: async () => ({ yousubSubs: { list: subbed ? [{ id: 'UCabcdefghijklmnopqrstuv', title: 'Chan' }] : [], ts: 1 } }), set: async () => {} },
+      local: {
+        get: async () => ({
+          yousubSubs: { list: subbed ? [{ id: 'UCabcdefghijklmnopqrstuv', title: 'Chan' }] : [], ts: 1 },
+          // The yellow state needs Drive sync configured, matching the extension's behavior.
+          yousubUnsubs: left ? { UCabcdefghijklmnopqrstuv: { s: 'unsub', at: 2, title: 'Chan', url: '/channel/UCabcdefghijklmnopqrstuv' } } : {},
+          yousubDriveConfig: left ? { link: 'https://drive.google.com/file/d/x/view', keyText: '{}' } : {}
+        }),
+        set: async () => {}
+      },
       onChanged: { addListener() {} }
     }
   };
@@ -107,7 +115,6 @@ function harness({ html = '', subbed = false } = {}) {
       DEFAULTS: { enabled: true, mode: 'highlight', color: '#ff3d00', showSubButton: true, sortUnsub: false, leftColor: '#ffd400', autoloadLimit: 250 },
       CARD_SEL: 'yt-lockup-view-model', AUTOLOAD: { stallMs: 15000 }, CONFIG_KEY: 'yousubDriveConfig'
     },
-    YousubNativeRefresh: { create: () => ({ request() {}, confirm() {}, buttonChanged() {} }) },
     console
   });
   vm.runInContext(fs.readFileSync('content/content.js', 'utf8'), context);
@@ -153,9 +160,20 @@ test('clicks on the copy never reach YouTube, so the video does not open', async
   assert.equal(h.messages.some((m) => m.type === 'subscription'), true);
 });
 
-test('main-world ignores clicks on the copy when watching for native actions', () => {
-  const source = fs.readFileSync('content/main-world.js', 'utf8');
-  assert.match(source, /matches\('\.yousub-subbtn, \.yousub-inlinebtn'\)/);
+test('a previously unsubscribed channel is marked yellow only, without any button', async () => {
+  const h = harness({ left: true });
+  await h.run();
+  assert.equal(h.card.getAttribute('data-yousub-state'), 'left');
+  assert.equal(h.card.__yousubKind, null);
+  assert.equal(h.card.__yousubInlineKind, null);
+  assert.equal(h.row.children.some((el) => el.className === 'yousub-inline-host'), false);
+  assert.equal(h.thumb.children.length, 0);
+  const css = fs.readFileSync('content/content.css', 'utf8');
+  assert.match(css, /\[data-yousub-state="left"\] \.yousub-subbtn/);
+  assert.match(css, /\[data-yousub-state="left"\] \.yousub-inline-host \{ display: none !important; \}/);
+});
+
+test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);
   assert.match(css, /\.yousub-inline-host/);

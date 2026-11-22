@@ -6,9 +6,9 @@ This project is **only a Chrome extension**, distributed as a signed CRX and an 
 
 ## Features
 
-- Highlight channels you are not subscribed to, or previously unsubscribed from.
+- Highlight channels you are not subscribed to, or mark previously unsubscribed channels with a yellow outline only.
 - Subscribe and unsubscribe directly from video thumbnails, including collaboration videos.
-- Get the same subscribe/unsubscribe button to the right of YouTube's own button on watch pages and channel cards.
+- Get the same subscribe/unsubscribe button to the right of YouTube's own button on watch pages and channel cards. YouTube's own button keeps its behavior.
 - Put unsubscribed channels first and hide duplicate videos.
 - Dim or hide selected subscription groups.
 - Refresh your subscription list and export it as CSV.
@@ -167,7 +167,7 @@ Google Drive sync is disabled until a manifest is selected. Unsubscribe history 
    }
    ```
 
-Both linked files must be downloadable without signing in. **Security warning:** anyone with access to the service account key link can obtain the private key and act as the service account. Use a dedicated account with the minimum required access, and revoke or rotate any exposed key. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
+Both linked files must be downloadable without signing in. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted. The 🗑️ button deletes the saved configuration and local unsubscribe history.
 
 The sync button in the popup runs an immediate sync. The service worker also syncs on a 15-minute alarm and after local unsubscribe changes.
 
@@ -177,7 +177,7 @@ Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, a
 
 ## Privacy and behavior
 
-Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists are loaded on first use, when changing accounts, manually, and after detected subscription actions; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
+Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are sent to your Google Drive file using your service account. Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists are loaded on first use, when changing accounts, manually, and after detected subscription actions; pressing YouTube's own Subscribe/Unsubscribe button only applies the change YouTube already made, with no extra request or refresh; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; refresh the page or list if detection stops working.
 
 ## Development
 
@@ -190,7 +190,6 @@ node --check background.js
 node --check shared.js
 node --check drive.js
 node --check config-store.js
-node --check content/native-refresh.js
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js

@@ -76,11 +76,6 @@
     return () => { clearTimeout(t); t = setTimeout(safe(fn), ms); };
   }
 
-  const nativeRefresh = YousubNativeRefresh.create({
-    ready: () => initialized && !syncing,
-    refresh: () => doSync()
-  });
-
   /* ---------------- communication with the main world ---------------- */
   const pending = new Map();
   let reqSeq = 0;
@@ -105,15 +100,11 @@
       syncProgress = payload.count || 0;
       notifyState();
     } else if (type === 'subChange') {
+      // YouTube's own Subscribe/Unsubscribe request succeeded: only apply the confirmed result.
+      // No extra request, dialog, or list refresh is triggered by the native button.
       if (Array.isArray(payload.ids) && typeof payload.subscribed === 'boolean') {
-        const ids = payload.ids.filter((id) => /^UC[\w-]{10,}$/.test(id || ''));
-        ids.forEach((id) => updateSub(id, payload.subscribed));
-        if (ids.length && initialized && subs.ts) nativeRefresh.confirm(payload.seq, ids, payload.subscribed);
+        payload.ids.filter((id) => /^UC[\w-]{10,}$/.test(id || '')).forEach((id) => updateSub(id, payload.subscribed));
       }
-    } else if (type === 'nativeButtonChanged' && /^UC[\w-]{10,}$/.test(payload.id || '') && typeof payload.subscribed === 'boolean') {
-      nativeRefresh.buttonChanged(payload.seq, payload.id, payload.subscribed);
-    } else if (type === 'nativeRefreshRequested') {
-      nativeRefresh.request(payload.seq);
     }
   });
 
@@ -618,11 +609,11 @@
       card.__yousubKey = dupKey(card);
       // Only offer unsubscribe for a confirmed subscribed ID, avoiding mismatches from duplicate names
       const canUnsub = state === 'sub' && (r.subCollab ? r.subCollab.length > 0 : subs.ids.has(r.id));
-      const kind = state === 'unsub' ? 'sub' : canUnsub ? 'unsub' : null;
+      // Previously unsubscribed channels are marked yellow only: no +, −, or inline button.
+      const kind = state === 'left' ? null : state === 'unsub' ? 'sub' : canUnsub ? 'unsub' : null;
       const native = nativeSubButton(card); // YouTube's own button, if this card has one
       card.__yousubKind = kind && buttonAllowed(card, native) ? kind : null;
-      // No copy for previously unsubscribed channels (their native button already says Subscribe)
-      card.__yousubInlineKind = kind && state !== 'left' && inlineAllowed(card, native) ? kind : null;
+      card.__yousubInlineKind = kind && inlineAllowed(card, native) ? kind : null;
       // Cache only confirmed channel IDs; reevaluate cards identified only by page text
       card.__yousubSig = r.id ? sig : '';
       done(card, parent);

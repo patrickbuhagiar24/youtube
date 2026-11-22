@@ -1,3 +1,12 @@
+yousub (2.3.1) unstable; urgency=medium
+
+  * Leave YouTube's own Subscribe/Unsubscribe button untouched: no extra
+    refresh, dialog, polling, or request is triggered from it.
+  * Mark previously unsubscribed channels yellow only, without a button.
+  * Remove the service account key warning text from the docs and side panel.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.0) unstable; urgency=medium
 
   * Add a subscribe and unsubscribe button next to YouTube's own button on

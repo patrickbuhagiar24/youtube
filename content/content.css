@@ -136,6 +136,10 @@ html.yousub-on.yousub-sort ytd-rich-grid-renderer > #contents > ytd-rich-item-re
 /* Floating button above the hovered video and YouTube preview player */
 .yousub-subbtn.yousub-float { position: fixed; z-index: 2147483000; }
 .yousub-subbtn.yousub-float[hidden] { display: none !important; }
+/* Previously unsubscribed channels: yellow outline only, never a + / − / inline button */
+[data-yousub-state="left"] .yousub-subbtn,
+[data-yousub-state="left"] .yousub-inline-host { display: none !important; }
+
 /* Hide the attached + button while the floating button is active to avoid duplicates */
 [data-yousub-hover] .yousub-subbtn:not(.yousub-float) { visibility: hidden; }
 html:not(.yousub-on) .yousub-subbtn { display: none !important; }
