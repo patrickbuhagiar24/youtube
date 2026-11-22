@@ -226,13 +226,23 @@
     }
     const k = ch.key || ch.id || ch.url || (ch.__local ? 'local-button' : '');
     if (!k || busy.has(k)) return false;
+    if (!ch.id && !targetHasId(ch)) {
+      // Resolve from the page itself: the video on a watch page, the address bar on a channel page.
+      if (location.pathname === '/watch') ch.vid ||= new URLSearchParams(location.search).get('v') || '';
+      else ch.url ||= location.pathname;
+    }
     const sub = action === 'subscribe';
     const group = sub ? ch.collab : ch.subCollab;
+    // One target: the channel object this button acts on (its own object stays the reference used
+    // for the busy flag and the toast). Never the card wrapper, which carries no ID of its own.
     const targets = group?.length ? group : [ch];
     busy.add(k);
     refreshButtons();
     try {
-      const r = await request('subscription', 60000, { action, ids: targets.map((c) => c.id).filter(Boolean), url: ch.url, vid: ch.vid || '', name: ch.name || '' });
+      const ids = targets.map((c) => c.id).filter(Boolean);
+      // With no ID, the page world resolves the channel from the page (see pageHint there), which
+      // is why the name is sent as well: the toast and the saved entry use it.
+      const r = await request('subscription', 60000, { action, ids, url: ch.url, vid: ch.vid || '', name: ch.name || '' });
       const names = [];
       for (const id of r.ids || []) {
         const info = targets.find((c) => c.id === id) || (targets.length === 1 ? targets[0] : null) || { name: '', url: '' };
@@ -253,6 +263,10 @@
       refreshButtons();
     }
   }
+
+  /** Whether any channel in this action already carries an ID. */
+  const targetHasId = (ch) => [ch, ...(ch.collab || []), ...(ch.subCollab || [])]
+    .some((c) => /^UC[\w-]{10,}$/.test(c?.id || ''));
 
   function refreshButtons() {
     for (const b of document.querySelectorAll('.yousub-subbtn, .yousub-inlinebtn')) {
@@ -381,13 +395,17 @@
     const subscribed = keys.some(isSubKey) || (!!name && subs.titles.has(norm(name)));
     // Channel ID from the card or, for subscribed channels, from the subscription list
     const cid = id || keys.find((k) => k.startsWith('UC')) || (subscribed ? idFromList(keys, name) : leftIdFromKeys(keys)) || '';
+    // For a subscribed channel the subscription list has the exact name: what is rendered on the
+    // card can be a shortened or differently styled title (handle, badge text, truncated name).
+    const listed = cid ? subs.list.find((c) => c.id === cid) : null;
+    if (listed?.title) name = listed.title;
     return {
       subscribed,
       left: !subscribed && isLeft(cid),
       key: keys[0] || 'name:' + norm(name),
       id: cid,
-      name: name || keys[0],
-      url: url || (id ? '/channel/' + id : '')
+      name: name || listed?.title || keys[0],
+      url: url || listed?.url || (id ? '/channel/' + id : '')
     };
   }
 
@@ -479,9 +497,30 @@
     if (el.__yousubAsking || !el.__yousubLocal) return;
     el.__yousubAsking = true;
     request('identityLocal', 15000, { local: el.__yousubLocal })
-      .then((info) => { if (info?.id) el.__yousubId = info.id; })
+      .then((info) => {
+        if (info?.id) el.__yousubId = info.id;
+        el.__yousubName = info?.name || el.__yousubName || nameNearButton(el);
+      })
       .catch(() => { /* The button's own label stays in charge */ })
       .finally(() => { el.__yousubAsking = false; scheduleScan(); });
+  }
+
+  /**
+   * Token identifying the element whose Subscribe button is in use. The page world matches it to
+   * read that button's channel, so a click never has to guess.
+   */
+  function localToken(el) {
+    const tok = el.__yousubLocal ||= 'l' + Math.random().toString(36).slice(2, 10);
+    if (el.getAttribute('data-yousub-local') !== tok) el.setAttribute('data-yousub-local', tok);
+    return tok;
+  }
+
+  /** Channel name YouTube shows next to the button, used when the page world has none. */
+  function nameNearButton(el) {
+    const scope = el.closest?.('ytd-video-owner-renderer, yt-page-header-renderer, #owner, #page-header') ||
+      el.parentElement?.parentElement;
+    const hit = scope?.querySelector?.(NAME_SEL) || el.closest?.('ytd-video-owner-renderer, #owner')?.querySelector?.('#channel-name, ytd-channel-name, h1');
+    return hit?.textContent?.trim() || '';
   }
 
   /** State reported by YouTube's own button, used where the card itself is not marked. */
@@ -714,6 +753,11 @@
       const state = r.subscribed ? 'sub' : r.left ? 'left' : 'unsub';
       if (card.getAttribute('data-yousub-state') !== state) card.setAttribute('data-yousub-state', state);
       if (!r.id) r.vid = videoIdOfCard(card); // Fallback for resolving a channel ID when + is clicked
+      if (!r.id && nativeSubButton(card)) {
+        // No channel data on this element: ask the page world for the channel of its own button.
+        Object.assign(r, { __local: true, localTok: localToken(card) });
+        askLocalId(card);
+      }
       card.__yousubCh = r;
       card.__yousubKey = dupKey(card);
       // Only offer unsubscribe for a confirmed subscribed ID, avoiding mismatches from duplicate names
@@ -741,8 +785,7 @@
       if (card?.__yousubCh || card?.hasAttribute('data-yousub-state')) continue;
       if (!ownerReady) { el.__yousubInlineKind = null; el.__yousubLocal = ''; placeInline(el, null); continue; }
       // Tag the element first: askLocalId() sends this token to the page world.
-      const tok = el.__yousubLocal ||= 'l' + Math.random().toString(36).slice(2, 10);
-      if (el.getAttribute('data-yousub-local') !== tok) el.setAttribute('data-yousub-local', tok);
+      const tok = localToken(el);
       let kind;
       if (el.__yousubId) {
         // Known channel: the subscription list is authoritative (and keeps yellow colour-only)
@@ -753,7 +796,13 @@
         kind = cardSubscribedState(el) ? 'unsub' : 'sub';
         askLocalId(el);
       }
-      el.__yousubCh = { key: 'local:' + tok, id: el.__yousubId || '', name: '', url: '', __local: true, localTok: tok };
+      const id = el.__yousubId || '';
+      const listed = id ? subs.list.find((c) => c.id === id) : null;
+      el.__yousubName ||= nameNearButton(el); // Kept for the next scan, so it is never re-read
+      el.__yousubCh = {
+        key: 'local:' + tok, id, name: el.__yousubName || listed?.title || '',
+        url: listed?.url || '', __local: true, localTok: tok
+      };
       el.__yousubInlineKind = kind && inlineAllowed(el, el) ? kind : null;
       placeInline(el, el.__yousubInlineKind);
     }

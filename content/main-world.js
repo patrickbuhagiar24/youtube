@@ -376,8 +376,39 @@
     }
     // 2) The page itself (owner area, channel header, player response)
     const pageId = pageChannelId();
-    if (pageId) return { id: pageId };
+    if (pageId) return { id: pageId, name: pageChannelName(pageId) };
     return null;
+  }
+
+  /**
+   * Name of the channel the page is showing. `text` nodes are checked before data is walked, so a
+   * description link or a mentioned channel can never supply the name.
+   */
+  function pageChannelName(id) {
+    const fromPlayer = window.ytInitialPlayerResponse?.videoDetails;
+    if (id && fromPlayer?.channelId === id && fromPlayer.author) return String(fromPlayer.author);
+    for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer', '#owner', 'ytd-c4-tabbed-header-renderer']) {
+      for (const el of document.querySelectorAll(sel)) {
+        const shown = el.querySelector('#channel-name a, #channel-name #text, ytd-channel-name a, h1 yt-formatted-string, h1')?.textContent?.trim();
+        if (shown) return shown;
+      }
+    }
+    // Page data, text only: the channel's own title/handle, never a URL or an ID
+    for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer']) {
+      for (const el of document.querySelectorAll(sel)) {
+        let name = '';
+        walk(getData(el), (o) => {
+          if (typeof o.text === 'string' && o.text.trim() && !/^UC[\w-]{10,}$/.test(o.text) && !/^https?:|^\//.test(o.text)) {
+            name = o.text.trim();
+            return true;
+          }
+          if (o.channelId && o.channelId !== id) return true; // Never cross into another channel
+          return false;
+        }, null, 3000);
+        if (name) return name;
+      }
+    }
+    return '';
   }
 
   /** First channel ID found in page data, wherever the page happens to keep it. */

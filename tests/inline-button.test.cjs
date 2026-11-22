@@ -287,6 +287,34 @@ test('a stacked row is detected from its declared layout, not from a moving meas
   assert.match(css, /\.yousub-native-row \{[^}]*flex-direction: row !important;/);
 });
 
+test('a subscribed channel is named exactly as the subscription list names it', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // The rendered card title can be shortened (handle, badges, truncation); the list is exact.
+  assert.match(content, /const listed = cid \? subs\.list\.find\(\(c\) => c\.id === cid\) : null;/);
+  assert.match(content, /if \(listed\?\.title\) name = listed\.title;/);
+});
+
+test('a button outside the cards carries a name, never a raw channel ID', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // The copy's channel keeps the name from the page world, the list, or what YouTube shows.
+  assert.match(content, /el\.__yousubName \|\|= nameNearButton\(el\);/);
+  assert.match(content, /function nameNearButton\(el\)/);
+  assert.match(content, /el\.__yousubName = info\?\.name \|\| el\.__yousubName \|\| nameNearButton\(el\);/);
+  // The page world answers with the channel's name as well as its ID.
+  assert.match(main, /function pageChannelName\(id\)/);
+  assert.match(main, /fromPlayer\?\.channelId === id && fromPlayer\.author/);
+});
+
+test('a card without channel data is resolved from its own button, not sent without an ID', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // The watch page owner area is a card with no channel data of its own: it owns the copy, so it
+  // must be marked local - otherwise the click silently sent no channel at all.
+  assert.match(content, /if \(!r\.id && nativeSubButton\(card\)\) \{/);
+  assert.match(content, /Object\.assign\(r, \{ __local: true, localTok: localToken\(card\) \}\);/);
+  assert.match(content, /if \(!ch\.id && !targetHasId\(ch\)\) \{/);
+});
+
 test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);

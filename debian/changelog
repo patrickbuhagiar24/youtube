@@ -1,3 +1,17 @@
+yousub (2.4.5) unstable; urgency=medium
+
+  * Use the exact channel name everywhere: for a subscribed channel the name
+    comes from the subscription list, not from the shortened or differently
+    styled title rendered on the card.
+  * Give the copy beside YouTube's own button a real channel name (from the page
+    world, the subscription list, or the name YouTube shows) instead of a raw
+    UC... ID in the toast and in the saved entry.
+  * Resolve the channel of a card that has none of its own (the watch page owner
+    area) from that card's own button, so clicking its copy no longer sends a
+    request without a channel ID.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.4.4) unstable; urgency=medium
 
   * Fix "Could not find this channel ID" when clicking the copy beside
