@@ -128,7 +128,7 @@ Marking is controlled by `Display mode` and the two colours:
 
 ## If markers do not appear
 
-Run `diagnostics.js` in the YouTube tab: press F12 (Developer tools) → **Console**, paste the whole file, press Enter. It prints which part is missing — extension context, page flag, stored list, marked cards, and whether YouTube's page-world script answers — and changes no settings. Share its output when asking for help.
+Run `diagnostics.js` in the YouTube tab: press F12 (Developer tools) → **Console**, paste the whole file, press Enter. It prints which part is missing and which version is really running in the page: a page console cannot see extension APIs, so the checks look for the trace the extension leaves in the page (`data-yousub-*` attributes and `yousub-*` classes). "0. console type: inside the page" is expected. It changes no settings; share its output when asking for help.
 
 ## Keyboard
 

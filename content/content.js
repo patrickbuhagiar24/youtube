@@ -7,6 +7,8 @@
   'use strict';
   if (window.__YOUSUB_CONTENT__) return;
   window.__YOUSUB_CONTENT__ = true;
+  // Lets diagnostics.js (and support) see which build is actually running in the page.
+  try { document.documentElement.setAttribute('data-yousub-version', chrome.runtime.getManifest().version); } catch { /* */ }
 
   const IN = 'yousub-content';
   const OUT = 'yousub-main';

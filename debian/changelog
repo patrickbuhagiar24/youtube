@@ -1,3 +1,11 @@
+yousub (2.3.9) unstable; urgency=medium
+
+  * Report the reported version in the page (data-yousub-version) and make the
+    diagnostics accurate: a page console cannot see extension APIs, so it now
+    checks the trace the extension leaves in the page instead.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.3.8) unstable; urgency=medium
 
   * Stop hiding every marker when YouTube's page configuration has not loaded
