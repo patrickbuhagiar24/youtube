@@ -1,3 +1,15 @@
+yousub (2.5.1) unstable; urgency=medium
+
+  * Use the configuration read from the folder from a cache instead of reading
+    the folder again: opening the side panel no longer touches the folder and no
+    longer asks for permissions, which failed because that is not a user action.
+  * Read only the top level of the chosen folder; sub-folders are not entered.
+  * Show a single ✅ on the Google Drive row (details in its tooltip) and name
+    the missing file when service-account.json or yousub-google-drive.json is
+    not in the folder.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.5.0) unstable; urgency=medium
 
   * Configure Google Drive from a folder instead of a manifest file: choose the

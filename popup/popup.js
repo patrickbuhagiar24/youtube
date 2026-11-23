@@ -110,16 +110,14 @@ async function renderDrive() {
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
-  // Configuration status: the row states whether a manifest is loaded and which file it points at.
-  const account = d.email || 'service account';
-  const found = cfg.folder ? ` · folder ${cfg.folder}` : '';
-  $('driveConfig').textContent = !configured ? '❌ Not configured — choose a folder with 📁'
-    : d.syncing ? `✅ Configured · ${account}${found} · ⏳ syncing…`
-      : d.lastError ? `✅ Configured · ${account}${found} · ⚠️ needs attention`
-        : `✅ Configured · ${account}${found}${d.fileName ? ' · ' + d.fileName : ''}`;
-  $('driveConfig').title = configured && cfg.files
-    ? `Found in the folder: ${cfg.files.serviceAccount} and ${cfg.files.drive}`
-    : '';
+  // Configuration status: one mark, no sentence. The tooltip keeps the details.
+  if (!$('driveConfig').classList.contains('warn')) $('driveConfig').textContent = configured ? '✅' : '❌';
+  if (!$('driveConfig').classList.contains('warn')) $('driveConfig').title = !configured
+    ? 'Not configured: choose the folder that holds service-account.json and yousub-google-drive.json (📁)'
+    : [d.email || 'service account', cfg.folder ? `folder ${cfg.folder}` : '',
+      cfg.files ? `found ${cfg.files.serviceAccount} and ${cfg.files.drive}` : '',
+      d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName ? d.fileName : '']
+      .filter(Boolean).join(' · ');
   // Once configured, the same picker replaces the saved configuration instead of setting it up.
   const setup = $('driveSetupBtn');
   const setupLabel = configured ? 'Choose another configuration folder' : 'Choose the configuration folder';
@@ -141,6 +139,7 @@ async function loadFolder(handle) {
     return link;
   });
   await YousubFolder.remember(handle);
+  clearConfigWarning();
   await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
   await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
   await renderDrive();
@@ -157,28 +156,27 @@ $('driveSetupBtn').addEventListener('click', async () => {
     const handle = await window.showDirectoryPicker({ id: 'yousub-config', mode: 'read' });
     await loadFolder(handle);
   } catch (e) {
-    if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not read this folder: ' + (e.message || String(e));
+    if (e.name === 'AbortError') return;
+    const message = e.message || String(e);
+    if (/^Missing JSON file/.test(message)) showConfigWarning(message);
+    else $('driveStatus').textContent = 'Could not read this folder: ' + message;
   }
 });
 
-// The remembered folder is re-read when the panel opens, so edits to its files are picked up
-// without choosing the folder again. A missing permission is asked for once, and only if the
-// configuration is already in use (never on a bare panel open without a user action).
-let folderChecked = false;
-async function refreshFromFolder() {
-  if (folderChecked) return;
-  folderChecked = true;
-  const handle = await YousubFolder.remembered();
-  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
-  const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
-  if (!handle || !configured) return;
-  try {
-    if (!(await YousubFolder.usable(handle))) return;
-    await loadFolder(handle);
-  } catch (e) {
-    $('driveStatus').textContent = '⚠️ ' + (e.message || String(e));
-  }
+/** A missing file is a configuration problem: show it on the configuration row, not the sync row. */
+function showConfigWarning(message) {
+  $('driveConfig').textContent = '⚠️';
+  $('driveConfig').title = message;
+  $('driveStatus').textContent = message;
+  $('driveConfig').classList.add('warn');
 }
+function clearConfigWarning() {
+  $('driveConfig').classList.remove('warn');
+}
+
+// No folder access when the panel opens: the configuration read from the folder is cached in
+// chrome.storage.local and used directly, so the browser is never asked for permission again. The
+// folder only needs to be chosen again when its files change (the 📁 / 🔁 button).
 
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
@@ -206,7 +204,6 @@ chrome.tabs.onUpdated.addListener((id, change) => {
   await loadSettings();
   await renderFromStorage();
   await renderDrive();
-  await refreshFromFolder();
   await refreshActiveTab();
   // Slow fallback for messages lost during navigation or extension reload.
   setInterval(async () => { if (!document.hidden) { const s = await getState(); if (s) render(s); } }, 30000);

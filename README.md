@@ -70,7 +70,9 @@ cat /usr/share/yousub/yousub-id.txt
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until you choose a configuration **folder**. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** and choose the folder that holds your JSON files — Yousub finds the two files it needs by their content, so their names do not matter and sub-folders are searched too. Once the folder is read the row reports `✅ Configured · <service account email> · folder <name>` and the button turns into 🔁 (**Choose another configuration folder**); syncing itself is automatic. The folder is remembered, so its files are re-read automatically when the side panel opens (after an edit, for example) without choosing it again.
+Google Drive sync is disabled until you choose a configuration **folder**. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** and choose the folder that holds your JSON files. Only the **top level** of that folder is read (sub-folders are not entered), and the two files are recognised by their content, so their names do not matter. When everything is found the row shows **✅** (hover for the account, the folder name, and which files were used) and the button becomes 🔁 (**Choose another configuration folder**); syncing itself is automatic. If a file is missing the row shows **⚠️** and the line below names it, for example `Missing JSON file: yousub-google-drive.json`.
+
+The configuration is read once and then used from the cache in `chrome.storage.local`, so opening the side panel never touches the folder and never asks the browser for permission again. Choose the folder again with 🔁 after changing a file inside it.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
@@ -97,7 +99,7 @@ Only one sync runs at a time. It signs in with the service account, reads `YouTu
 
 ### Google Drive row in the side panel
 
-- **Status line**: `❌ Not configured` until a manifest is loaded, then `✅ Configured · <service account email>` plus the file name when known, or `⚠️ needs attention` with the error.
+- **Status line**: `❌` until a folder is read, then `✅`; the tooltip holds the account, the folder and the files found. `⚠️` means a file is missing (named in the line below) or the sync needs attention.
 - **📁 / 🔁 button**: 📁 opens the folder picker; once configured it becomes 🔁 and replaces the saved configuration with the contents of the newly chosen folder.
 - **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress.
 

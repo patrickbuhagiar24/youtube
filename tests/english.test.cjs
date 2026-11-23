@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.5.0');
+  assert.equal(manifest.version, '2.5.1');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -136,8 +136,9 @@ test('the Drive row reports the configuration and the picker replaces it once co
   const js = fs.readFileSync('popup/popup.js', 'utf8');
   assert.match(html, /id="driveConfig"/); // Status line inside the "Google Drive sync" row
   assert.match(html, /Google Drive sync/);
-  assert.match(js, /\$\('driveConfig'\)\.textContent = !configured \? '❌ Not configured/);
-  assert.match(js, /✅ Configured · /);
+  // One mark, no sentence: the details are in the tooltip.
+  assert.match(js, /\$\('driveConfig'\)\.textContent = configured \? '✅' : '❌';/);
+  assert.doesNotMatch(js, /✅ Configured · /);
   // Unconfigured: setup with 📁. Configured: the same button replaces the configuration.
   assert.match(js, /'Choose the configuration folder'/);
   assert.match(js, /'Choose another configuration folder'/);
@@ -154,6 +155,12 @@ test('Google Drive setup picks a folder, not a manifest file', () => {
   assert.match(js, /showDirectoryPicker/);
   assert.match(js, /YousubFolder\.read/);
   assert.match(js, /YousubFolder\.remember/);
+  // The cached configuration is used as it is: opening the panel never reads the folder again,
+  // so the browser cannot ask for permission outside a user gesture.
+  assert.doesNotMatch(js, /YousubFolder\.usable|refreshFromFolder|requestPermission/);
+  const lib = fs.readFileSync('folder-config.js', 'utf8');
+  assert.doesNotMatch(lib, /requestPermission\(/);
+  assert.match(lib, /queryPermission\(\{ mode: 'read' \}\)/);
   assert.match(js, /chrome\.storage\.local\.set/);
   // A manifest file with links is gone: no file picker, no manifest loader, no shipped loader.
   assert.doesNotMatch(js, /showOpenFilePicker|YousubManifest/);
