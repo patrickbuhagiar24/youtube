@@ -112,41 +112,74 @@ async function renderDrive() {
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
   // Configuration status: the row states whether a manifest is loaded and which file it points at.
   const account = d.email || 'service account';
-  $('driveConfig').textContent = !configured ? '❌ Not configured — open a manifest with 📁'
-    : d.syncing ? `✅ Configured · ${account} · ⏳ syncing…`
-      : d.lastError ? `✅ Configured · ${account} · ⚠️ needs attention`
-        : `✅ Configured · ${account}${d.fileName ? ' · ' + d.fileName : ''}`;
+  const found = cfg.folder ? ` · folder ${cfg.folder}` : '';
+  $('driveConfig').textContent = !configured ? '❌ Not configured — choose a folder with 📁'
+    : d.syncing ? `✅ Configured · ${account}${found} · ⏳ syncing…`
+      : d.lastError ? `✅ Configured · ${account}${found} · ⚠️ needs attention`
+        : `✅ Configured · ${account}${found}${d.fileName ? ' · ' + d.fileName : ''}`;
+  $('driveConfig').title = configured && cfg.files
+    ? `Found in the folder: ${cfg.files.serviceAccount} and ${cfg.files.drive}`
+    : '';
   // Once configured, the same picker replaces the saved configuration instead of setting it up.
   const setup = $('driveSetupBtn');
-  const setupLabel = configured ? 'Replace the Google Drive configuration' : 'Open Drive file setup';
+  const setupLabel = configured ? 'Choose another configuration folder' : 'Choose the configuration folder';
   setup.textContent = configured ? '🔁' : '📁';
   setup.title = setupLabel;
   setup.setAttribute('aria-label', setupLabel);
   setup.classList.toggle('configured', configured);
 }
 
+/* ---------------- Google Drive configuration: one folder, files found inside ---------------- */
+
+/** Read the chosen folder and store the Drive configuration it contains. */
+async function loadFolder(handle) {
+  $('driveStatus').textContent = 'Searching this folder for the configuration files…';
+  const config = await YousubFolder.read(handle, (driveText) => {
+    // Same rules as before, applied to the file found in the folder
+    const link = Drive.linkFromConfig(driveText);
+    if (!Drive.fileIdOf(link)) throw new Error('The Drive configuration must contain a valid file link.');
+    return link;
+  });
+  await YousubFolder.remember(handle);
+  await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
+  await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
+  await renderDrive();
+  return config;
+}
+
 $('driveSetupBtn').addEventListener('click', async () => {
-  if (!window.showOpenFilePicker) {
-    $('driveStatus').textContent = 'This browser does not support the file picker.';
+  if (!window.showDirectoryPicker) {
+    $('driveStatus').textContent = 'This browser does not support the folder picker.';
     return;
   }
   try {
-    // Start the picker immediately in the click gesture. The side panel stays open on Linux.
-    const [handle] = await window.showOpenFilePicker({
-      multiple: false,
-      types: [{ description: 'JSON configuration manifest', accept: { 'application/json': ['.json'] } }]
-    });
-    const file = await handle.getFile();
-    if (file.size > 256 * 1024) throw new Error('The manifest is too large (maximum 256 KB).');
-    $('driveStatus').textContent = 'Loading linked configuration files…';
-    const config = await YousubManifest.load(await file.text());
-    await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
-    await chrome.runtime.sendMessage({ type: 'driveSync' }).catch(() => {});
-    await renderDrive();
+    // Start the picker inside the click gesture. The side panel stays open on Linux.
+    const handle = await window.showDirectoryPicker({ id: 'yousub-config', mode: 'read' });
+    await loadFolder(handle);
   } catch (e) {
-    if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not load configuration: ' + (e.message || String(e));
+    if (e.name !== 'AbortError') $('driveStatus').textContent = 'Could not read this folder: ' + (e.message || String(e));
   }
 });
+
+// The remembered folder is re-read when the panel opens, so edits to its files are picked up
+// without choosing the folder again. A missing permission is asked for once, and only if the
+// configuration is already in use (never on a bare panel open without a user action).
+let folderChecked = false;
+async function refreshFromFolder() {
+  if (folderChecked) return;
+  folderChecked = true;
+  const handle = await YousubFolder.remembered();
+  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
+  const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
+  if (!handle || !configured) return;
+  try {
+    if (!(await YousubFolder.usable(handle))) return;
+    await loadFolder(handle);
+  } catch (e) {
+    $('driveStatus').textContent = '⚠️ ' + (e.message || String(e));
+  }
+}
+
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
   if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
@@ -172,7 +205,8 @@ chrome.tabs.onUpdated.addListener((id, change) => {
 (async () => {
   await loadSettings();
   await renderFromStorage();
-  renderDrive();
+  await renderDrive();
+  await refreshFromFolder();
   await refreshActiveTab();
   // Slow fallback for messages lost during navigation or extension reload.
   setInterval(async () => { if (!document.hidden) { const s = await getState(); if (s) render(s); } }, 30000);

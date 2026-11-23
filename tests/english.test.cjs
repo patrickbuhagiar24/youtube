@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.4.7');
+  assert.equal(manifest.version, '2.5.0');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -139,20 +139,28 @@ test('the Drive row reports the configuration and the picker replaces it once co
   assert.match(js, /\$\('driveConfig'\)\.textContent = !configured \? '❌ Not configured/);
   assert.match(js, /✅ Configured · /);
   // Unconfigured: setup with 📁. Configured: the same button replaces the configuration.
-  assert.match(js, /'Open Drive file setup'/);
-  assert.match(js, /'Replace the Google Drive configuration'/);
+  assert.match(js, /'Choose the configuration folder'/);
+  assert.match(js, /'Choose another configuration folder'/);
   assert.match(js, /setup\.textContent = configured \? '🔁' : '📁'/);
   assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
 });
 
-test('Google Drive setup opens a single manifest picker from the side panel', () => {
+test('Google Drive setup picks a folder, not a manifest file', () => {
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
   assert.ok(manifest.permissions.includes('sidePanel'));
   assert.equal(manifest.side_panel.default_path, 'popup/popup.html');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
-  assert.match(js, /showOpenFilePicker/);
-  assert.match(js, /YousubManifest\.load/);
+  // One folder choice; the files inside are found by their content.
+  assert.match(js, /showDirectoryPicker/);
+  assert.match(js, /YousubFolder\.read/);
+  assert.match(js, /YousubFolder\.remember/);
   assert.match(js, /chrome\.storage\.local\.set/);
+  // A manifest file with links is gone: no file picker, no manifest loader, no shipped loader.
+  assert.doesNotMatch(js, /showOpenFilePicker|YousubManifest/);
+  assert.equal(fs.existsSync('config-manifest.js'), false);
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  assert.match(html, /folder-config\.js/);
+  assert.doesNotMatch(html, /config-manifest\.js/);
 });
 
 

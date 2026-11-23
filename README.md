@@ -70,7 +70,7 @@ cat /usr/share/yousub/yousub-id.txt
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until you choose a configuration manifest. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** to pick the JSON manifest. Once a manifest is loaded the row reports `✅ Configured` and the button turns into 🔁 (**Replace the Google Drive configuration**); syncing itself is automatic.
+Google Drive sync is disabled until you choose a configuration **folder**. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 under **Google Drive sync** and choose the folder that holds your JSON files — Yousub finds the two files it needs by their content, so their names do not matter and sub-folders are searched too. Once the folder is read the row reports `✅ Configured · <service account email> · folder <name>` and the button turns into 🔁 (**Choose another configuration folder**); syncing itself is automatic. The folder is remembered, so its files are re-read automatically when the side panel opens (after an edit, for example) without choosing it again.
 
 1. Create a service account in Google Cloud and enable the Google Drive API.
 2. Download its JSON key.
@@ -80,16 +80,9 @@ Google Drive sync is disabled until you choose a configuration manifest. Unsubsc
    {"link": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing"}
    ```
 
-4. Upload both the configuration JSON and the service account JSON key to Drive. Create one local manifest containing links to both files, and select it with 📁:
+4. Put the service account JSON key and `yousub-google-drive.json` in one folder on this computer, then choose that folder with 📁. Nothing is uploaded for this step and there is no manifest to write: Yousub scans the folder (and its sub-folders) for a JSON object with `"type": "service_account"` and one with a `link` field.
 
-   ```json
-   {
-     "yousub-google-drive.json": "https://drive.google.com/file/d/CONFIG_ID/view",
-     "service-account.json": "https://drive.google.com/file/d/KEY_ID/view"
-   }
-   ```
-
-Both linked files must be downloadable without signing in. The manifest is read once and the downloaded settings are stored in `chrome.storage.local`, which is not encrypted.
+The files are read once and the settings are stored in `chrome.storage.local`, which is not encrypted. Editing them later only needs the panel to be opened again, which re-reads the remembered folder.
 
 ### When the sync runs
 
@@ -105,7 +98,7 @@ Only one sync runs at a time. It signs in with the service account, reads `YouTu
 ### Google Drive row in the side panel
 
 - **Status line**: `❌ Not configured` until a manifest is loaded, then `✅ Configured · <service account email>` plus the file name when known, or `⚠️ needs attention` with the error.
-- **📁 / 🔁 button**: 📁 opens a configuration manifest; once configured it becomes 🔁 and replaces the saved configuration.
+- **📁 / 🔁 button**: 📁 opens the folder picker; once configured it becomes 🔁 and replaces the saved configuration with the contents of the newly chosen folder.
 - **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress.
 
 ### Subscribed channel count
@@ -136,7 +129,7 @@ Yousub adds **no keyboard shortcuts or hotkeys** — there is no `commands` entr
 
 - Click the `+` / `−` in a thumbnail corner (the `−` follows the cursor when hovering a subscribed video).
 - Click the `+` / `−` placed to the right of YouTube's own Subscribe button — in cards, and also on a watch page or a channel header, where that button is not part of any video card.
-- Toggle the extension, change modes and colours, or pick the Drive manifest in the side panel.
+- Toggle the extension, change modes and colours, or choose the Drive configuration folder in the side panel.
 
 YouTube's own shortcuts (space, `k`, `j`, `l`, `f`, `m`, `c`, `shift+n`, etc.) keep working untouched.
 
@@ -155,7 +148,7 @@ node --check drive.js
 node --check content/content.js
 node --check content/main-world.js
 node --check popup/popup.js
-node --check config-manifest.js
+node --check folder-config.js
 node --test tests/*.test.cjs
 ```
 

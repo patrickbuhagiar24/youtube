@@ -1,3 +1,16 @@
+yousub (2.5.0) unstable; urgency=medium
+
+  * Configure Google Drive from a folder instead of a manifest file: choose the
+    folder with 📁 and Yousub finds the files it needs by their content (a
+    service account key and a JSON object with a "link"), whatever they are
+    named and also in sub-folders.
+  * Remember the chosen folder, so its files are re-read when the side panel
+    opens and edits are picked up without choosing it again.
+  * Remove the manifest format and its loader; the Drive sync itself keeps using
+    the service account exactly as before.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.4.7) unstable; urgency=medium
 
   * Read a card's channel name from its lockup title instead of the first
