@@ -1,3 +1,13 @@
+yousub (2.5.2) unstable; urgency=medium
+
+  * Move the configuration folder button into the "previously unsubscribed
+    channels" row, at its far right, next to the ✅/❌ mark, and remove the
+    separate "Google Drive sync" box.
+  * A missing file keeps its warning mark and message until the next successful
+    read, including when the sync status refreshes.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.5.1) unstable; urgency=medium
 
   * Use the configuration read from the folder from a cache instead of reading

@@ -25,22 +25,15 @@
     <div id="error" class="err hidden" role="alert"></div>
   </section>
 
-  <!-- Unsubscribe history row -->
+  <!-- Unsubscribe history row: count, status, configuration mark, and the folder picker -->
   <section class="card drive">
     <span class="dotl"></span>
     <div class="grow">
       <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
       <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
     </div>
-  </section>
-
-  <!-- Drive setup: label, configuration status, and the folder picker -->
-  <section class="card drive">
-    <div class="grow">
-      <div>Google Drive sync</div>
-      <small id="driveConfig" class="muted" aria-live="polite">❌ Not configured</small>
-    </div>
-    <button id="driveSetupBtn" class="icon" title="Open Drive file setup" aria-label="Open Drive file setup">📁</button>
+    <span id="driveConfig" class="mark" aria-live="polite" title="Not configured">❌</span>
+    <button id="driveSetupBtn" class="icon" title="Choose the configuration folder" aria-label="Choose the configuration folder">📁</button>
   </section>
 
   <!-- Collapsible settings -->

@@ -110,9 +110,19 @@ async function renderDrive() {
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
-  // Configuration status: one mark, no sentence. The tooltip keeps the details.
-  if (!$('driveConfig').classList.contains('warn')) $('driveConfig').textContent = configured ? '✅' : '❌';
-  if (!$('driveConfig').classList.contains('warn')) $('driveConfig').title = !configured
+  // Configuration mark at the right of the unsubscribe row: one symbol, details in the tooltip.
+  const mark = $('driveConfig');
+  const missing = $('driveConfig').dataset.missing || '';
+  if (missing) {
+    mark.textContent = '⚠️';
+    mark.title = missing;
+    mark.classList.add('warn');
+  } else if (mark.classList.contains('warn') && !missing) {
+    mark.classList.remove('warn');
+  }
+  if (!mark.classList.contains('warn')) mark.textContent = configured ? '✅' : '❌';
+  if (missing) return; // A named missing file stays on screen until the next successful read
+  mark.title = !configured
     ? 'Not configured: choose the folder that holds service-account.json and yousub-google-drive.json (📁)'
     : [d.email || 'service account', cfg.folder ? `folder ${cfg.folder}` : '',
       cfg.files ? `found ${cfg.files.serviceAccount} and ${cfg.files.drive}` : '',
@@ -163,14 +173,16 @@ $('driveSetupBtn').addEventListener('click', async () => {
   }
 });
 
-/** A missing file is a configuration problem: show it on the configuration row, not the sync row. */
+/** A missing file is a configuration problem: the mark turns ⚠️ and the line below names the file. */
 function showConfigWarning(message) {
+  $('driveConfig').dataset.missing = message;
   $('driveConfig').textContent = '⚠️';
   $('driveConfig').title = message;
-  $('driveStatus').textContent = message;
   $('driveConfig').classList.add('warn');
+  $('driveStatus').textContent = message;
 }
 function clearConfigWarning() {
+  delete $('driveConfig').dataset.missing;
   $('driveConfig').classList.remove('warn');
 }
 

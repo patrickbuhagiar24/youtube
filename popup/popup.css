@@ -36,6 +36,9 @@ button.secondary { background: #333; }
 .drive b { color: var(--left); }
 .drive small { display: block; overflow-wrap: anywhere; }
 .dotl { width: 12px; height: 12px; border-radius: 50%; background: var(--left); box-shadow: 0 0 8px var(--left); flex: none; }
+/* Configuration mark, at the far right of the row: ✅ configured, ❌ not yet, ⚠️ a file is missing */
+.mark { flex: none; font-size: 15px; line-height: 1; cursor: help; }
+.mark.warn { font-size: 17px; }
 
 details summary { cursor: pointer; font-weight: 600; list-style: none; }
 details summary::-webkit-details-marker { display: none; }

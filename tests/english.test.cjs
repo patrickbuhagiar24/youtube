@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.5.1');
+  assert.equal(manifest.version, '2.5.2');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -134,10 +134,18 @@ test('the side panel has no manual refresh or Drive sync buttons', () => {
 test('the Drive row reports the configuration and the picker replaces it once configured', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
-  assert.match(html, /id="driveConfig"/); // Status line inside the "Google Drive sync" row
-  assert.match(html, /Google Drive sync/);
+  // The mark and the folder button live in the unsubscribe row, at its far right.
+  const row = html.slice(html.indexOf('<!-- Unsubscribe history row'), html.indexOf('<!-- Collapsible settings'));
+  assert.match(row, /id="unsubCount"/);
+  assert.match(row, /id="driveConfig"/);
+  assert.match(row, /id="driveSetupBtn"/);
+  assert.match(row, /<span id="driveConfig" class="mark"/);
+  assert.ok(row.indexOf('driveConfig') < row.indexOf('driveSetupBtn'), 'the mark sits before the button');
+  // The separate "Google Drive sync" box is gone.
+  assert.equal((html.match(/class="card drive"/g) || []).length, 1);
+  assert.doesNotMatch(html, /<div>Google Drive sync<\/div>/);
   // One mark, no sentence: the details are in the tooltip.
-  assert.match(js, /\$\('driveConfig'\)\.textContent = configured \? '✅' : '❌';/);
+  assert.match(js, /if \(!mark\.classList\.contains\('warn'\)\) mark\.textContent = configured \? '✅' : '❌';/);
   assert.doesNotMatch(js, /✅ Configured · /);
   // Unconfigured: setup with 📁. Configured: the same button replaces the configuration.
   assert.match(js, /'Choose the configuration folder'/);
