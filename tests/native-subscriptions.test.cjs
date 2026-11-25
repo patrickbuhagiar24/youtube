@@ -70,7 +70,10 @@ test('the native Subscribe button gets no click, dialog, or polling hooks', () =
   assert.doesNotMatch(source, /CONFIRM_BUTTON|confirm-dialog-renderer/);
   assert.doesNotMatch(source, /nativeButtonChanged|nativeRefreshRequested|scanButtons|getElementsByTagName/);
   assert.doesNotMatch(source, /addEventListener\('click'/);
-  assert.doesNotMatch(source, /subscribe-button-renderer|yt-subscribe-button-view-model/);
+  assert.doesNotMatch(source, /CONFIRM_BUTTON|nativeButtonChanged|nativeRefreshRequested|scanButtons/);
+  // Its element may only be read (see localSubscribeIdentity): never hooked or clicked here.
+  assert.doesNotMatch(source, /(subscribe-button-renderer|yt-subscribe-button-view-model)[^\n]*addEventListener/);
+  assert.doesNotMatch(source, /\.click\(\)/);
   // YouTube's button is not polled: the safety-net interval only rescans cards.
   assert.match(source, /setInterval\(\(\) => \{ if \(!document\.hidden\) scan\(\); \}, 10000\)/);
 });
@@ -82,4 +85,36 @@ test('the content script keeps no fallback refresh tied to the native button', (
   const scripts = manifest.content_scripts.flatMap((entry) => entry.js);
   assert.ok(!scripts.includes('content/native-refresh.js'));
   assert.ok(!fs.existsSync('content/native-refresh.js'));
+});
+
+test('the identity lookup reads a tagged button element, not only its children', () => {
+  const source = fs.readFileSync('content/main-world.js', 'utf8');
+  // Regression: the content script tags the button element itself, and querySelectorAll never
+  // returns the element it is called on, so the lookup used to answer nothing at all.
+  assert.match(source, /if \(scope\.matches\?\.\(NATIVE_BTN_SEL\)\) found\.unshift\(scope\);/);
+  assert.match(source, /const NATIVE_BTN_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';/);
+  // It must fall back to channel data the page already has, so no click is left without an ID.
+  assert.match(source, /function pageChannelId\(\)/);
+  assert.match(source, /ytInitialPlayerResponse\?\.videoDetails\?\.channelId/);
+  // And a request without an ID is resolved from the page (video on /watch, URL on a channel page).
+  assert.match(source, /function pageHint\(hint = \{\}\)/);
+  assert.match(source, /ids = \[await resolveChannelId\(pageHint\(hint\)\)\]/);
+});
+
+test('an unknown login state is never reported as signed out', () => {
+  const source = fs.readFileSync('content/main-world.js', 'utf8');
+  // ytcfg may not exist yet when the page asks; !!undefined would have said "signed out"
+  // and the isolated script would then hide every marker.
+  assert.match(source, /loggedIn: typeof cfg\('LOGGED_IN'\) === 'boolean' \? cfg\('LOGGED_IN'\) : null/);
+  assert.doesNotMatch(source, /loggedIn: !!cfg\('LOGGED_IN'\)/);
+  assert.match(source, /const configured = await waitCfg\(\);/);
+  assert.match(source, /configured \? \{\} : \{ loggedIn: null \}/);
+});
+
+test('hidden tabs are scanned so markers are ready when the tab is shown', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  assert.match(content, /setInterval\(\(\) => extAlive && \(\+\+tick % 4 === 0 \|\| document\.documentElement\.classList\.contains\('yousub-autoload'\)\) && scheduleScan\(\), 2500\)/);
+  assert.doesNotMatch(content, /extAlive && !document\.hidden/);
+  // Autoload itself stays visible-only: it must not load pages in the background.
+  assert.match(content, /!auto\.done && !document\.hidden && AUTOLOAD_PATH/);
 });

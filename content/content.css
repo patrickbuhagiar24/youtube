@@ -152,18 +152,29 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   vertical-align: middle;
   margin-left: 8px;
   flex: 0 0 auto;
+  /* The copy must never widen or reshape the row it is placed in: that is what made it move */
+  box-shadow: none;
+  contain: layout style;
 }
 .yousub-inlinebtn {
+  /* The strokes are positioned against the button, so it must be their containing block */
+  position: relative !important;
+  display: inline-block !important;
+  flex: 0 0 auto;
+  visibility: visible !important;
+  opacity: 1 !important;
   box-sizing: border-box;
   width: 30px;
   height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   margin: 0;
   padding: 0;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: var(--yousub-color);
+  background: var(--yousub-color) !important;
   /* Hide the +/− text and draw the strokes with CSS for exact, font-independent centering */
-  color: transparent;
+  color: transparent !important;
   font-size: 0;
   line-height: 0;
   overflow: hidden;
@@ -177,11 +188,13 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   position: absolute;
   inset: 0;
   margin: auto;
-  background: #fff;
+  width: 13px;
+  height: 3px;
   border-radius: 2px;
+  background: #fff !important; /* YouTube's own button styles must not blank the stroke */
+  pointer-events: none;
 }
-.yousub-inlinebtn::before { width: 13px; height: 3px; } /* Horizontal stroke */
-.yousub-inlinebtn::after { width: 3px; height: 13px; }  /* Vertical stroke */
+.yousub-inlinebtn::after { width: 3px; height: 13px; }  /* Vertical stroke turns the bar into a plus */
 .yousub-inlinebtn:hover { transform: scale(1.12); filter: brightness(1.1); }
 .yousub-inlinebtn:active { transform: scale(.95); }
 /* Processing: a spinner, also exactly centered */
@@ -197,14 +210,33 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   animation: yousub-spin .8s linear infinite;
 }
 .yousub-inlinebtn:disabled::after { display: none; }
-/* Fallback when YouTube's container is a block: lay the native button and the copy on one line */
+/* Fallback, used only when YouTube's own container stacks its children: put the button and the
+   copy on one line. A container YouTube already lays out horizontally is never restyled. */
 .yousub-native-row {
   display: flex !important;
-  flex-wrap: wrap;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
+  white-space: nowrap;
+  overflow: visible !important; /* Never clip the +/− away */
+  height: auto !important;
+  max-height: none !important;
+}
+/* The button keeps its size: the copy sits next to it, and the row is never resized by the copy */
+.yousub-native-row > ytd-subscribe-button-renderer,
+.yousub-native-row > yt-subscribe-button-renderer,
+.yousub-native-row > yt-subscribe-button-view-model {
+  flex: 0 0 auto;
+  width: auto !important;
+  max-width: none !important;
 }
 .yousub-native-row > .yousub-inline-host { margin-left: 0; }
+/* The copy is a direct child of a row that already lays out its children on one line */
+.yousub-inline-anchor-row { display: flex; align-items: center; }
+/* A wrapper that still hides or clips its children must not hide the copy */
+.yousub-native-row > .yousub-inline-host .yousub-inlinebtn { clip-path: none !important; }
 /* Blue unsubscribe (−) button */
 .yousub-inlinebtn.yousub-unsubbtn { background: var(--yousub-unsub-btn, #1e88e5); }
 .yousub-inlinebtn.yousub-unsubbtn::after { display: none; } /* Horizontal stroke only = minus sign */

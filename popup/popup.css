@@ -71,5 +71,14 @@ input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
 body.setup { width: 420px; padding: 14px; }
 body.setup .card { margin-top: 12px; }
 
-/* Drive setup button: 📁 sets up, 🔁 replaces an existing configuration */
+/* Settings button: filled border once the Google client and file link are saved */
 .icon.configured { border-color: var(--accent); }
+.setup-card summary { font-size: 12px; }
+.setup-card .field { margin-bottom: 8px; }
+.setup-card input[type="text"], .setup-card input[type="password"] {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px;
+  border: 1px solid #444; background: #222; color: inherit; font: inherit; font-size: 12px;
+}
+.setup-links { justify-content: flex-start; gap: 8px; }
+.setup-links button { flex: none; font-size: 12px; padding: 6px 10px; }
+#setupStatus { display: block; margin-top: 8px; overflow-wrap: anywhere; }

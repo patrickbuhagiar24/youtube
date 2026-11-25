@@ -1,17 +1,11 @@
 name: Publish signed APT repository
 
+# Published on merge to main (and on demand). There are no release tags: the version
+# comes from manifest.json, and this run builds the signed package itself.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      run_id:
-        description: ID of a successful "Build signed Yousub extension" run
-        required: false
-      tag:
-        description: Tag to wait for when no build run ID is given
-        required: false
-        default: v2.0.0
 
 permissions:
   contents: read
@@ -21,7 +15,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    # A called workflow does not inherit the caller's secrets implicitly.
+    uses: ./.github/workflows/build-extension.yml
+    secrets: inherit
+
   publish:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,59 +31,73 @@ jobs:
       - name: Install repository tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv
+          sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv lintian
 
-      - name: Find the signed build run
-        id: build
+      - name: Lint the built package
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.event.inputs.run_id }}
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          if [ -n "$RUN_ID" ]; then
-            echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          for attempt in $(seq 1 12); do
-            id=$(gh api "repos/$GH_REPO/actions/workflows/build-extension.yml/runs?per_page=20" \
-              --jq ".workflow_runs[] | select(.head_branch == \"$TAG\" and .event == \"push\") | .id" | head -n 1 || true)
-            if [ -n "$id" ]; then
-              state=$(gh api "repos/$GH_REPO/actions/runs/$id" --jq '.status + " " + (.conclusion // "")')
-              case "$state" in
-                "completed success") echo "run_id=$id" >> "$GITHUB_OUTPUT"; exit 0 ;;
-                "completed failure") echo "Build run $id failed." >&2; exit 1 ;;
-              esac
-            fi
-            echo "Waiting for the build run for $TAG ($attempt/12)..."
-            sleep 10
-          done
-          echo "No successful build run found for $TAG." >&2
-          exit 1
+          mkdir -p lint
+          gh run download "${{ needs.build.outputs.run_id || github.run_id }}" --name yousub-extension --dir lint
+          deb=$(find lint -name 'yousub_*.deb' -print -quit)
+          test -n "$deb"
+          # Errors fail the run; warnings are printed for review.
+          lintian --fail-on error --display-info "$deb"
 
-      - name: Download the signed package
+      - name: Download the signed package from this run
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           mkdir -p release
-          gh run download "${{ steps.build.outputs.run_id }}" --name yousub-extension --dir release
+          # The build job runs as a reusable workflow, so its artifact belongs to that run, not
+          # to this one; fetch the artifact from whichever run produced it.
+          run_id="${{ needs.build.outputs.run_id || github.run_id }}"
+          gh run download "$run_id" --name yousub-extension --dir release
           test -n "$(find release -name 'yousub_*.deb' -print -quit)"
           (cd release && sha256sum -c checksums.txt)
 
-      - name: Build repository metadata
+      - name: Check whether this version is already published
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all site/dists/stonking/main/binary-all
+          version=$(python3 -c "import json; print(json.load(open('release/manifest.json'))['version'])" 2>/dev/null || true)
+          if [ -z "$version" ]; then
+            # The manifest is only in the ZIP; read it from there.
+            version=$(unzip -p "$(find release -name 'yousub-*-unpacked.zip' -print -quit)" manifest.json |
+              python3 -c "import json,sys; print(json.load(sys.stdin)['version'])")
+          fi
+          if [ -z "$version" ]; then echo 'No version in manifest.json.' >&2; exit 1; fi
+          published=$(curl -fsSL --retry 3 --retry-delay 2 --max-time 30 "https://patrickbuhagiar24.github.io/youtube/dists/stable/main/binary-all/Packages?cb=$(date +%s)" 2>/dev/null |
+            awk -v want="$version" '/^Package: yousub$/ {inpkg=1} inpkg && /^Version: / {print $2; exit}' || true)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$published" = "$version" ]; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip an unchanged version
+        if: steps.version.outputs.already == 'true'
+        run: echo "yousub ${{ steps.version.outputs.version }} is already published; nothing to deploy."
+
+      - name: Build repository metadata
+        if: steps.version.outputs.already != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all/by-hash
           cp release/yousub-id.txt site/extension-id.txt
           cp release/yousub_*.deb site/pool/main/y/yousub/
           cd site
-          dpkg-scanpackages --arch all pool /dev/null > dists/stable/main/binary-all/Packages
+          # Section, Priority and Description-md5 come from the package itself (dpkg-gencontrol).
+          dpkg-scanpackages --arch all pool /dev/null 2>/dev/null \
+            > dists/stable/main/binary-all/Packages
           gzip -9 -n -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
-          cp dists/stable/main/binary-all/Packages dists/stonking/main/binary-all/Packages
-          cp dists/stable/main/binary-all/Packages.gz dists/stonking/main/binary-all/Packages.gz
           cat > yousub.sources <<'EOF'
           Types: deb
           URIs: https://patrickbuhagiar24.github.io/youtube/
@@ -108,11 +122,11 @@ jobs:
           python3 - <<'PY'
           import gzip
           import hashlib
-          from datetime import datetime, timezone
+          from datetime import datetime, timedelta, timezone
           from email.utils import format_datetime
           from pathlib import Path
 
-          for suite in ('stable', 'stonking'):
+          for suite in ('stable',):
               root = Path('dists') / suite
               files = sorted(p for p in root.rglob('*') if p.is_file())
               if not files:
@@ -126,7 +140,10 @@ jobs:
                   'Architectures: all',
                   'Components: main',
                   'Description: Signed Yousub Chrome extension packages',
-                  'Acquire-By-Hash: no',
+                  'Acquire-By-Hash: yes',
+                  # Advisory date: apt only fails on it when the user sets
+                  # Acquire::Check-Valid-Until, which is not the default for this repository.
+                  'Valid-Until: ' + format_datetime(datetime.now(timezone.utc) + timedelta(days=30), usegmt=True),
               ]
               for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):
                   fields.append(label + ':')
@@ -134,10 +151,19 @@ jobs:
                       data = path.read_bytes()
                       digest = hashlib.new(algorithm, data).hexdigest()
                       fields.append(f' {digest} {len(data):16d} {path.relative_to(root).as_posix()}')
+                  # Acquire-By-Hash: apt may fetch an index by its digest instead of its name, which
+                  # keeps working when a CDN still serves the previous Release file.
+                  if algorithm in ('sha256', 'sha512'):
+                      for path in files:
+                          data = path.read_bytes()
+                          target = root / 'by-hash' / algorithm.upper() / hashlib.new(algorithm, data).hexdigest()
+                          target.parent.mkdir(parents=True, exist_ok=True)
+                          target.write_bytes(data)
               (root / 'Release').write_text('\n'.join(fields) + '\n', encoding='utf-8')
           PY
 
       - name: Sign the repository
+        if: steps.version.outputs.already != 'true'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -159,7 +185,7 @@ jobs:
           printf '%s\n' "$fingerprint" > site/archive-keyring.fingerprint.txt
           gpg --batch --yes --armor --export "$fingerprint" > site/archive-keyring.asc
           gpg --batch --yes --export "$fingerprint" > site/archive-keyring.gpg
-          for suite in stable stonking; do
+          for suite in stable; do
             gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
               --local-user "$fingerprint" --armor --detach-sign \
               --output "site/dists/$suite/Release.gpg" "site/dists/$suite/Release"
@@ -180,11 +206,14 @@ jobs:
             rm -rf "$GNUPGHOME"
           fi
 
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      - if: steps.version.outputs.already != 'true'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - if: steps.version.outputs.already != 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site
           include-hidden-files: true
       - name: Deploy GitHub Pages
+        if: steps.version.outputs.already != 'true'
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

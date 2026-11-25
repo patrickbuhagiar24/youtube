@@ -14,6 +14,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   const all = await chrome.storage.local.get(null);
   const stale = Object.keys(all).filter((k) => !YOUSUB.STORE_KEYS.includes(k));
   if (stale.length) await chrome.storage.local.remove(stale);
+  // The key check above is unchanged since 2.7.0, which lacked the sign-in record; make sure a
+  // refresh token written before this build is back when a device has any sign-in to restore.
+  await Drive.restoreSignIn();
   setupAlarm();
   clearHistoryWhenUnconfigured();
   Drive.sync(); // Read the Drive settings saved in the popup after installation or reload
@@ -23,10 +26,10 @@ chrome.runtime.onStartup.addListener(() => { setupAlarm(); clearHistoryWhenUncon
 function setupAlarm() { chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 15 }); }
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === SYNC_ALARM) { clearHistoryWhenUnconfigured(); Drive.sync(); } });
 
-// Local unsubscribe history exists only while Drive sync is configured.
+// Local unsubscribe history exists only while Drive sync is configured (cached file: client + link).
 async function clearHistoryWhenUnconfigured() {
   const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
-  const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
+  const configured = !!(String(cfg.clientId || '').trim() && String(cfg.link || '').trim());
   if (!configured) await chrome.storage.local.remove('yousubUnsubs');
 }
 
@@ -47,7 +50,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (Date.now() - lastPull > 120e3) { lastPull = Date.now(); Drive.sync(); }
       return;
     case 'driveSync':
-      Drive.sync().then(sendResponse);
+      // Only a click in the panel may open the Google sign-in window.
+      Drive.sync({ signIn: msg.signIn === true }).then(sendResponse);
+      return true;
+    case 'driveSignOut':
+      // Revoke the token of the configured client, then report the result of a fresh sync.
+      chrome.storage.local.get(YOUSUB.CONFIG_KEY)
+        .then(({ [YOUSUB.CONFIG_KEY]: cfg = {} }) => Drive.signOut(cfg.clientId || ''))
+        .then(() => Drive.sync())
+        .then(sendResponse)
+        .catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
   }
 });

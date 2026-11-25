@@ -25,23 +25,30 @@
     <div id="error" class="err hidden" role="alert"></div>
   </section>
 
-  <!-- Unsubscribe history row -->
+  <!-- Unsubscribe history row: count, status, and the configuration file button -->
   <section class="card drive">
     <span class="dotl"></span>
     <div class="grow">
       <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
       <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
     </div>
+    <button id="driveSetupBtn" class="icon" title="Choose the configuration file" aria-label="Choose the configuration file">📄</button>
   </section>
 
-  <!-- Drive setup: label, configuration status, and the manifest picker -->
-  <section class="card drive">
-    <div class="grow">
-      <div>Google Drive sync</div>
-      <small id="driveConfig" class="muted" aria-live="polite">❌ Not configured</small>
+  <!-- Google settings: one configuration file, plus sign in / sign out -->
+  <details id="googleSetup" class="card setup-card">
+    <summary>Configuration file and Google account</summary>
+    <p class="hint">Pick one JSON file with <code>"yousub-file"</code> (the link to YouTube.json),
+      <code>"client_id"</code> and optionally <code>"client_secret"</code>. It is read once and then
+      kept in this browser, so it is never needed again — not even after a restart. The guide is in
+      the project README.</p>
+    <small id="configInfo" class="muted">No configuration file has been read yet.</small>
+    <div class="links setup-links">
+      <button id="chooseFileBtn" class="secondary">Choose file…</button>
+      <button id="signOutBtn" class="secondary">Sign out</button>
     </div>
-    <button id="driveSetupBtn" class="icon" title="Open Drive file setup" aria-label="Open Drive file setup">📁</button>
-  </section>
+    <small id="setupStatus" class="muted" aria-live="polite"></small>
+  </details>
 
   <!-- Collapsible settings -->
   <details class="card">
@@ -81,7 +88,7 @@
   <footer>Version <span id="ver"></span></footer>
   <script src="../shared.js"></script>
   <script src="../drive.js"></script>
-  <script src="../config-manifest.js"></script>
+  <script src="../config-file.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -7,6 +7,8 @@
   'use strict';
   if (window.__YOUSUB_CONTENT__) return;
   window.__YOUSUB_CONTENT__ = true;
+  // Lets diagnostics.js (and support) see which build is actually running in the page.
+  try { document.documentElement.setAttribute('data-yousub-version', chrome.runtime.getManifest().version); } catch { /* */ }
 
   const IN = 'yousub-content';
   const OUT = 'yousub-main';
@@ -22,13 +24,25 @@
   const CHANNEL_LINK = 'a[href^="/@"], a[href^="/channel/"], a[href^="/c/"], a[href^="/user/"]';
   // YouTube's own subscribe/unsubscribe button (classic renderer and newer view models)
   const NATIVE_SUB_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';
-  /** YouTube's subscribe/unsubscribe button inside a card, or null when the card has none. */
-  const nativeSubButton = (card) => card?.querySelector?.(NATIVE_SUB_SEL) || null;
+  /** YouTube's subscribe/unsubscribe button inside a card (or the element itself), else null. */
+  const nativeSubButton = (card) => card?.querySelector?.(NATIVE_SUB_SEL) ||
+    (card?.matches?.(NATIVE_SUB_SEL) ? card : null);
+  /** Where the copy goes: next to YouTube's button element itself, so no inner wrapper can clip it. */
+  const nativeRowAnchor = (card) => {
+    const el = nativeSubButton(card);
+    if (!el) return null;
+    let node = el;
+    for (let up = el.parentElement; node !== card && up && up !== card; up = up.parentElement) {
+      if (!up.matches?.(NATIVE_SUB_SEL)) break;
+      node = up; // Nested renderers: use the outermost button node inside the card
+    }
+    return node;
+  };
 
   let settings = { ...DEFAULTS };
   const subs = { list: [], ids: new Set(), keys: new Set(), titles: new Set(), ts: 0, accountId: null, loggedIn: null, stats: null };
   let channelPage = null; // { key, name, subscribed }
-  let syncing = false, syncProgress = 0;
+  let syncing = false, syncProgress = 0, syncRetryTimer = 0;
   let initialized = false;
   const earlyChanges = [];
   let changesDuringSync = null;
@@ -109,11 +123,25 @@
   });
 
   /* ---------------- data subscription ---------------- */
+  /** Set when a stored entry had to drop a name; the list is then refreshed once in the background. */
+  let subsNeedsSync = false;
+
   function loadSubs(data) {
     subs.list = Array.isArray(data?.list) ? data.list : [];
     subs.ts = data?.ts || 0;
     subs.accountId = data?.accountId ?? null;
     subs.stats = data?.stats || null;
+    // Entries saved by an earlier version could hold an @handle as the title. The handle is kept,
+    // the title is cleared, and the next sync fills in the real name.
+    let fixed = 0;
+    for (const c of subs.list) {
+      if (c.title && !isName(c.title)) {
+        if (!c.handle && isHandle(c.title)) c.handle = c.title.slice(1);
+        c.title = '';
+        fixed++;
+      }
+    }
+    if (fixed) subsNeedsSync = true;
     rebuildSets();
   }
   function rebuildSets() {
@@ -131,6 +159,9 @@
   }, 500);
 
   const isSubKey = (k) => (k.startsWith('UC') ? subs.ids : subs.keys).has(k);
+  /** A channel name is a title, never a bare @handle or an ID (YouTube shows handles bylines). */
+  const isHandle = (t) => /^@\S+$/.test(String(t || '').trim());
+  const isName = (t) => { const s = String(t || '').trim(); return !!s && !isHandle(s) && !/^UC[\w-]{10,}$/.test(s); };
 
   /** Add or remove one channel from the stored subscription list. */
   function setSubscribed(id, subscribed, info) {
@@ -157,7 +188,8 @@
 
   /* ---------------- unsubscribe history ---------------- */
   const isLeft = (id) => unsubs[id]?.s === 'unsub' && !subs.ids.has(id);
-  const driveConfigured = (cfg) => !!(String(cfg?.link || '').trim() && String(cfg?.keyText || '').trim());
+  // The cached configuration file decides: a client id and the YouTube.json link.
+  const driveConfigured = (cfg) => !!(String(cfg?.link || '').trim() && String(cfg?.clientId || '').trim());
   const readDriveConfigured = async () => {
     const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
     return driveConfigured(cfg);
@@ -198,15 +230,37 @@
    * Collaborations: subscribe to all missing collaborators, or unsubscribe from all subscribed collaborators.
    */
   async function changeSub(ch, action = 'subscribe') {
-    const k = ch.key || ch.id || ch.url;
+    // The channel header carries no channel data of its own in some layouts. Ask the MAIN world to
+    // read it from that exact button (yt-subscribe-button), so the click still works.
+    if (ch.__local && !ch.id) {
+      try {
+        const info = await request('identityLocal', 15000, { local: ch.localTok || '' });
+        if (info?.id) Object.assign(ch, { id: info.id, name: ch.name || info.name || '', url: ch.url || info.url || '' });
+        // The page world can still resolve the channel from the page itself (video or channel URL),
+        // so a click is never sent with nothing to work with.
+        else if (location.pathname === '/watch') ch.vid = new URLSearchParams(location.search).get('v') || '';
+        else ch.url = location.pathname;
+      } catch { /* The page world resolves it from the page instead */ }
+    }
+    const k = ch.key || ch.id || ch.url || (ch.__local ? 'local-button' : '');
     if (!k || busy.has(k)) return false;
+    if (!ch.id && !targetHasId(ch)) {
+      // Resolve from the page itself: the video on a watch page, the address bar on a channel page.
+      if (location.pathname === '/watch') ch.vid ||= new URLSearchParams(location.search).get('v') || '';
+      else ch.url ||= location.pathname;
+    }
     const sub = action === 'subscribe';
     const group = sub ? ch.collab : ch.subCollab;
+    // One target: the channel object this button acts on (its own object stays the reference used
+    // for the busy flag and the toast). Never the card wrapper, which carries no ID of its own.
     const targets = group?.length ? group : [ch];
     busy.add(k);
     refreshButtons();
     try {
-      const r = await request('subscription', 60000, { action, ids: targets.map((c) => c.id).filter(Boolean), url: ch.url, vid: ch.vid || '', name: ch.name || '' });
+      const ids = targets.map((c) => c.id).filter(Boolean);
+      // With no ID, the page world resolves the channel from the page (see pageHint there), which
+      // is why the name is sent as well: the toast and the saved entry use it.
+      const r = await request('subscription', 60000, { action, ids, url: ch.url, vid: ch.vid || '', name: ch.name || '' });
       const names = [];
       for (const id of r.ids || []) {
         const info = targets.find((c) => c.id === id) || (targets.length === 1 ? targets[0] : null) || { name: '', url: '' };
@@ -227,6 +281,10 @@
       refreshButtons();
     }
   }
+
+  /** Whether any channel in this action already carries an ID. */
+  const targetHasId = (ch) => [ch, ...(ch.collab || []), ...(ch.subCollab || [])]
+    .some((c) => /^UC[\w-]{10,}$/.test(c?.id || ''));
 
   function refreshButtons() {
     for (const b of document.querySelectorAll('.yousub-subbtn, .yousub-inlinebtn')) {
@@ -293,6 +351,10 @@
       lastError = !list.length ? 'You are not subscribed to any channels.' : r.stats?.note || '';
     } catch (e) {
       lastError = friendlyError(e);
+      // The stored list is still valid. Retry quietly in 20 seconds; the page is never
+      // reloaded for this, and the user is not asked to do anything.
+      clearTimeout(syncRetryTimer);
+      syncRetryTimer = setTimeout(safe(() => { if (extAlive && !syncing && subs.loggedIn !== false) doSync(); }), 20000);
     } finally {
       changesDuringSync = null;
       syncing = false;
@@ -337,6 +399,7 @@
     const id = card.getAttribute('data-yousub-cid') || '';
     let url = card.getAttribute('data-yousub-url') || '';
     let name = card.getAttribute('data-yousub-name') || '';
+    if (!isName(name)) name = '';
     const keys = id ? [id] : [];
     const uk = keyFromPath(url); if (uk && uk !== id) keys.push(uk);
 
@@ -345,19 +408,30 @@
       const k = a && keyFromPath(a.getAttribute('href'));
       if (k) { keys.push(k); url ||= a.getAttribute('href'); name ||= a.textContent.trim(); }
     }
-    if (!name) name = card.querySelector(NAME_SEL)?.textContent.trim() || '';
+    if (!name || !isName(name)) {
+      // Card bylines render the @handle next to the title; only the title is a name.
+      const parts = [card.querySelector(NAME_SEL), ...card.querySelectorAll('#' + 'channel-name a, ytd-channel-name a, #channel-name #text, #channel-name')]
+        .map((n) => n?.textContent?.trim() || '')
+        .flatMap((t) => t.split(/\n|\s{2,}/).map((x) => x.trim()))
+        .filter(isName);
+      name = parts[0] || (isName(name) ? name : '');
+    }
     if (!keys.length && !name) return null;
 
     const subscribed = keys.some(isSubKey) || (!!name && subs.titles.has(norm(name)));
     // Channel ID from the card or, for subscribed channels, from the subscription list
     const cid = id || keys.find((k) => k.startsWith('UC')) || (subscribed ? idFromList(keys, name) : leftIdFromKeys(keys)) || '';
+    // For a subscribed channel the subscription list has the exact name: what is rendered on the
+    // card can be a shortened or differently styled title (handle, badge text, truncated name).
+    const listed = cid ? subs.list.find((c) => c.id === cid) : null;
+    if (listed?.title) name = listed.title;
     return {
       subscribed,
       left: !subscribed && isLeft(cid),
       key: keys[0] || 'name:' + norm(name),
       id: cid,
-      name: name || keys[0],
-      url: url || (id ? '/channel/' + id : '')
+      name: name || listed?.title || keys[0],
+      url: url || listed?.url || (id ? '/channel/' + id : '')
     };
   }
 
@@ -393,6 +467,8 @@
   /** YouTube's native button works on a single channel; collaboration cards use the thumbnail button. */
   const inlineAllowed = (card, native = nativeSubButton(card)) => settings.showSubButton &&
     !!native && !card.__yousubCh?.collab;
+  /** Markers only make sense once the list is known, but the inline copy does not depend on it. */
+  const listReady = () => settings.enabled && subs.loggedIn !== false && subs.ts > 0;
 
   /** Create a button. getCard() returns the card this button currently acts on. */
   function makeButton(getCard, inline = false) {
@@ -439,11 +515,64 @@
     host.appendChild(btn);
   }
 
-  /** True when both buttons sit on the same text line (0-width in a hidden layout counts as yes). */
+  /**
+   * Ask the page world which channel YouTube's own button belongs to. Runs once per button and
+   * rescans, so the copy can use the subscription list (including the yellow rule) as authority.
+   */
+  function askLocalId(el) {
+    if (el.__yousubAsking || !el.__yousubLocal) return;
+    el.__yousubAsking = true;
+    request('identityLocal', 15000, { local: el.__yousubLocal })
+      .then((info) => {
+        if (info?.id) el.__yousubId = info.id;
+        el.__yousubName = info?.name || el.__yousubName || nameNearButton(el);
+      })
+      .catch(() => { /* The button's own label stays in charge */ })
+      .finally(() => { el.__yousubAsking = false; scheduleScan(); });
+  }
+
+  /**
+   * Token identifying the element whose Subscribe button is in use. The page world matches it to
+   * read that button's channel, so a click never has to guess.
+   */
+  function localToken(el) {
+    const tok = el.__yousubLocal ||= 'l' + Math.random().toString(36).slice(2, 10);
+    if (el.getAttribute('data-yousub-local') !== tok) el.setAttribute('data-yousub-local', tok);
+    return tok;
+  }
+
+  /** Channel name YouTube shows next to the button, used when the page world has none. */
+  function nameNearButton(el) {
+    const scope = el.closest?.('ytd-video-owner-renderer, yt-page-header-renderer, #owner, #page-header') ||
+      el.parentElement?.parentElement;
+    const link = scope?.querySelector?.('#channel-name a, ytd-channel-name a, #owner a[href^="/@"], #owner a[href^="/channel/"]');
+    const title = link?.textContent?.trim();
+    if (isName(title)) return title;
+    // A byline can hold the @handle in the same text node: keep only the title lines.
+    const hit = scope?.querySelector?.(NAME_SEL) || el.closest?.('ytd-video-owner-renderer, #owner')?.querySelector?.('#channel-name, ytd-channel-name, h1');
+    const parts = String(hit?.textContent || '').split(/\n|\s{2,}/).map((t) => t.trim()).filter(isName);
+    return parts[0] || '';
+  }
+
+  /** State reported by YouTube's own button, used where the card itself is not marked. */
+  function cardSubscribedState(card) {
+    const el = nativeSubButton(card);
+    const data = el?.data || el?.__data?.data || el?.polymerController?.data || el?.inst?.data;
+    if (typeof data?.subscribed === 'boolean') return data.subscribed;
+    // Without page data, infer from the label YouTube renders ("Subscribe" vs "Subscribed").
+    const label = (el?.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!label) return false;
+    return !/^(subscribe|subscri|abon|s\'abonner|inscri|登録|구독|订阅|訂閱|suscrib|iscriv|assinar|abone|inscreva)/.test(label);
+  }
+
+  /** True when both buttons sit on one text line and neither is clipped by the row it lives in. */
   function sideBySide(a, b) {
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-    if (!ra.width || !rb.width) return true;
-    return Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
+    if (!ra.width || !rb.width) return true; // Hidden layout: cannot judge, keep the CSS alone
+    const sameLine = Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) <= Math.max(ra.height, rb.height) / 2;
+    const parent = a.parentElement?.getBoundingClientRect();
+    const insideRow = !parent || (ra.left >= parent.left - 2 && ra.right <= parent.right + 2);
+    return sameLine && insideRow;
   }
 
   /**
@@ -453,12 +582,16 @@
   function placeInline(card, kind) {
     let btn = card.__yousubInlineBtn;
     if (!kind && !btn) return; // Nothing placed yet and nothing to place
-    const anchor = nativeSubButton(card);
+    const anchor = nativeRowAnchor(card);
     if (!kind || !anchor) {
       if (btn) { btn.remove(); card.__yousubInlineBtn = null; }
       const host = card.__yousubInlineHost;
       if (host) {
-        host.parentElement?.classList.remove('yousub-native-row'); // Undo the one-line fallback
+        const parent = host.parentElement;
+        if (parent?.__yousubRowFixed) { // Undo the one-line fallback and forget the decision
+          parent.classList.remove('yousub-native-row');
+          parent.__yousubRowFixed = false;
+        }
         host.remove();
         card.__yousubInlineHost = null;
       }
@@ -466,15 +599,58 @@
     }
     btn ||= card.__yousubInlineBtn = makeButton(() => card, true);
     setKind(btn, kind, card);
-    const parent = anchor.parentElement; // Same row as YouTube's button
-    if (!parent) return;
     const host = card.__yousubInlineHost ||= Object.assign(document.createElement('span'), { className: 'yousub-inline-host' });
-    if (host.parentElement !== parent || host.previousElementSibling !== anchor) {
-      parent.insertBefore(host, anchor.nextSibling);
-      // A block container would drop the copy below YouTube's button; lay that row out as one line instead
-      parent.classList.toggle('yousub-native-row', !sideBySide(host, anchor));
-    }
+    // A row YouTube has already laid out horizontally is used as it is: nothing about YouTube's
+    // own layout is touched, so the copy cannot move. Only a stacked row needs help (see below).
+    const flatRow = horizontalRow(anchor);
+    const parent = flatRow || stackedParent(anchor);
+    if (!parent) return;
+    // Only insert once. Re-inserting on sibling changes would make the copy visibly jump on every
+    // scan, so YouTube adding something beside its button never moves the copy again.
+    if (host.parentElement !== parent) parent.insertBefore(host, anchor.nextSibling);
+    if (host.parentElement !== anchor.parentElement && anchor.parentElement) anchor.parentElement.classList.add('yousub-inline-anchor-row');
     if (btn.parentElement !== host) host.appendChild(btn);
+    // A container that stacks its children (block or column flex) would put the copy on its own
+    // line. That row is laid out on one line once, and the decision is remembered: measuring again
+    // after changing the layout is exactly what made the copy flip between two positions.
+    if (!flatRow && !parent.__yousubRowFixed) {
+      parent.classList.add('yousub-native-row');
+      parent.__yousubRowFixed = true;
+    }
+  }
+
+  /**
+   * The row holding YouTube's button, but only when YouTube already lays it out horizontally and
+   * it has not become a page-wide container. Inserting there needs no CSS at all.
+   */
+  function horizontalRow(anchor) {
+    const parent = anchor.parentElement;
+    if (!parent || parent === document.body) return null;
+    if (parent.getAttribute('id') === 'content' || parent.getAttribute('id') === 'owner') return null;
+    return rowIsHorizontal(parent) ? parent : null;
+  }
+
+  /** The element wrapping the button, used only when that row stacks its children. */
+  function stackedParent(anchor) {
+    const parent = anchor.parentElement;
+    if (!parent || parent === document.body) return null;
+    // Never restyle a page-wide container: a wrapper taller than a few button rows is not a row
+    const rp = parent.getBoundingClientRect(), ra = anchor.getBoundingClientRect();
+    if (rp.height && rp.height > Math.max(ra.height, 30) * 3) return null;
+    return parent;
+  }
+
+  /** True when the element puts its children on one line (row flex, inline, or a short block row). */
+  function rowIsHorizontal(el) {
+    const style = getComputedStyle(el);
+    const display = style.display || '';
+    if (/flex|grid/.test(display)) return !/column/.test(style.flexDirection || '') && !/column/.test(style.gridTemplateColumns || '');
+    if (/inline/.test(display)) return true;
+    // A block wrapper: horizontal only when its children already sit on one line. With a single
+    // child nothing can be compared, and a second child would start a new line.
+    const kids = [...(el.children || [])].filter((k) => k.className !== 'yousub-inline-host');
+    if (kids.length < 2) return false;
+    return sideBySide(kids[1], kids[0]);
   }
 
   function clearCard(card) {
@@ -571,6 +747,8 @@
   }
 
   function scan() {
+    // Hidden tabs are still marked: they do not paint, so this costs little and the
+    // markers are ready the moment the tab is shown.
     const ready = settings.enabled && subs.loggedIn !== false && subs.ts > 0;
     document.documentElement.classList.toggle('yousub-on', ready);
     // Traverse the DOM once (YouTube may have tens of thousands of elements), also counting grids and videos
@@ -589,6 +767,7 @@
       if (card.hasAttribute('data-yousub-dup') !== dup) card.toggleAttribute('data-yousub-dup', dup);
       if (shown && !dup) marked++;
       placeButton(card, card.__yousubKind);
+      // Cheap when nothing changed; re-attaches the copy if YouTube re-rendered the button row.
       placeInline(card, card.__yousubInlineKind);
     };
 
@@ -605,6 +784,11 @@
       const state = r.subscribed ? 'sub' : r.left ? 'left' : 'unsub';
       if (card.getAttribute('data-yousub-state') !== state) card.setAttribute('data-yousub-state', state);
       if (!r.id) r.vid = videoIdOfCard(card); // Fallback for resolving a channel ID when + is clicked
+      if (!r.id && nativeSubButton(card)) {
+        // No channel data on this element: ask the page world for the channel of its own button.
+        Object.assign(r, { __local: true, localTok: localToken(card) });
+        askLocalId(card);
+      }
       card.__yousubCh = r;
       card.__yousubKey = dupKey(card);
       // Only offer unsubscribe for a confirmed subscribed ID, avoiding mismatches from duplicate names
@@ -617,6 +801,41 @@
       // Cache only confirmed channel IDs; reevaluate cards identified only by page text
       card.__yousubSig = r.id ? sig : '';
       done(card, parent);
+    }
+
+    // YouTube's own Subscribe button is not always inside a video card: the watch page owner row
+    // and the channel header change layout often, so no fixed container list is used. Any button
+    // that no card pass already covered gets the copy beside it, whatever element wraps it.
+    const ownerReady = listReady();
+    for (const el of (page || document).querySelectorAll(NATIVE_SUB_SEL)) {
+      if (el.parentElement?.matches?.(NATIVE_SUB_SEL)) continue; // Nested renderers: outermost only
+      // The card pass above already decided for buttons inside a card (including yellow = colour
+      // only). Nested cards belong to their outermost card, so only that one is checked.
+      let card = el.closest(CARD_SEL);
+      while (card && card.parentElement?.closest?.(CARD_SEL)) card = card.parentElement.closest(CARD_SEL);
+      if (card?.__yousubCh || card?.hasAttribute('data-yousub-state')) continue;
+      if (!ownerReady) { el.__yousubInlineKind = null; el.__yousubLocal = ''; placeInline(el, null); continue; }
+      // Tag the element first: askLocalId() sends this token to the page world.
+      const tok = localToken(el);
+      let kind;
+      if (el.__yousubId) {
+        // Known channel: the subscription list is authoritative (and keeps yellow colour-only)
+        kind = isSubKey(el.__yousubId) ? 'unsub' : isLeft(el.__yousubId) ? null : 'sub';
+      } else {
+        // YouTube's own button decides immediately; the channel ID is resolved for the click and
+        // for the yellow rule, which is why this one lookup is asked once per button.
+        kind = cardSubscribedState(el) ? 'unsub' : 'sub';
+        askLocalId(el);
+      }
+      const id = el.__yousubId || '';
+      const listed = id ? subs.list.find((c) => c.id === id) : null;
+      el.__yousubName ||= nameNearButton(el); // Kept for the next scan, so it is never re-read
+      el.__yousubCh = {
+        key: 'local:' + tok, id, name: el.__yousubName || listed?.title || '',
+        url: listed?.url || '', __local: true, localTok: tok
+      };
+      el.__yousubInlineKind = kind && inlineAllowed(el, el) ? kind : null;
+      placeInline(el, el.__yousubInlineKind);
     }
 
     fixGridColumns(grids, ready && !!settings.sortUnsub);
@@ -687,7 +906,7 @@
     if (auto.page !== page) auto = { page, count: -1, since: 0, done: false }; // New page: start again
     let on = false;
     const limit = [0, 100, 250, 500].includes(settings.autoloadLimit) ? settings.autoloadLimit : DEFAULTS.autoloadLimit;
-    if (ready && settings.sortUnsub && limit > 0 && !auto.done && AUTOLOAD_PATH.test(location.pathname)) {
+    if (ready && settings.sortUnsub && limit > 0 && !auto.done && !document.hidden && AUTOLOAD_PATH.test(location.pathname)) {
       if (n !== auto.count) { auto.count = n; auto.since = Date.now(); }
       auto.done = n >= limit || Date.now() - auto.since > AUTOLOAD.stallMs;
       on = !auto.done;
@@ -759,6 +978,9 @@
     settings = { ...DEFAULTS, ...yousubSettings };
     loadSubs(yousubSubs);
     initialized = true;
+    // A stored entry lost its name (it held an @handle): refresh the list once so the real title
+    // comes back, without waiting for the user to press anything.
+    if (subsNeedsSync && subs.ts) setTimeout(safe(doSync), 3000);
     for (const change of earlyChanges.splice(0)) updateSub(change.id, change.subscribed, change.info);
     reconcile();
     applySettings();
@@ -767,9 +989,10 @@
       if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target) &&
         (m.attributeName === 'hidden' || !m.target.closest?.('ytd-page-manager > [hidden]')))) scheduleScan();
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-yousub-v', 'hidden'] });
-    // Fallback every 10 seconds, or 2.5 seconds during autoload to detect an exhausted list
+    // Fallback every 10 seconds (4 ticks of 2.5 s), every tick during autoload. Runs in hidden
+    // tabs too, so a background-opened page is already marked when it is shown.
     let tick = 0;
-    setInterval(() => extAlive && !document.hidden && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
+    setInterval(() => extAlive && (++tick % 4 === 0 || document.documentElement.classList.contains('yousub-autoload')) && scheduleScan(), 2500);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleScan(true); });
     for (const ev of ['pointermove', 'pointerover']) document.addEventListener(ev, onPointer, { capture: true, passive: true });
     document.addEventListener('scroll', queueHover, { capture: true, passive: true });
@@ -777,6 +1000,20 @@
     document.documentElement.addEventListener('mouseleave', () => { pointer = null; leave(); });
     window.addEventListener('blur', () => { pointer = null; leave(); });
     document.addEventListener('yt-navigate-finish', () => scheduleScan(true));
+
+    // Back/forward cache: Chrome restores the document without rerunning the page scripts, so
+    // YouTube's own data is missing. Reload the page once automatically (never in a loop).
+    const pageRestored = (event) => {
+      if (event.persisted) location.reload();
+    };
+    window.addEventListener('pageshow', pageRestored);
+    // If that reload fails to produce page data within 30 seconds, explain it in one line.
+    setTimeout(safe(() => {
+      if (initialized && subs.loggedIn === null && !document.querySelector('ytd-app')) {
+        lastError = 'YouTube is not responding on this tab. Open youtube.com in a new tab and try again.';
+        notifyState();
+      }
+    }), 30000);
 
     let hello;
     try { hello = await request('hello', 30000); } catch { hello = { loggedIn: null }; }

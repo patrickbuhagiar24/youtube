@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.3.4');
+  assert.equal(manifest.version, '2.7.1');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -101,6 +101,24 @@ test('the side panel removes the saved-configuration button and its wiring', () 
   assert.doesNotMatch(build, /config-store\.js/);
 });
 
+test('no message asks the user to press F5 or to reload by hand', () => {
+  const files = ['content/content.js', 'content/main-world.js', 'popup/popup.js', 'popup/popup.html', 'README.md'];
+  for (const file of files) {
+    const text = fs.readFileSync(file, 'utf8');
+    // Only what the user can actually see: quoted UI strings, not developer code comments.
+    const shown = [...text.matchAll(/'([^'\n]*)'|`([^`]*)`/g)].map((m) => m[1] ?? m[2]).join('\n');
+    assert.doesNotMatch(shown, /\bF5\b/, `${file} must not show F5 to the user`);
+    assert.doesNotMatch(shown, /reload (the|this) (page|tab)/i, `${file} must not tell the user to reload by hand`);
+  }
+  // Recovery is automatic instead: a back/forward-cache restore reloads once, and a failed
+  // list refresh retries on its own while the stored list stays usable.
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  assert.match(content, /if \(event\.persisted\) location\.reload\(\)/);
+  assert.match(content, /syncRetryTimer = setTimeout\(safe\(\(\) => \{ if \(extAlive && !syncing && subs\.loggedIn !== false\) doSync\(\); \}\), 20000\)/);
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  assert.match(main, /YouTube did not finish loading this page\. Go back to YouTube and try again\./);
+});
+
 test('the side panel has no manual refresh or Drive sync buttons', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
@@ -113,39 +131,108 @@ test('the side panel has no manual refresh or Drive sync buttons', () => {
   assert.match(fs.readFileSync('background.js', 'utf8'), /Drive\.sync\(\)/);
 });
 
-test('the Drive row reports the configuration and the picker replaces it once configured', () => {
+test('the Drive row reports the configuration and the settings button opens the form', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
-  assert.match(html, /id="driveConfig"/); // Status line inside the "Google Drive sync" row
-  assert.match(html, /Google Drive sync/);
-  assert.match(js, /\$\('driveConfig'\)\.textContent = !configured \? '❌ Not configured/);
-  assert.match(js, /✅ Configured · /);
-  // Unconfigured: setup with 📁. Configured: the same button replaces the configuration.
-  assert.match(js, /'Open Drive file setup'/);
-  assert.match(js, /'Replace the Google Drive configuration'/);
-  assert.match(js, /setup\.textContent = configured \? '🔁' : '📁'/);
+  // The button lives in the unsubscribe row, at its far right, and no status mark is drawn.
+  const row = html.slice(html.indexOf('<!-- Unsubscribe history row'), html.indexOf('<!-- Google settings'));
+  assert.match(row, /id="unsubCount"/);
+  assert.match(row, /id="driveSetupBtn"/);
+  assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button sits at the right');
+  assert.doesNotMatch(html + js, /id="driveConfig"|class="mark"|mark\.textContent/);
+  // One Drive box only: there is no separate "Google Drive sync" row.
+  assert.equal((html.match(/class="card drive"/g) || []).length, 1);
+  assert.doesNotMatch(html, /<div>Google Drive sync<\/div>/);
+  // The form picks a file and offers sign out; the three settings are inside the file, not in fields.
+  for (const id of ['chooseFileBtn', 'signOutBtn', 'configInfo', 'setupStatus', 'googleSetup']) {
+    assert.match(html, new RegExp(`id="${id}"`), `${id} is in the form`);
+  }
+  assert.doesNotMatch(html, /id="clientId"|id="clientSecret"|id="driveLink"|id="saveSetupBtn"|id="redirectUri"/);
+  assert.match(js, /showOpenFilePicker/);
+  assert.match(js, /YousubConfigFile\.read/);
+  assert.match(js, /type: 'driveSync', signIn: true/);
   assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
 });
 
-test('Google Drive setup opens a single manifest picker from the side panel', () => {
-  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-  assert.ok(manifest.permissions.includes('sidePanel'));
-  assert.equal(manifest.side_panel.default_path, 'popup/popup.html');
-  const js = fs.readFileSync('popup/popup.js', 'utf8');
-  assert.match(js, /showOpenFilePicker/);
-  assert.match(js, /YousubManifest\.load/);
-  assert.match(js, /chrome\.storage\.local\.set/);
+test('every message points at a control the panel really has', () => {
+  const drive = fs.readFileSync('drive.js', 'utf8');
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+  // The panel has no "Sign in" button and no "Client secret" field any more: the secret lives in
+  // the configuration file. A message that names them sends the reader looking for nothing.
+  assert.doesNotMatch(drive, /click Sign in\./);
+  assert.doesNotMatch(drive, /"Client secret" field/);
+  assert.doesNotMatch(drive, /Click ⚙️/);
+  // The two controls that do exist.
+  assert.ok(ids.has('driveSetupBtn'), 'the 📄 button opens the form');
+  assert.ok(ids.has('chooseFileBtn'), 'Choose file… is also what signs in');
+  assert.match(drive, /const OPEN_FORM = 'Open the side panel and click 📄\.'/);
+  assert.match(drive, /const SIGN_IN = 'Open the side panel, click 📄, then choose the configuration file again to sign in\.'/);
+  // The consent screen for auth/drive does not read like the narrow drive.file one.
+  assert.doesNotMatch(drive, /See, edit, create and delete only the specific Google Drive files/);
+  assert.match(drive, /only touches the one file named in the configuration/);
 });
 
+test('the sign-in record is a stored key, so an update cannot delete it', () => {
+  const shared = fs.readFileSync('shared.js', 'utf8');
+  const keys = JSON.parse(shared.match(/STORE_KEYS: Object\.freeze\((\[[^\]]*\])\)/)[1].replace(/'/g, '"'));
+  // onInstalled runs on every extension update and deletes local keys missing from this list;
+  // dropping the token key silently stops the background sync until the person signs in again.
+  assert.ok(keys.includes('yousubOAuthTokens'), 'the refresh token survives an update');
+  for (const key of ['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig']) assert.ok(keys.includes(key), key);
+  assert.match(fs.readFileSync('background.js', 'utf8'), /await Drive\.restoreSignIn\(\)/);
+  // The flow record and its mirror live in chrome.storage.session, which the onInstalled sweep
+  // never touches because it only reads chrome.storage.local.
+  assert.doesNotMatch(shared, /yousubOAuthFlow/);
+});
 
+test('the panel redraws from one storage listener, not three', () => {
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  assert.equal((js.match(/chrome\.storage\.onChanged\.addListener/g) || []).length, 1);
+  assert.doesNotMatch(js, /EMAIL_KEY/, 'the sign-in record is not an email key');
+  assert.match(js, /const TOKENS_KEY = 'yousubOAuthTokens';/);
+});
+
+test('the manifest asks only for the hosts the code contacts', () => {
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.deepEqual(manifest.host_permissions, [
+    'https://www.youtube.com/*',
+    'https://oauth2.googleapis.com/*',
+    'https://www.googleapis.com/*'
+  ]);
+  // A Drive file link is a value in the configuration, never a page the extension requests.
+  for (const gone of ['https://drive.google.com/*', 'https://*.googleusercontent.com/*']) {
+    assert.ok(!manifest.host_permissions.includes(gone), `${gone} is not contacted`);
+  }
+});
+
+test('configuration is one cached file, not a folder scan', () => {
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  // No folder picker and no folder scanner remain anywhere in the extension.
+  assert.doesNotMatch(html + js, /showDirectoryPicker|YousubFolder|folder-config/);
+  assert.equal(fs.existsSync('folder-config.js'), false);
+  assert.ok(fs.existsSync('config-file.js'), 'the file loader exists');
+  const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
+  assert.match(build, /config-file\.js/);
+  assert.doesNotMatch(build, /folder-config\.js/);
+  const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  assert.match(ci, /config-file\.js/);
+  // The file format has its own guard.
+  const loader = fs.readFileSync('config-file.js', 'utf8');
+  for (const key of ['yousub-file', 'client_id', 'client_secret']) assert.match(loader, new RegExp(`'${key.replace('_', '_')}'`));
+  assert.match(loader, /version: VERSION/);
+});
 
 test('the APT repository workflow is signed and deployed through Pages', () => {
   const text = fs.readFileSync('.github/workflows/publish-apt.yml', 'utf8');
   assert.match(text, /GPG_PRIVATE_KEY: \$\{\{ secrets\.GPG_PRIVATE_KEY \}\}/);
   assert.match(text, /GPG_PASSPHRASE: \$\{\{ secrets\.GPG_PASSPHRASE \}\}/);
   assert.match(text, /Suites: stable/);
-  assert.match(text, /for suite in \('stable', 'stonking'\)/);
-  assert.match(text, /for suite in stable stonking; do/);
+  // One suite only: "stonking" was an alias and is gone.
+  assert.match(text, /for suite in \('stable',\):/);
+  assert.match(text, /for suite in stable; do/);
+  assert.doesNotMatch(text, /stonking/);
   assert.match(text, /Signed-By: \/etc\/apt\/keyrings\/yousub\.gpg/);
   assert.match(text, /actions\/deploy-pages/);
   assert.match(text, /gpgv --keyring/);
@@ -159,12 +246,36 @@ test('the APT repository workflow is signed and deployed through Pages', () => {
   assert.doesNotMatch(text, /gh release/);
 });
 
+test('releases are Pages-only: no release tags and no GitHub Releases', () => {
+  const publish = fs.readFileSync('.github/workflows/publish-apt.yml', 'utf8');
+  const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
+  for (const text of [publish, build]) {
+    assert.doesNotMatch(text, /tags: \['v\*'\]/, 'no workflow may trigger on version tags');
+    assert.doesNotMatch(text, /github\.ref_name|head_branch == \\?"\$TAG/, 'no workflow may resolve a tag');
+    assert.doesNotMatch(text, /gh release|softprops\/action-gh-release|actions\/create-release/, 'no GitHub Releases');
+  }
+  // Merging to main publishes; a manual run can target any branch (verified: Pages accepts it).
+  assert.match(publish, /on:\n  push:\n    branches: \[main\]\n  workflow_dispatch:/);
+  // The version comes from manifest.json, and an unchanged version is not redeployed.
+  assert.doesNotMatch(publish, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(publish, /uses: \.\/\.github\/workflows\/build-extension\.yml/);
+  // Without this the called workflow cannot see YOUSUB_CRX_PRIVATE_KEY / GPG secrets.
+  assert.match(publish, /secrets: inherit/);
+  assert.match(publish, /needs: build/);
+  assert.match(publish, /already/);
+  assert.match(build, /on:\n  workflow_call:\n  workflow_dispatch:/);
+  // The publish job receives its artifact from the build job of the same run, falling back to
+  // this run's id when the reusable workflow does not expose its own.
+  assert.match(publish, /run_id="\$\{\{ needs\.build\.outputs\.run_id \|\| github\.run_id \}\}"/);
+  assert.match(publish, /gh run download "\$run_id"/);
+});
+
 test('the build workflow signs the CRX and does not publish a GitHub Release', () => {
   const text = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.match(text, /YOUSUB_CRX_PRIVATE_KEY: \$\{\{ secrets\.YOUSUB_CRX_PRIVATE_KEY \}\}/);
   assert.match(text, /'dgst', '-sha256', '-sign'/);
   assert.match(text, /manifest\['key'\] = public_key/);
-  assert.match(text, /on:\n  workflow_dispatch:/);
+  assert.match(text, /on:\n  workflow_call:\n  workflow_dispatch:/);
   assert.doesNotMatch(text, /echo[^\n]*\$YOUSUB_CRX_PRIVATE_KEY/);
 });
 

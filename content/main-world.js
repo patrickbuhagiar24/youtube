@@ -48,6 +48,8 @@
     }
     return false;
   }
+  /** The page data is missing (for example restored from the back/forward cache). */
+  const NOT_READY = 'YouTube did not finish loading this page. Go back to YouTube and try again.';
   function getCookie(name) {
     const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
     return m ? decodeURIComponent(m[1]) : null;
@@ -103,8 +105,9 @@
     throw err;
   }
 
+  /** null means "YouTube has not told us yet"; null is never treated as signed out. */
   const accountInfo = () => ({
-    loggedIn: !!cfg('LOGGED_IN'),
+    loggedIn: typeof cfg('LOGGED_IN') === 'boolean' ? cfg('LOGGED_IN') : null,
     accountId: [cfg('DATASYNC_ID') || '', cfg('DELEGATED_SESSION_ID') || '', cfg('SESSION_INDEX') ?? ''].join('|')
   });
 
@@ -114,6 +117,13 @@
   // Response sections that are not part of the channel list
   const SUBS_SKIP = new Set(['header', 'topbar', 'sidebar', 'frameworkUpdates', 'responseContext', 'microformat',
     'metadata', 'trackingParams', 'thumbnail', 'thumbnails', 'accessibility', 'menu', 'loggingDirectives']);
+
+  /** A name must be a real title: a bare @handle is not a name, and an ID is not a name. */
+  const isHandle = (t) => /^@\S+$/.test(String(t || '').trim());
+  const cleanTitle = (t) => {
+    const s = String(t || '').replace(/\s+/g, ' ').trim();
+    return !s || isHandle(s) || isUC(s) ? '' : s;
+  };
 
   function entryFromLockup(l) {
     const ch = findChannel(l) || {};
@@ -125,14 +135,15 @@
       for (const p of r.metadataParts || []) if (!handle && /^@\S+$/.test(p?.text?.content || '')) handle = p.text.content;
     }
     const url = ch.url || (handle ? '/' + handle : '');
-    return { id, title: meta?.title?.content || ch.name || '', url, handle: handle || (url.startsWith('/@') ? url.slice(1) : '') };
+    const title = cleanTitle(meta?.title?.content) || cleanTitle(ch.name);
+    return { id, title, url, handle: handle || (url.startsWith('/@') ? url.slice(1) : '') };
   }
 
   function entryFromRenderer(cr) {
     const url = cr.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '';
     let handle = url.startsWith('/@') ? url.slice(1) : '';
     if (!handle) for (const t of [textOf(cr.subscriberCountText), textOf(cr.videoCountText)]) if (/^@\S+$/.test(t)) handle = t;
-    return { id: cr.channelId, title: textOf(cr.title), url, handle };
+    return { id: cr.channelId, title: cleanTitle(textOf(cr.title)), url, handle };
   }
 
   /** Find continuationCommand / nextContinuationData within a node in any format. */
@@ -165,7 +176,10 @@
     const add = (e) => {
       if (!e?.id) return;
       if (!map.has(e.id)) added++;
-      map.set(e.id, { ...map.get(e.id), ...e });
+      // A later page may know the real title where an earlier one only had the @handle.
+      const prev = map.get(e.id);
+      const title = e.title || prev?.title || '';
+      map.set(e.id, { ...prev, ...e, title, name: title });
     };
     walk(root, (o) => {
       const cr = o.channelRenderer || o.gridChannelRenderer;
@@ -194,7 +208,7 @@
   }
 
   async function fetchSubscriptions() {
-    if (!(await waitCfg())) throw new Error('The YouTube page is not ready. Reload it (F5), then try again.');
+    if (!(await waitCfg())) throw new Error(NOT_READY);
     const info = accountInfo();
     if (!info.loggedIn) return { ...info, list: [] };
 
@@ -269,6 +283,7 @@
 
   /** Check whether a value is a channel ID (UC...). */
   const isUC = (x) => /^UC[\w-]{10,}$/.test(x || '');
+  const NATIVE_BTN_SEL = 'ytd-subscribe-button-renderer, yt-subscribe-button-renderer, yt-subscribe-button-view-model';
   const cmpName = (s) => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 
   /**
@@ -310,13 +325,25 @@
     throw new Error('Could not find this channel ID. Open the channel page and click Subscribe there.');
   }
 
+  /**
+   * Fill in what the caller did not send: on a watch page the video identifies the channel through
+   * the usual resolution (player / next), on a channel page the address bar does.
+   */
+  function pageHint(hint = {}) {
+    const out = { ...hint };
+    const path = location.pathname;
+    if (!out.vid && path === '/watch') out.vid = new URLSearchParams(location.search).get('v') || '';
+    if (!out.url && /^\/(@|channel\/|c\/|user\/)/.test(path)) out.url = path;
+    return out;
+  }
+
   /** Subscribe or unsubscribe one or more channels (collaborations). Return successful IDs. */
   async function changeSubscription(action, ids, hint = {}) {
     if (!SUB_PARAMS[action]) throw new Error('Unknown action');
-    if (!(await waitCfg(5000))) throw new Error('The YouTube page is not ready. Reload it (F5), then try again.');
+    if (!(await waitCfg(5000))) throw new Error(NOT_READY);
     if (!cfg('LOGGED_IN')) throw new Error('Please sign in to YouTube first.');
     ids = (Array.isArray(ids) ? ids : [ids]).filter(isUC);
-    if (!ids.length) ids = [await resolveChannelId(hint)];
+    if (!ids.length) ids = [await resolveChannelId(pageHint(hint))];
     const done = [];
     let err = null;
     for (const id of ids) { // One at a time, like YouTube's Collaborators dialog
@@ -335,6 +362,104 @@
     return done;
   }
 
+  /**
+   * Channel behind the Subscribe button this page is showing, read from the button's own data
+   * (`yt-subscribe-button`). Used where the element has no channel of its own (video owner area,
+   * channel header) and from there resolved like any other unconfirmed channel.
+   */
+  function localSubscribeIdentity(local) {
+    // The content script tags the element whose button is in use, so the right channel is read
+    // even when the page shows several Subscribe buttons.
+    let root = null;
+    if (local) {
+      try { root = [...document.querySelectorAll('[data-yousub-local]')].find((el) => el.getAttribute('data-yousub-local') === local) || null; } catch { /* */ }
+    }
+    const buttons = (scope) => {
+      const found = [...scope.querySelectorAll(NATIVE_BTN_SEL)];
+      // The tagged element is usually the button itself, which querySelectorAll never returns
+      if (scope.matches?.(NATIVE_BTN_SEL)) found.unshift(scope);
+      return found;
+    };
+    // 1) The button the copy belongs to
+    if (root) {
+      const id = firstChannelId(buttons(root).map(getData));
+      if (id) return { id };
+    }
+    // 2) The page itself (owner area, channel header, player response)
+    const pageId = pageChannelId();
+    if (pageId) return { id: pageId, name: pageChannelName(pageId) };
+    return null;
+  }
+
+  /**
+   * Name of the channel the page is showing. `text` nodes are checked before data is walked, so a
+   * description link or a mentioned channel can never supply the name.
+   */
+  function pageChannelName(id) {
+    const fromPlayer = window.ytInitialPlayerResponse?.videoDetails;
+    if (id && fromPlayer?.channelId === id && fromPlayer.author) return String(fromPlayer.author);
+    for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer', '#owner', 'ytd-c4-tabbed-header-renderer']) {
+      for (const el of document.querySelectorAll(sel)) {
+        const shown = cleanTitle(el.querySelector('#channel-name a, #channel-name #text, ytd-channel-name a, h1 yt-formatted-string, h1')?.textContent);
+        if (shown) return shown;
+      }
+    }
+    // Page data, text only: the channel's own title/handle, never a URL or an ID
+    for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer']) {
+      for (const el of document.querySelectorAll(sel)) {
+        let name = '';
+        walk(getData(el), (o) => {
+          if (typeof o.text === 'string' && cleanTitle(o.text) && !/^https?:|^\//.test(o.text)) {
+            name = cleanTitle(o.text);
+            return true;
+          }
+          if (o.channelId && o.channelId !== id) return true; // Never cross into another channel
+          return false;
+        }, null, 3000);
+        if (name) return name;
+      }
+    }
+    return '';
+  }
+
+  /** First channel ID found in page data, wherever the page happens to keep it. */
+  function firstChannelId(roots) {
+    for (const data of roots) {
+      if (!isObj(data)) continue;
+      let id = '';
+      walk(data, (o) => {
+        if (isUC(o.channelId)) id = o.channelId;
+        else if (isUC(o.targetId)) id = o.targetId;
+        else if (isUC(o.navigationEndpoint?.browseEndpoint?.browseId)) id = o.navigationEndpoint.browseEndpoint.browseId;
+        else if (isUC(o.endpoint?.browseEndpoint?.browseId)) id = o.endpoint.browseEndpoint.browseId;
+        else if (isUC(o.browseEndpoint?.browseId)) id = o.browseEndpoint.browseId;
+        return !!id;
+      }, null, 4000);
+      if (id) return id;
+    }
+    return '';
+  }
+
+  /**
+   * Channel of the page currently shown: the watch page's video owner, or the channel page in the
+   * address bar. Read from data the page already has, so no request is made.
+   */
+  function pageChannelId() {
+    const fromPlayer = window.ytInitialPlayerResponse?.videoDetails?.channelId;
+    if (isUC(fromPlayer)) return fromPlayer;
+    for (const sel of ['ytd-video-owner-renderer', 'yt-page-header-renderer', 'ytd-c4-tabbed-header-renderer', '#owner']) {
+      const id = firstChannelId([...document.querySelectorAll(sel)].map(getData));
+      if (id) return id;
+    }
+    const path = location.pathname;
+    if (/^\/(@|channel\/|c\/|user\/)/.test(path)) {
+      const html = document.querySelector('link[rel="canonical"]')?.href || '';
+      const id = html.match(/\/channel\/(UC[\w-]{10,})/)?.[1] || '';
+      if (isUC(id)) return id;
+    }
+    return '';
+  }
+
   /* ================================================================== */
   /* Channel owning each card                                           */
   /* ================================================================== */
@@ -350,6 +475,17 @@
     try { return el.data || el.__data?.data || el.polymerController?.data || el.inst?.data || null; } catch { return null; }
   }
 
+  /**
+   * Channel of the video owner area. The owner data can be very deep (description, links), so read
+   * the known shape first and only fall back to a bounded search.
+   */
+  function ownerChannel(d) {
+    const v = d.videoOwnerRenderer || d.videoOwner || d;
+    let id = '';
+    walk(v, (x) => { const b = x.navigationEndpoint?.browseEndpoint?.browseId; if (isUC(b)) id = b; return !!id; }, null, 3000);
+    return id ? { id, name: textOf(v.title) || '' } : null;
+  }
+
   /** First channel in the data, depth-first in original key order. */
   function findChannel(root) {
     const seen = new Set();
@@ -358,11 +494,11 @@
       seen.add(o);
       if (o.adSlotRenderer || o.promotedSparklesWebRenderer) return { ad: true };
       if (typeof o.channelId === 'string' && o.channelId.startsWith('UC') && (o.title || o.subscriberCountText)) {
-        return { id: o.channelId, url: o.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '', name: textOf(o.title) };
+        return { id: o.channelId, url: o.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '', name: cleanTitle(textOf(o.title)) };
       }
       const ne = o.navigationEndpoint?.browseEndpoint;
       if (ne?.browseId?.startsWith?.('UC')) {
-        return { id: ne.browseId, url: ne.canonicalBaseUrl || '', name: typeof o.text === 'string' ? o.text : textOf(o.title) };
+        return { id: ne.browseId, url: ne.canonicalBaseUrl || '', name: cleanTitle(typeof o.text === 'string' ? o.text : textOf(o.title)) };
       }
       const be = o.browseEndpoint;
       if (be?.browseId?.startsWith?.('UC')) return { id: be.browseId, url: be.canonicalBaseUrl || '', name: '' };
@@ -398,8 +534,20 @@
     return found;
   }
 
-  const lockupName = (l) =>
-    (l?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content || '').trim();
+  /**
+   * Channel name shown on a lockup. The first metadata part is often the @handle, not the title,
+   * so the lockup's own title is used first and handle parts are skipped.
+   */
+  const lockupName = (l) => {
+    const meta = l?.metadata?.lockupMetadataViewModel;
+    const own = cleanTitle(meta?.title?.content);
+    if (own) return own;
+    const parts = [];
+    for (const row of meta?.metadata?.contentMetadataViewModel?.metadataRows || []) {
+      for (const part of row.metadataParts || []) parts.push(cleanTitle(part?.text?.content));
+    }
+    return parts.find(Boolean) || '';
+  };
 
   /* ---------- videoId -> channel map (from InnerTube responses) ---------- */
   const videoMap = new Map();
@@ -451,7 +599,9 @@
   }
 
   const CONTAINERS = new Set(['ytd-watch-next-secondary-results-renderer', 'ytd-item-section-renderer',
-    'ytd-rich-grid-renderer', 'ytd-section-list-renderer', 'ytd-playlist-panel-renderer', 'ytd-watch-flexy']);
+    'ytd-rich-grid-renderer', 'ytd-section-list-renderer', 'ytd-playlist-panel-renderer', 'ytd-watch-flexy',
+    // Channel header: it carries YouTube's Subscribe button but is not a card.
+    'yt-page-header-renderer']);
   const SCAN_SEL = [...CONTAINERS, CARD_SEL].join(',');
 
   function scan() {
@@ -461,19 +611,22 @@
 
     // 1) Index changed container data (watch sidebar, home grid, search results)
     for (const c of containers) {
-      const d = getData(c) || (c.localName === 'ytd-watch-flexy' ? c.__data?.watchNextData || c.watchNextData : null);
+      const d = getData(c) || (c.localName === 'ytd-watch-flexy' ? c.__data?.watchNextData || c.watchNextData : null) ||
+        (c.localName === 'yt-page-header-renderer' ? c.__data?.pageHeaderData || c.pageHeaderData : null);
       if (d && containerCache.get(c) !== d) { containerCache.set(c, d); try { indexData(d); } catch { /* */ } }
     }
 
     // 2) Channel owning each card
     for (const el of cards) {
       const d = getData(el);
-      const vid = videoIdOf(el, d);
+      // A channel header describes one channel, not a video: no ad or video lookup.
+      const singleChannel = el.localName === 'yt-page-header-renderer';
+      const vid = singleChannel ? '' : videoIdOf(el, d);
       const prev = dataCache.get(el);
       if (prev && prev.d === d && prev.vid === vid && (prev.resolved || prev.mv === mapVersion)) continue;
 
-      let ch = d ? findChannel(d) : null;
-      if (ch?.ad) {
+      let ch = (d && (el.localName === 'ytd-video-owner-renderer' ? ownerChannel(d) : null)) || (d ? findChannel(d) : null);
+      if (ch?.ad && !singleChannel) {
         dataCache.set(el, { d, vid, mv: mapVersion, resolved: true });
         setAttr(el, 'data-yousub-ad', '1');
         el.setAttribute('data-yousub-v', String(++ver));
@@ -481,7 +634,7 @@
       }
       const fromMap = vid ? videoMap.get(vid) : null;
       if (fromMap && !ch?.id) ch = { ...fromMap, name: ch?.name || fromMap.name };
-      if (ch && !ch.name) ch.name = lockupName(d?.content?.lockupViewModel || d) || fromMap?.name || '';
+      if (ch && !ch.name) ch.name = cleanTitle(lockupName(d?.content?.lockupViewModel || d)) || fromMap?.name || '';
       const collab = (d && collaborators(d)) || fromMap?.collab || null;
       if (collab && !ch?.id) ch = { id: collab[0].id, url: collab[0].url, name: collab.map((c) => c.name).join(', ') };
       const collabAttr = collab ? JSON.stringify(collab) : '';
@@ -593,10 +746,12 @@
     if (e.source !== window || e.data?.source !== IN) return;
     const { type, reqId } = e.data;
     if (type === 'hello') {
-      await waitCfg();
-      post('hello', { reqId, ...accountInfo() });
+      const configured = await waitCfg();
+      post('hello', { reqId, ...accountInfo(), ...(configured ? {} : { loggedIn: null }) });
     } else if (type === 'sync') {
       try { post('subs', { reqId, ...(await fetchSubscriptions()) }); } catch (err) { post('subsError', { reqId, error: String(err?.message || err) }); }
+    } else if (type === 'identityLocal') {
+      post('identityLocal', { reqId, ...(localSubscribeIdentity(e.data.local) || {}) });
     } else if (type === 'subscription') {
       try { post('subscriptionDone', { reqId, ids: await changeSubscription(e.data.action, e.data.ids, { url: e.data.url, vid: e.data.vid, name: e.data.name }) }); } catch (err) { post('subsError', { reqId, error: String(err?.message || err) }); }
     } else if (type === 'rescan') {

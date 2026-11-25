@@ -7,12 +7,14 @@ const vm = require('node:vm');
  * Run the isolated-world content script inside a DOM built from a plain object tree,
  * so the inline button can be placed next to a native Subscribe button.
  */
-function harness({ subbed = false, left = false } = {}) {
+function harness({ subbed = false, left = false, stacked = false, clip = false } = {}) {
+  const layout = { stacked, clip };
   const listeners = {};
   const messages = [];
   const pending = new Map();
   let nextId = 0;
 
+  const boxes = { host: null };
   const make = (tag, attrs = {}) => {
     const el = {
       tagName: tag.toUpperCase(), localName: tag, children: [], parentElement: null, style: {},
@@ -39,11 +41,22 @@ function harness({ subbed = false, left = false } = {}) {
       contains(node) { for (let n = node; n; n = n.parentElement) if (n === this) return true; return false; },
       querySelector() { return null; }, querySelectorAll() { return []; },
       addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); },
-      getBoundingClientRect() { return { left: 0, top: 0, bottom: 0, width: 0, height: 0 }; },
+      // Boxes are set by the harness so a test can simulate YouTube layouts (no box = zero width).
+      getBoundingClientRect() {
+        const box = (String(this.className).includes('yousub-inline-host') && boxes.host) || this.__box;
+        if (!box) return { left: 0, top: 0, bottom: 0, width: 0, height: 0 };
+        return { ...box, width: box.right - box.left, height: box.bottom - box.top };
+      },
+      get previousElementSibling() {
+        const at = this.parentElement?.children.indexOf(this) ?? -1;
+        return at > 0 ? this.parentElement.children[at - 1] : null;
+      },
       matches() { return false; }, closest() { return null; },
       getClientRects() { return []; }
     };
     const classes = new Set();
+    el.__box = { left: 0, top: 0, right: 100, bottom: 40 };
+    if (attrs.className === 'yousub-inline-host' && boxes.host) el.__box = boxes.host;
     el.classList = {
       add(...names) { names.forEach((n) => classes.add(n)); },
       remove(...names) { names.forEach((n) => classes.delete(n)); },
@@ -92,7 +105,7 @@ function harness({ subbed = false, left = false } = {}) {
           yousubSubs: { list: subbed ? [{ id: 'UCabcdefghijklmnopqrstuv', title: 'Chan' }] : [], ts: 1 },
           // The yellow state needs Drive sync configured, matching the extension's behavior.
           yousubUnsubs: left ? { UCabcdefghijklmnopqrstuv: { s: 'unsub', at: 2, title: 'Chan', url: '/channel/UCabcdefghijklmnopqrstuv' } } : {},
-          yousubDriveConfig: left ? { link: 'https://drive.google.com/file/d/x/view', keyText: '{}' } : {}
+          yousubDriveConfig: left ? { link: 'https://drive.google.com/file/d/x/view', clientId: '1234567890-abc.apps.googleusercontent.com' } : {}
         }),
         set: async () => {}
       },
@@ -110,6 +123,11 @@ function harness({ subbed = false, left = false } = {}) {
   const context = vm.createContext({
     window, document, chrome, location: { origin: 'https://www.youtube.com', pathname: '/', search: '' },
     MutationObserver: class { observe() {} }, HTMLElement: class {}, HTMLButtonElement: class {},
+    // Every row in this harness is a horizontal flex row, like YouTube's button rows, unless a
+    // test declares the row as a stacked container.
+    getComputedStyle: () => (layout.stacked
+      ? { display: 'flex', flexDirection: 'column', flexWrap: 'nowrap' }
+      : { display: 'flex', flexDirection: 'row', flexWrap: 'nowrap' }),
     requestAnimationFrame: (fn) => fn(), setTimeout: setTimeoutStub, clearTimeout() {}, setInterval: () => 0,
     YOUSUB: {
       DEFAULTS: { enabled: true, mode: 'highlight', color: '#ff3d00', showSubButton: true, sortUnsub: false, leftColor: '#ffd400', autoloadLimit: 250 },
@@ -124,7 +142,7 @@ function harness({ subbed = false, left = false } = {}) {
     for (let i = 0; i < rounds; i++) { await new Promise((resolve) => setImmediate(resolve)); flush(); }
     await new Promise((resolve) => setImmediate(resolve));
   };
-  return { card, row, thumb, nativeBtn, document, messages, pending, flush, run };
+  return { card, row, thumb, nativeBtn, document, messages, pending, flush, run, __boxes: boxes };
 }
 
 test('the copy is placed directly after YouTube\'s own subscribe button', async () => {
@@ -160,6 +178,47 @@ test('clicks on the copy never reach YouTube, so the video does not open', async
   assert.equal(h.messages.some((m) => m.type === 'subscription'), true);
 });
 
+test('the copy lands beside YouTube\'s own button element, never inside it', async () => {
+  const h = harness();
+  await h.run();
+  const host = h.row.children.find((el) => String(el.className).includes('yousub-inline-host'));
+  assert.ok(host);
+  assert.equal(h.nativeBtn.contains(host), false, 'the copy must not be nested inside YouTube\'s button');
+  assert.equal(host.previousElementSibling, h.nativeBtn, 'the copy must come right after it');
+});
+
+test('a row YouTube already lays out on one line is never restyled', async () => {
+  const h = harness();
+  await h.run();
+  assert.equal(h.row.classList.contains('yousub-native-row'), false, 'no layout change when the row is fine');
+  // The copy still sits right after the button, and stays there over repeated scans.
+  const host = h.row.children.find((el) => String(el.className).includes('yousub-inline-host'));
+  assert.equal(host.previousElementSibling, h.nativeBtn);
+  const before = h.row.children.slice();
+  await h.run(6);
+  assert.deepEqual(h.row.children, before, 'the copy must not move between scans');
+});
+
+test('a stacked row gets the one-line fallback, and it is stable', async () => {
+  const h = harness({ stacked: true });
+  await h.run();
+  const row = h.row;
+  const host = row.children.find((el) => String(el.className).includes('yousub-inline-host'));
+  assert.ok(host);
+  assert.equal(row.classList.contains('yousub-native-row'), true, 'a column row must be laid out on one line');
+  assert.equal(host.previousElementSibling, h.nativeBtn);
+  const before = row.children.slice();
+  await h.run(6); // Repeated scans must not toggle the class back and forth
+  assert.equal(row.classList.contains('yousub-native-row'), true);
+  assert.deepEqual(row.children, before);
+  // CSS keeps the glyph visible and the button at its own size.
+  const css = fs.readFileSync('content/content.css', 'utf8');
+  assert.match(css, /\.yousub-native-row \{[^}]*overflow: visible !important;/);
+  assert.match(css, /\.yousub-native-row \{[^}]*flex-wrap: nowrap !important;/);
+  // The copy itself can never resize the row it was placed in.
+  assert.match(css, /\.yousub-inline-host \{[^}]*contain: layout style;/);
+});
+
 test('a previously unsubscribed channel is marked yellow only, without any button', async () => {
   const h = harness({ left: true });
   await h.run();
@@ -173,8 +232,144 @@ test('a previously unsubscribed channel is marked yellow only, without any butto
   assert.match(css, /\[data-yousub-state="left"\] \.yousub-inline-host \{ display: none !important; \}/);
 });
 
+test('the copy also appears where YouTube\'s button is outside the video cards', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // No fixed container list: every native button outside a card gets the copy, whatever wraps it.
+  assert.match(content, /for \(const el of \(page \|\| document\)\.querySelectorAll\(NATIVE_SUB_SEL\)\)/);
+  assert.doesNotMatch(content, /OWNER_SEL/);
+  // A button already handled by the card pass is skipped, so no duplicate copy is placed.
+  assert.match(content, /if \(card\?\.__yousubCh \|\| card\?\.hasAttribute\('data-yousub-state'\)\) continue;/);
+  // Their state comes from YouTube's own button, so no channel data is needed to place the copy.
+  assert.match(content, /function cardSubscribedState/);
+  assert.match(content, /typeof data\?\.subscribed === 'boolean'/);
+  // A click there resolves the channel from that very button in the page world.
+  assert.match(main, /identityLocal/);
+  assert.match(main, /function localSubscribeIdentity/);
+  assert.match(main, /data-yousub-local/);
+  // Nothing is bound to or clicked on that button: it is only read.
+  assert.doesNotMatch(main, /nativeButtonClicked|nativeSubscribeClick/);
+});
+
+test('the button is tagged before its channel is asked for', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // askLocalId sends the token, so a token generated after the call would resolve the wrong button.
+  const tag = content.indexOf("el.__yousubLocal ||= 'l'");
+  const ask = content.indexOf('askLocalId(el);');
+  assert.ok(tag > 0 && ask > 0 && tag < ask, 'the data-yousub-local tag must exist before the lookup');
+  // One lookup per button, and the answer does not trigger another one.
+  assert.match(content, /if \(el\.__yousubAsking \|\| !el\.__yousubLocal\) return;/);
+});
+
+test('the channel header is scanned as one channel, not as a video', () => {
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // A header has no video ID, so it must not join the ad check or the video map.
+  assert.match(main, /const singleChannel = el\.localName === 'yt-page-header-renderer'/);
+  // Its own data shape is read first: description links would otherwise be found instead.
+  assert.match(main, /function ownerChannel/);
+});
+
+test('a stacked row is detected from its declared layout, not from a moving measurement', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const css = fs.readFileSync('content/content.css', 'utf8');
+  // Row direction comes from computed style, so it cannot depend on the copy's own position.
+  assert.match(content, /function rowIsHorizontal\(el\)/);
+  assert.match(content, /\/column\/\.test\(style\.flexDirection \|\| ''\)/);
+  // A row YouTube lays out horizontally is used as is: no restyling, so nothing can move.
+  assert.match(content, /const flatRow = horizontalRow\(anchor\);/);
+  assert.match(content, /const parent = flatRow \|\| stackedParent\(anchor\);/);
+  // The fallback is decided once and remembered, never recomputed after it changes the layout.
+  assert.match(content, /if \(!flatRow && !parent\.__yousubRowFixed\) \{/);
+  // Never restyle a page-wide container.
+  assert.match(content, /function stackedParent\(anchor\)/);
+  assert.match(content, /if \(rp\.height && rp\.height > Math\.max\(ra\.height, 30\) \* 3\) return null;/);
+  // The fallback class is only ever added, never toggled by a measurement that it itself changes.
+  assert.match(css, /\.yousub-native-row \{[^}]*flex-direction: row !important;/);
+});
+
+test('a subscribed channel is named exactly as the subscription list names it', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // The rendered card title can be shortened (handle, badges, truncation); the list is exact.
+  assert.match(content, /const listed = cid \? subs\.list\.find\(\(c\) => c\.id === cid\) : null;/);
+  assert.match(content, /if \(listed\?\.title\) name = listed\.title;/);
+});
+
+test('a button outside the cards carries a name, never a raw channel ID', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // The copy's channel keeps the name from the page world, the list, or what YouTube shows.
+  assert.match(content, /el\.__yousubName \|\|= nameNearButton\(el\);/);
+  assert.match(content, /function nameNearButton\(el\)/);
+  assert.match(content, /el\.__yousubName = info\?\.name \|\| el\.__yousubName \|\| nameNearButton\(el\);/);
+  // The page world answers with the channel's name as well as its ID.
+  assert.match(main, /function pageChannelName\(id\)/);
+  assert.match(main, /fromPlayer\?\.channelId === id && fromPlayer\.author/);
+});
+
+test('a card without channel data is resolved from its own button, not sent without an ID', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // The watch page owner area is a card with no channel data of its own: it owns the copy, so it
+  // must be marked local - otherwise the click silently sent no channel at all.
+  assert.match(content, /if \(!r\.id && nativeSubButton\(card\)\) \{/);
+  assert.match(content, /Object\.assign\(r, \{ __local: true, localTok: localToken\(card\) \}\);/);
+  assert.match(content, /if \(!ch\.id && !targetHasId\(ch\)\) \{/);
+});
+
+test('a bare @handle is never used as a channel name', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // YouTube renders the byline as "@handle" for some cards: that is not the channel's name.
+  assert.match(content, /const isHandle = \(t\) => \/\^@\\S\+\$\/\.test\(String\(t \|\| ''\)\.trim\(\)\);/);
+  assert.match(content, /const isName = \(t\) =>/);
+  assert.match(content, /if \(!isName\(name\)\) name = '';/);
+  assert.match(main, /const cleanTitle = \(t\) =>/);
+  assert.match(main, /return !s \|\| isHandle\(s\) \|\| isUC\(s\) \? '' : s;/);
+  // A byline is split so only the title line can be the name.
+  assert.match(content, /const parts = String\(hit\?\.textContent \|\| ''\)\.split/);
+});
+
+test('the card name comes from the lockup title, not its first metadata part', () => {
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  // metadataParts[0] is often the @handle (e.g. "@almostperfectrestoration"), so the lockup's own
+  // title is used first and handle parts are never taken as a name.
+  assert.match(main, /const own = cleanTitle\(meta\?\.title\?\.content\);/);
+  assert.match(main, /for \(const part of row\.metadataParts \|\| \[\]\) parts\.push\(cleanTitle\(part\?\.text\?\.content\)\);/);
+  assert.doesNotMatch(main, /metadataParts\?\\.\[0\]\?\\.text\?\\.content/);
+  assert.match(main, /ch\.name = cleanTitle\(lockupName\(/);
+});
+
+test('entries saved with a handle as their name repair themselves', () => {
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  // The handle is kept, the wrong title is dropped, and one background refresh brings the real name.
+  assert.match(content, /if \(!c\.handle && isHandle\(c\.title\)\) c\.handle = c\.title\.slice\(1\);/);
+  assert.match(content, /c\.title = '';/);
+  assert.match(content, /if \(fixed\) subsNeedsSync = true;/);
+  assert.match(content, /if \(subsNeedsSync && subs\.ts\) setTimeout\(safe\(doSync\), 3000\);/);
+  // And a later page of the list may improve a title instead of keeping the old one.
+  const main = fs.readFileSync('content/main-world.js', 'utf8');
+  assert.match(main, /const title = e\.title \|\| prev\?\.title \|\| '';/);
+});
+
 test('the stylesheet declares the inline button and its host', () => {
   const css = fs.readFileSync('content/content.css', 'utf8');
   assert.match(css, /\.yousub-inlinebtn \{/);
   assert.match(css, /\.yousub-inline-host/);
+  // The +/− strokes are -absolute- inside the button, so the button is the containing block,
+  // and neither the glyph nor the button can be blanked or hidden by YouTube's rules.
+  const button = css.slice(css.indexOf('.yousub-inlinebtn {'), css.indexOf('.yousub-inlinebtn::before'));
+  assert.match(button, /position: relative !important;/);
+  assert.match(button, /visibility: visible !important;/);
+  assert.match(button, /background: var\(--yousub-color\) !important;/);
+  assert.match(css, /\.yousub-inlinebtn::before,\s*\n\.yousub-inlinebtn::after \{[^}]*position: absolute;/);
+  assert.match(css, /background: #fff !important;/);
+  assert.match(css, /\.yousub-inlinebtn\.yousub-unsubbtn::after \{ display: none; \}/);
+});
+
+test('there are no keyboard shortcuts or hotkeys', () => {
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.equal('commands' in manifest, false);
+  for (const file of ['content/content.js', 'content/main-world.js', 'popup/popup.js']) {
+    const source = fs.readFileSync(file, 'utf8');
+    assert.doesNotMatch(source, /addEventListener\('key(down|up|press)'|accessKey|KeyboardEvent|event\.key\b/, `${file} must not bind a keyboard shortcut`);
+  }
 });

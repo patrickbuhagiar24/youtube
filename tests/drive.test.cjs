@@ -4,7 +4,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function load(chrome = {}, fetch = async () => ({ ok: false }), cryptoImpl = crypto) {
-  const context = vm.createContext({ chrome, fetch, URL, URLSearchParams, TextEncoder, crypto: cryptoImpl, btoa, atob, console });
+  // AbortController is a Node global; the sandbox needs it for the request timeout.
+  // A browser has these globals; the sandbox is given the Node equivalents the code relies on.
+  const context = vm.createContext({ chrome, fetch, URL, URLSearchParams, TextEncoder, crypto: cryptoImpl, btoa, atob,
+    console, AbortController, setTimeout, clearTimeout });
   vm.runInContext(fs.readFileSync('shared.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('drive.js', 'utf8'), context);
   return context;
@@ -13,22 +16,52 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 const id = 'UCabcdefghijklmnopqrstuv';
 const now = Date.now();
 const link = 'https://drive.google.com/file/d/abcdefghij1234567890/view';
-const key = { type: 'service_account', client_email: 'test@example.invalid', private_key: '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----' };
-const settings = { link, keyText: JSON.stringify(key) };
+const clientId = '1234567890-abcdefg.apps.googleusercontent.com';
+const secret = 'GOCSPX-test-secret';
+const settings = { clientId, clientSecret: secret, link };
 
-/** Minimal chrome.storage.local implementation for the service worker. */
-function storageChrome(store = {}) {
+/** Minimal chrome.storage (local + session) and identity implementation for the worker. */
+function storageChrome(store = {}, session = {}, redirect = 'https://abcdefghijklmnop.chromiumapp.org/') {
   return {
-    storage: { local: {
-      get: async (keys) => {
-        if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in store).map((k) => [k, store[k]]));
-        if (keys === null) return { ...store };
-        return keys in store ? { [keys]: store[keys] } : {};
+    storage: {
+      local: {
+        get: async (keys) => {
+          if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in store).map((k) => [k, store[k]]));
+          if (keys === null) return { ...store };
+          return keys in store ? { [keys]: store[keys] } : {};
+        },
+        set: async (patch) => Object.assign(store, patch),
+        remove: async (keys) => { for (const k of [].concat(keys)) delete store[k]; },
       },
-      set: async (patch) => Object.assign(store, patch),
-      remove: async (keys) => { for (const k of [].concat(keys)) delete store[k]; },
-    } },
+      session: {
+        get: async (k) => (k in session ? { [k]: session[k] } : {}),
+        set: async (patch) => Object.assign(session, patch),
+        remove: async (keys) => { for (const k of [].concat(keys)) delete session[k]; },
+      },
+    },
+    identity: { getRedirectURL: () => redirect },
   };
+}
+
+/** A fetch stub that answers the OAuth endpoints and the Drive API. */
+function oauthFetch({ remote = '{}', token = { access_token: 'access-1', expires_in: 3600, refresh_token: 'refresh-1' }, tokenStatus = 200, tokenBody } = {}) {
+  const seen = { token: [], drive: [], uploads: [] };
+  const fetch = async (url, options = {}) => {
+    if (url === 'https://oauth2.googleapis.com/token') {
+      seen.token.push(Object.fromEntries(new URLSearchParams(options.body)));
+      if (tokenBody) return { ok: false, status: tokenStatus, json: async () => tokenBody };
+      return { ok: true, status: 200, json: async () => token };
+    }
+    if (url.startsWith('https://www.googleapis.com/oauth2/v3/userinfo')) {
+      return { ok: true, json: async () => ({ email: 'someone@example.invalid' }) };
+    }
+    seen.drive.push(url);
+    if (url.includes('fields=')) return { ok: true, json: async () => ({ name: 'YouTube.json', mimeType: 'application/json', capabilities: { canEdit: true } }) };
+    if (url.includes('alt=media')) return { ok: true, text: async () => remote };
+    if (url.includes('/upload/')) { seen.uploads.push(options.body); return { ok: true }; }
+    throw new Error('Unexpected URL: ' + url);
+  };
+  return { fetch, seen };
 }
 
 test('Drive exports use English fields and round-trip both event types', () => {
@@ -84,8 +117,8 @@ test('file links are validated and placeholders remain disabled', () => {
   assert.equal(Drive.fileIdOf('https://drive.google.com/file/d/abcdefghij1234567890/view'), 'abcdefghij1234567890');
   assert.equal(Drive.fileIdOf(''), '');
   assert.equal(Drive.fileIdOf('PASTE_FILE_LINK_HERE'), '');
-  assert.throws(() => Drive.fileIdOf('https://drive.google.com/drive/folders/abc'), /settings in the popup.*folder/);
-  assert.throws(() => Drive.fileIdOf('not a link'), /settings in the popup.*not a Google Drive file link/);
+  assert.throws(() => Drive.fileIdOf('https://drive.google.com/drive/folders/abc'), /configuration file.*folder/);
+  assert.throws(() => Drive.fileIdOf('not a link'), /configuration file.*not a Google Drive file link/);
 });
 
 test('yousub-google-drive.json accepts a link object or a bare JSON string', () => {
@@ -103,11 +136,11 @@ test('yousub-google-drive.json rejects folder and placeholder links with a clear
   assert.throws(() => Drive.linkFromConfig('{"link": "PASTE_FILE_LINK_HERE"}'), /still contains the placeholder/);
 });
 
-test('service account keys are validated without a helper program', () => {
+test('OAuth client IDs are validated without a helper program', () => {
   const { Drive } = load();
-  assert.equal(Drive.parseKey(key).client_email, key.client_email);
-  assert.throws(() => Drive.parseKey('{not json'), /not valid JSON/);
-  assert.throws(() => Drive.parseKey('{"type":"user"}'), /not a service account key/);
+  assert.equal(Drive.clientIdOf(clientId), clientId);
+  assert.equal(Drive.clientIdOf('  '), '');
+  assert.throws(() => Drive.clientIdOf('not-a-client'), /apps\.googleusercontent\.com/);
 });
 
 test('empty Drive settings disable sync without authentication errors', async () => {
@@ -119,37 +152,68 @@ test('empty Drive settings disable sync without authentication errors', async ()
 });
 
 test('a missing link points the user to the popup', async () => {
-  const store = { yousubDriveConfig: { link: '', keyText: JSON.stringify(key) } };
+  const store = { yousubDriveConfig: { link: '', clientId, clientSecret: secret } };
   const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /Paste the YouTube\.json file link into .*popup/);
+  assert.match(result.error, /"yousub-file" with the link to YouTube\.json/);
 });
 
 test('a missing key with a configured link produces an English error', async () => {
-  const store = { yousubDriveConfig: { link, keyText: '' } };
+  const store = { yousubDriveConfig: { link, clientId: '', clientSecret: '' } };
   const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /Paste your service account JSON key into .*popup/);
+  assert.match(result.error, /"client_id" of a Google OAuth client/);
 });
 
-test('an invalid key is reported without network access', async () => {
-  const store = { yousubDriveConfig: { link, keyText: '{bad' } };
+test('an invalid client ID is reported without network access', async () => {
+  const store = { yousubDriveConfig: { link, clientId: 'nope', clientSecret: secret } };
   const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /not valid JSON/);
+  assert.match(result.error, /apps\.googleusercontent\.com/);
+});
+
+test('a sync without a sign-in never opens a window and says how to sign in', async () => {
+  const store = { yousubDriveConfig: settings };
+  const chrome = storageChrome(store);
+  chrome.identity.launchWebAuthFlow = async () => { throw new Error('no window may open without a click'); };
+  const { fetch } = oauthFetch();
+  const { Drive } = load(chrome, fetch);
+  const result = await Drive.sync();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /not signed in/i);
+  // The advice names a control the panel really has: 📄, then the file, which is what signs in.
+  assert.match(result.error, /click 📄/);
+  assert.match(result.error, /choose the configuration file again/);
+});
+
+test('an expired access token is renewed with the saved refresh token', async () => {
+  const store = {
+    yousubDriveConfig: settings,
+    yousubOAuthTokens: { clientId, email: 'someone@example.invalid', refresh: 'refresh-1', access: 'old', exp: Date.now() - 1000 },
+  };
+  const chrome = storageChrome(store);
+  chrome.identity.launchWebAuthFlow = async () => { throw new Error('no window for a renewal'); };
+  const { fetch, seen } = oauthFetch({ token: { access_token: 'access-2', expires_in: 3600 } });
+  const { Drive } = load(chrome, fetch);
+  assert.deepEqual(plain(await Drive.sync()), { ok: true });
+  assert.equal(seen.token[0].grant_type, 'refresh_token');
+  assert.equal(seen.token[0].refresh_token, 'refresh-1');
+  assert.equal(seen.token[0].client_secret, 'GOCSPX-test-secret');
+  assert.equal(store.yousubOAuthTokens.access, 'access-2');
+  assert.equal(store.yousubOAuthTokens.refresh, 'refresh-1');
 });
 
 test('a later sync re-reads settings from storage after an unconfigured result', async () => {
   const store = {};
   const { Drive } = load(storageChrome(store));
   assert.deepEqual(plain(await Drive.sync()), { ok: false, configured: false });
-  store.yousubDriveConfig = { link, keyText: '' };
+  store.yousubDriveConfig = { link, clientId: '', clientSecret: '' };
   const second = await Drive.sync();
   assert.equal(second.ok, false);
-  assert.match(second.error, /service account JSON key/);
+  assert.match(second.error, /"client_id" of a Google OAuth client/);
 });
 
 test('a full sync preserves newer local events and writes English data', async () => {
@@ -158,19 +222,16 @@ test('a full sync preserves newer local events and writes English data', async (
     { id, name: 'Remote channel', url: '/@remote', status: 'resubscribed', date: new Date(now - 1000).toISOString() }
   ] });
   const local = { [secondId]: { s: 'unsub', at: now, title: 'Local channel', url: '/@local' } };
-  const store = { yousubDriveConfig: settings, yousubUnsubs: local };
-  let uploaded = '';
-  const fetch = async (url, options = {}) => {
-    if (url === 'https://oauth2.googleapis.com/token') return { ok: true, json: async () => ({ access_token: 'test-token', expires_in: 3600 }) };
-    if (url.includes('fields=')) return { ok: true, json: async () => ({ name: 'YouTube.json', mimeType: 'application/json', capabilities: { canEdit: true } }) };
-    if (url.includes('alt=media')) return { ok: true, text: async () => remote };
-    if (url.includes('/upload/')) { uploaded = options.body; return { ok: true }; }
-    throw new Error('Unexpected URL: ' + url);
+  const store = {
+    yousubDriveConfig: settings,
+    yousubUnsubs: local,
+    yousubOAuthTokens: { clientId, email: 'someone@example.invalid', refresh: 'refresh-1', access: 'access-1', exp: Date.now() + 3600e3 },
   };
-  const cryptoImpl = { subtle: { importKey: async () => ({}), sign: async () => new Uint8Array([1, 2, 3]) } };
-  const { Drive } = load(storageChrome(store), fetch, cryptoImpl);
+  const { fetch, seen } = oauthFetch({ remote });
+  const { Drive } = load(storageChrome(store), fetch);
+  const uploaded = () => seen.uploads.at(-1);
   assert.deepEqual(plain(await Drive.sync()), { ok: true });
-  const data = JSON.parse(uploaded);
+  const data = JSON.parse(uploaded());
   assert.equal(data.application, 'Yousub');
   assert.equal(data.unsubscribeCount, 1);
   assert.equal(data.channels.length, 2);
@@ -179,4 +240,57 @@ test('a full sync preserves newer local events and writes English data', async (
   assert.equal(store.yousubUnsubs[secondId].s, 'unsub');
   assert.equal(store.yousubDrive.lastError, '');
   assert.equal(store.yousubDrive.syncing, false);
+});
+
+test('the sign-in record is mirrored into the session area', async () => {
+  const store = { yousubDriveConfig: settings };
+  const session = {};
+  const chrome = storageChrome(store, session);
+  chrome.identity.launchWebAuthFlow = async () => 'https://abcdefghijklmnop.chromiumapp.org/?code=abc&state=' + session.yousubOAuthFlow.state;
+  const { fetch } = oauthFetch();
+  const { Drive } = load(chrome, fetch);
+  assert.deepEqual(plain(await Drive.sync({ signIn: true })), { ok: true });
+  assert.equal(store.yousubOAuthTokens.refresh, 'refresh-1');
+  // Written by saveTokens: local is the record of record, session is what an update can restore.
+  assert.equal(session.yousubOAuthTokensBackup.refresh, 'refresh-1');
+});
+
+test('a sign-in deleted by an extension update is restored from the session mirror', async () => {
+  const record = { clientId, email: 'someone@example.invalid', refresh: 'refresh-1', access: 'old', exp: 1 };
+  // Yousub 2.7.0 and earlier deleted yousubOAuthTokens in onInstalled, so the mirror is all that is
+  // left; 2.7.1 must put the record back instead of asking for a new sign-in.
+  const store = { yousubDriveConfig: settings };
+  const session = { yousubOAuthTokensBackup: record };
+  const { Drive } = load(storageChrome(store, session));
+  assert.equal(await Drive.restoreSignIn(), true);
+  assert.deepEqual(plain(store.yousubOAuthTokens), record);
+  // Nothing to restore: a record already present is left alone, and an empty mirror restores nothing.
+  assert.equal(await Drive.restoreSignIn(), false);
+  const empty = {};
+  assert.equal(await load(storageChrome({}, empty)).Drive.restoreSignIn(), false);
+});
+
+test('sign out clears the session mirror as well', async () => {
+  const store = { yousubDriveConfig: settings, yousubOAuthTokens: { clientId, refresh: 'refresh-1', access: 'a', exp: Date.now() + 3600e3 } };
+  const session = { yousubOAuthTokensBackup: { refresh: 'refresh-1' }, yousubOAuthFlow: { verifier: 'v', state: 's' } };
+  const chrome = storageChrome(store, session);
+  const { fetch } = oauthFetch();
+  const { Drive } = load(chrome, fetch);
+  await Drive.signOut(clientId);
+  assert.deepEqual(plain(store.yousubOAuthTokens), {});
+  assert.deepEqual(plain(session), {}, 'no token survives in the session area');
+});
+
+test('a rejected saved token is forgotten so the next attempt can sign in', async () => {
+  const store = {
+    yousubDriveConfig: settings,
+    yousubOAuthTokens: { clientId, refresh: 'refresh-1', access: 'stale', exp: Date.now() + 3600e3 },
+  };
+  const chrome = storageChrome(store);
+  const fetch = async (url) => (url.includes('alt=media') ? { ok: false, status: 401, text: async () => '' } : { ok: false, status: 401, text: async () => '', json: async () => ({}) });
+  const { Drive } = load(chrome, fetch);
+  const result = await Drive.sync();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /rejected the saved sign-in/);
+  assert.deepEqual(plain(store.yousubOAuthTokens), {}, 'the dead token is gone, not replayed for ever');
 });
