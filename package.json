@@ -1,0 +1,12 @@
+{
+  "name": "yousub-tests",
+  "private": true,
+  "description": "Test tooling for the Yousub Chrome extension. The extension has no build step and no runtime dependencies; jsdom is used only by the side-panel tests.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "31.0.1"
+  }
+}

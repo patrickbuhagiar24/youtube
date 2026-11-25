@@ -4,6 +4,8 @@ Priority: optional
 Maintainer: Patrick Buhagiar <arobidsh@proton.me>
 Homepage: https://github.com/patrickbuhagiar24/youtube
 Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.4.1
+Rules-Requires-Root: no
 
 Package: yousub
 Architecture: all

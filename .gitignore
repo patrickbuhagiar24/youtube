@@ -7,7 +7,8 @@
 .env
 .env.*
 
-# Local tooling and temporary output.
+# Test tooling output. package.json and package-lock.json are intentionally kept:
+# the side-panel tests need jsdom and CI installs it with "npm ci".
 /.cache/
 /dist/
 /artifacts/

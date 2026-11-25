@@ -28,6 +28,21 @@ test('one source of truth per control field', () => {
   assert.doesNotMatch(build, /installed_size=/);
 });
 
+test('the source stanza declares Standards-Version and Rules-Requires-Root', () => {
+  const control = read('debian/control');
+  // Both fields belong to the source stanza: everything before the empty line that starts the
+  // binary stanza. In the binary stanza they would still be parsed, but they would be wrong.
+  const [source, binary] = control.split(/\n\s*\n/);
+  assert.ok(binary, 'control holds a source and a binary stanza');
+  // Policy 5.6.11: the first three components matter, the fourth is cosmetic; 4.7.4.1 is the
+  // policy version this package was reviewed against.
+  assert.match(source, /^Standards-Version: \d+\.\d+\.\d+(\.\d+)?$/m);
+  // Policy 5.6.31: the build needs neither root nor fakeroot (the maintainer scripts run at
+  // install time, which this field does not describe).
+  assert.match(source, /^Rules-Requires-Root: no$/m);
+  assert.doesNotMatch(binary, /Standards-Version|Rules-Requires-Root/, 'the fields stay out of the binary stanza');
+});
+
 test('the archive is filed by the package and adds no override file', () => {
   assert.equal(fs.existsSync('debian/control.override'), false, 'Section/Priority come from the package');
   const publish = read('.github/workflows/publish-apt.yml');
@@ -51,6 +66,24 @@ test('CI lints the built package and fails on errors', () => {
   const publish = read('.github/workflows/publish-apt.yml');
   assert.match(publish, /dpkg-dev gnupg gpgv/);
   assert.match(publish, /lintian --fail-on error/);
+});
+
+test('CI runs the side-panel tests in the same Node version', () => {
+  const ci = read('.github/workflows/ci.yml');
+  // The panel tests need jsdom; without an install step they would be skipped, not failed.
+  assert.match(ci, /container: node:22\n/);
+  assert.match(ci, /npm ci --no-audit --no-fund/);
+  assert.match(ci, /node --test tests\/\*\.test\.cjs/);
+  const pkg = JSON.parse(read('package.json'));
+  assert.equal(pkg.private, true, 'the package is never published');
+  assert.ok(pkg.devDependencies.jsdom, 'jsdom is a development dependency');
+  assert.equal(pkg.dependencies, undefined, 'the extension itself has no runtime dependencies');
+  assert.ok(fs.existsSync('package-lock.json'), 'npm ci needs a lock file');
+  const lock = JSON.parse(read('package-lock.json'));
+  assert.equal(lock.packages['node_modules/jsdom'].version, pkg.devDependencies.jsdom);
+  // jsdom is test-only: it must never be shipped in the CRX or the ZIP.
+  const build = read('.github/workflows/build-extension.yml');
+  assert.doesNotMatch(build, /node_modules|package\.json/);
 });
 
 test('the changelog suite matches the published suite', () => {

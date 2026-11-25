@@ -215,18 +215,14 @@ Subscription data is stored in browser extension storage. YouTube requests use y
 
 ## Building and development
 
-No build step is required. Check and test the source with Node.js 18 or newer:
+No build step is required, and the extension has no runtime dependencies. Node.js 22 or newer:
 
 ```bash
-node --check background.js
-node --check shared.js
-node --check drive.js
-node --check content/content.js
-node --check content/main-world.js
-node --check popup/popup.js
-node --check folder-config.js
-node --test tests/*.test.cjs
+npm install          # once: jsdom, used only by the side-panel tests
+npm test             # node --test tests/*.test.cjs
 ```
+
+`tests/panel.test.cjs` loads the real `popup/popup.html` with the real `popup.js`, `shared.js`, `drive.js` and `config-file.js` inside jsdom and drives the panel the way a person does — clicking 📄, picking a file, reopening the panel — with an in-memory `chrome.storage` and a recorded `chrome.runtime.sendMessage`. It is the guard for the two promises that are otherwise invisible until release: the configuration file is read once and cached forever, and a file that fails validation never replaces a working configuration.
 
 Release workflow — **no version tags and no GitHub Releases**; GitHub Pages is the only channel:
 
