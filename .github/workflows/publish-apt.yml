@@ -34,6 +34,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv lintian
 
       - name: Lint the built package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           mkdir -p lint
