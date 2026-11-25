@@ -8,5 +8,8 @@
   },
   "devDependencies": {
     "jsdom": "31.0.1"
+  },
+  "dependencies": {
+    "js-yaml": "^5.5.0"
   }
 }

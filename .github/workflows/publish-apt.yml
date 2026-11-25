@@ -218,6 +218,27 @@ jobs:
         with:
           path: site
           include-hidden-files: true
+      - name: Check the artifact the deploy step will look for
+        if: steps.version.outputs.already != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          echo "run id: $GITHUB_RUN_ID"
+          echo 'artifacts visible to the API for this run:'
+          gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/artifacts" \
+            --jq '.artifacts[] | "\(.name) id=\(.id) size=\(.size_in_bytes)"' 2>&1 | sed 's/^/  /'
+          echo 'lookup exactly as actions/deploy-pages does it:'
+          code=$(curl -s -o /tmp/artifact.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GH_REPO/actions/artifacts?name=github-pages")
+          echo "  status=$code body=$(head -c 300 /tmp/artifact.json)"
+          curl -s -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages" \
+            | head -c 300 | sed 's/^/  run-scoped: /'
+
       - name: Deploy GitHub Pages
         if: steps.version.outputs.already != 'true'
         id: deployment
