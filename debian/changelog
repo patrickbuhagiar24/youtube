@@ -1,4 +1,17 @@
-yousub (2.5.3) unstable; urgency=medium
+yousub (2.5.4) stable; urgency=medium
+
+  * Package metadata: the version is filled in from manifest.json at build time
+    instead of being duplicated in debian/control, and Installed-Size is now
+    recorded so apt can report the disk space the package needs.
+  * Section and Priority are filed by the archive override file
+    (debian/control.override: web / optional) instead of the built package.
+  * The changelog uses the published suite name (stable) for every entry.
+  * CI checks the syntax of every shipped script, and the publish step retries
+    the published-version lookup and revalidates it with a cache-busting query.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
+yousub (2.5.3) stable; urgency=medium
 
   * Remove the configuration status mark from the unsubscribe row: the folder
     picker already reports the state (📁 not configured, 🔁 configured) and a
@@ -6,7 +19,7 @@ yousub (2.5.3) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.5.2) unstable; urgency=medium
+yousub (2.5.2) stable; urgency=medium
 
   * Move the configuration folder button into the "previously unsubscribed
     channels" row, at its far right, next to the ✅/❌ mark, and remove the
@@ -16,7 +29,7 @@ yousub (2.5.2) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.5.1) unstable; urgency=medium
+yousub (2.5.1) stable; urgency=medium
 
   * Use the configuration read from the folder from a cache instead of reading
     the folder again: opening the side panel no longer touches the folder and no
@@ -28,7 +41,7 @@ yousub (2.5.1) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.5.0) unstable; urgency=medium
+yousub (2.5.0) stable; urgency=medium
 
   * Configure Google Drive from a folder instead of a manifest file: choose the
     folder with 📁 and Yousub finds the files it needs by their content (a
@@ -41,7 +54,7 @@ yousub (2.5.0) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.7) unstable; urgency=medium
+yousub (2.4.7) stable; urgency=medium
 
   * Read a card's channel name from its lockup title instead of the first
     metadata part: for many cards that part is the @handle, which is how a
@@ -51,7 +64,7 @@ yousub (2.4.7) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.6) unstable; urgency=medium
+yousub (2.4.6) stable; urgency=medium
 
   * Never use a bare @handle as a channel name: YouTube renders the handle in
     the byline of some cards, so the name shown for a subscribed channel could
@@ -66,7 +79,7 @@ yousub (2.4.6) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.5) unstable; urgency=medium
+yousub (2.4.5) stable; urgency=medium
 
   * Use the exact channel name everywhere: for a subscribed channel the name
     comes from the subscription list, not from the shortened or differently
@@ -80,7 +93,7 @@ yousub (2.4.5) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.4) unstable; urgency=medium
+yousub (2.4.4) stable; urgency=medium
 
   * Fix "Could not find this channel ID" when clicking the copy beside
     YouTube's own button: the tagged element is the button itself, and the page
@@ -92,7 +105,7 @@ yousub (2.4.4) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.3) unstable; urgency=medium
+yousub (2.4.3) stable; urgency=medium
 
   * Stop the +/− copy from moving: a row YouTube already lays out horizontally
     is used unchanged, the copy is inserted once instead of being re-inserted,
@@ -104,7 +117,7 @@ yousub (2.4.3) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.2) unstable; urgency=medium
+yousub (2.4.2) stable; urgency=medium
 
   * Put the +/− copy beside YouTube's button instead of under it: the row that
     holds the button is laid out on one line (row direction, no wrapping) when
@@ -117,7 +130,7 @@ yousub (2.4.2) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.1) unstable; urgency=medium
+yousub (2.4.1) stable; urgency=medium
 
   * Place the +/− copy beside every YouTube Subscribe/Unsubscribe button that
     is not inside a video card, instead of guessing which element wraps it:
@@ -132,7 +145,7 @@ yousub (2.4.1) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.4.0) unstable; urgency=medium
+yousub (2.4.0) stable; urgency=medium
 
   * Show the +/− copy beside YouTube's own Subscribe button on the watch page
     and the channel header, where the button sits outside the video cards.
@@ -143,7 +156,7 @@ yousub (2.4.0) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.9) unstable; urgency=medium
+yousub (2.3.9) stable; urgency=medium
 
   * Report the reported version in the page (data-yousub-version) and make the
     diagnostics accurate: a page console cannot see extension APIs, so it now
@@ -151,7 +164,7 @@ yousub (2.3.9) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.8) unstable; urgency=medium
+yousub (2.3.8) stable; urgency=medium
 
   * Stop hiding every marker when YouTube's page configuration has not loaded
     yet: an unknown login state is no longer treated as signed out.
@@ -161,7 +174,7 @@ yousub (2.3.8) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.7) unstable; urgency=medium
+yousub (2.3.7) stable; urgency=medium
 
   * Release without version tags: merging into main builds and publishes the
     signed package to GitHub Pages in one run, and an unchanged version is
@@ -169,7 +182,7 @@ yousub (2.3.7) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.6) unstable; urgency=medium
+yousub (2.3.6) stable; urgency=medium
 
   * Remove every "press F5 / reload the page" message. A page restored from
     the back/forward cache is reloaded automatically once, and a failed list
@@ -177,7 +190,7 @@ yousub (2.3.6) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.5) unstable; urgency=medium
+yousub (2.3.5) stable; urgency=medium
 
   * Keep the +/- glyph of the button beside YouTube's own Subscribe button
     visible: anchor it to the button element itself, never inside a wrapper
@@ -185,7 +198,7 @@ yousub (2.3.5) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.4) unstable; urgency=medium
+yousub (2.3.4) stable; urgency=medium
 
   * Remove the "Refresh list" and "Sync with Google Drive now" buttons; both
     happen automatically.
@@ -196,14 +209,14 @@ yousub (2.3.4) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.3) unstable; urgency=medium
+yousub (2.3.3) stable; urgency=medium
 
   * Show whether Google Drive sync is configured in its side panel row, and
     turn the folder picker into a replace action once a manifest is loaded.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.2) unstable; urgency=medium
+yousub (2.3.2) stable; urgency=medium
 
   * Remove the "Remove saved configuration" (trash) button and its message
     handler; the folder-handle store existed only for that button.
@@ -212,7 +225,7 @@ yousub (2.3.2) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.1) unstable; urgency=medium
+yousub (2.3.1) stable; urgency=medium
 
   * Leave YouTube's own Subscribe/Unsubscribe button untouched: no extra
     refresh, dialog, polling, or request is triggered from it.
@@ -221,14 +234,14 @@ yousub (2.3.1) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.3.0) unstable; urgency=medium
+yousub (2.3.0) stable; urgency=medium
 
   * Add a subscribe and unsubscribe button next to YouTube's own button on
     watch pages and channel cards.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 22 Nov 2026 00:00:00 +0000
 
-yousub (2.2.9) unstable; urgency=medium
+yousub (2.2.9) stable; urgency=medium
 
   * Reduce scanning and polling, and make sorting autoload configurable.
   * Remove periodic subscription list refresh and support local private keys.
@@ -236,58 +249,58 @@ yousub (2.2.9) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
 
-yousub (2.2.8) unstable; urgency=medium
+yousub (2.2.8) stable; urgency=medium
 
   * Refresh subscription data after native YouTube button and dialog actions.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
 
-yousub (2.2.7) unstable; urgency=medium
+yousub (2.2.7) stable; urgency=medium
 
   * Refresh subscriptions after stable native YouTube button changes.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
 
-yousub (2.2.6) unstable; urgency=medium
+yousub (2.2.6) stable; urgency=medium
 
   * Load Drive settings from a single manifest via a side panel.
   * Update subscriptions after successful native YouTube actions.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sat, 21 Nov 2026 00:00:00 +0000
 
-yousub (2.2.5) unstable; urgency=medium
+yousub (2.2.5) stable; urgency=medium
 
   * Clear Drive settings, local history, and the saved folder handle together.
   * Share the folder-handle store between the setup tab and service worker.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:45:00 +0000
 
-yousub (2.2.4) unstable; urgency=medium
+yousub (2.2.4) stable; urgency=medium
 
   * Remove stale file-picker text and CSS; align docs with folder-only setup.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:30:00 +0000
 
-yousub (2.2.3) unstable; urgency=medium
+yousub (2.2.3) stable; urgency=medium
 
   * Replace the Drive menu text with a compact row of icon buttons.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:15:00 +0000
 
-yousub (2.2.2) unstable; urgency=medium
+yousub (2.2.2) stable; urgency=medium
 
   * Keep unsubscribe history only while Drive sync is configured; remove it
     when configuration is absent or cleared.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 10:00:00 +0000
 
-yousub (2.2.1) unstable; urgency=medium
+yousub (2.2.1) stable; urgency=medium
 
   * Remove per-file pickers; configuration is selected by folder only.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:45:00 +0000
 
-yousub (2.2.0) unstable; urgency=medium
+yousub (2.2.0) stable; urgency=medium
 
   * Add a one-time folder picker that finds yousub-google-drive.json and
     service-account.json automatically.
@@ -296,33 +309,33 @@ yousub (2.2.0) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:30:00 +0000
 
-yousub (2.1.4) unstable; urgency=medium
+yousub (2.1.4) stable; urgency=medium
 
   * Open Drive file pickers in a real extension tab: Linux popups close when
     a file chooser opens, so their change events never arrived.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 09:05:00 +0000
 
-yousub (2.1.3) unstable; urgency=medium
+yousub (2.1.3) stable; urgency=medium
 
   * Show when a file picker is clicked and when a selected file is being read.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:50:00 +0000
 
-yousub (2.1.2) unstable; urgency=medium
+yousub (2.1.2) stable; urgency=medium
 
   * Use visible file inputs in the popup so the file pickers are reliable.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:35:00 +0000
 
-yousub (2.1.1) unstable; urgency=medium
+yousub (2.1.1) stable; urgency=medium
 
   * Explain why a Pastex-style folder_url configuration is rejected and require
     a direct YouTube.json file link in google-drive.json.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:20:00 +0000
 
-yousub (2.1.0) unstable; urgency=medium
+yousub (2.1.0) stable; urgency=medium
 
   * Sign the CRX with a dedicated YOUSUB_CRX_PRIVATE_KEY so the extension ID
     cannot collide with extensions from other repositories.
@@ -330,21 +343,21 @@ yousub (2.1.0) unstable; urgency=medium
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 08:00:00 +0000
 
-yousub (2.0.2) unstable; urgency=medium
+yousub (2.0.2) stable; urgency=medium
 
   * Ship the Chrome/Chromium external-extension JSON inside the .deb payload,
     matching the known-working pastex packaging, with postinst as a fallback.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 07:30:00 +0000
 
-yousub (2.0.1) unstable; urgency=medium
+yousub (2.0.1) stable; urgency=medium
 
   * Register the signed CRX in the Chrome Linux external-extension directory.
   * Keep the Chromium registration and earlier paths for compatibility.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 19 Nov 2026 07:10:00 +0000
 
-yousub (2.0.0) unstable; urgency=medium
+yousub (2.0.0) stable; urgency=medium
 
   * Rename the extension to Yousub and remove the command-line program.
   * Register the CRX signed with the repository CRX_PRIVATE_KEY secret.

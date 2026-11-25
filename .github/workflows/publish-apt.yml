@@ -40,7 +40,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          gh run download "${{ github.run_id }}" --name yousub-extension --dir release
+          # The build job runs as a reusable workflow, so its artifact belongs to that run, not
+          # to this one; fetch the artifact from whichever run produced it.
+          run_id="${{ needs.build.outputs.run_id || github.run_id }}"
+          gh run download "$run_id" --name yousub-extension --dir release
           test -n "$(find release -name 'yousub_*.deb' -print -quit)"
           (cd release && sha256sum -c checksums.txt)
 
@@ -57,7 +60,7 @@ jobs:
               python3 -c "import json,sys; print(json.load(sys.stdin)['version'])")
           fi
           if [ -z "$version" ]; then echo 'No version in manifest.json.' >&2; exit 1; fi
-          published=$(curl -fsSL --max-time 20 https://patrickbuhagiar24.github.io/youtube/dists/stable/main/binary-all/Packages 2>/dev/null |
+          published=$(curl -fsSL --retry 3 --retry-delay 2 --max-time 30 "https://patrickbuhagiar24.github.io/youtube/dists/stable/main/binary-all/Packages?cb=$(date +%s)" 2>/dev/null |
             awk -v want="$version" '/^Package: yousub$/ {inpkg=1} inpkg && /^Version: / {print $2; exit}' || true)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$published" = "$version" ]; then
@@ -78,7 +81,11 @@ jobs:
           cp release/yousub-id.txt site/extension-id.txt
           cp release/yousub_*.deb site/pool/main/y/yousub/
           cd site
-          dpkg-scanpackages --arch all pool /dev/null > dists/stable/main/binary-all/Packages
+          # The archive, not the package, files the package: the copy of the override file is the
+          # second argument and supplies Section and Priority for the Packages index.
+          cp ../debian/control.override control.override
+          dpkg-scanpackages --arch all pool control.override 2>/dev/null \
+            > dists/stable/main/binary-all/Packages
           gzip -9 -n -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
           cp dists/stable/main/binary-all/Packages dists/stonking/main/binary-all/Packages
           cp dists/stable/main/binary-all/Packages.gz dists/stonking/main/binary-all/Packages.gz

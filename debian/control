@@ -1,7 +1,4 @@
 Package: yousub
-Version: 2.2.5
-Section: web
-Priority: optional
 Architecture: all
 Recommends: google-chrome-stable | chromium
 Maintainer: Patrick Buhagiar <arobidsh@proton.me>

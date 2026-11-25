@@ -156,6 +156,11 @@ jobs:
           sed -i "s/^Version: .*/Version: $VERSION/" "$deb/DEBIAN/control"
           install -m 0755 debian/postinst debian/postrm "$deb/DEBIAN/"
           (cd "$deb" && find usr -type f -print0 | sort -z | xargs -0 md5sum > DEBIAN/md5sums)
+          # Installed-Size is what apt reports as "after this operation ... of disk space";
+          # dpkg counts one rounded-up KiB block per installed file.
+          installed_size=$(cd "$deb" && find usr -type f -printf '%s\n' |
+            awk '{ total += int(($1 + 1023) / 1024) } END { print total + 0 }')
+          sed -i "/^Version: /a Installed-Size: $installed_size" "$deb/DEBIAN/control"
           dpkg-deb --root-owner-group --build "$deb" "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
           dpkg-deb --info "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
           dpkg-deb --contents "$RUNNER_TEMP/yousub_${VERSION}_all.deb"

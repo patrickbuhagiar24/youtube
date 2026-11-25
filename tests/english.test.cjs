@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.5.3');
+  assert.equal(manifest.version, '2.5.4');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -216,8 +216,10 @@ test('releases are Pages-only: no release tags and no GitHub Releases', () => {
   assert.match(publish, /needs: build/);
   assert.match(publish, /already/);
   assert.match(build, /on:\n  workflow_call:\n  workflow_dispatch:/);
-  // The publish job receives its artifact from the build job of the same run.
-  assert.match(publish, /gh run download "\$\{\{ github\.run_id \}\}"/);
+  // The publish job receives its artifact from the build job of the same run, falling back to
+  // this run's id when the reusable workflow does not expose its own.
+  assert.match(publish, /run_id="\$\{\{ needs\.build\.outputs\.run_id \|\| github\.run_id \}\}"/);
+  assert.match(publish, /gh run download "\$run_id"/);
 });
 
 test('the build workflow signs the CRX and does not publish a GitHub Release', () => {
