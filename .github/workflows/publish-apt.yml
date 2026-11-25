@@ -23,6 +23,11 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    # The Pages deployment target: actions/deploy-pages looks for its artifact through the
+    # environment, and the repository's Pages settings must point at "GitHub Actions".
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       contents: read
       pages: write

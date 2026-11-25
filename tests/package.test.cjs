@@ -91,6 +91,17 @@ test('the archive can be fetched by hash and expires its indices', () => {
   assert.match(publish, /lintian --fail-on error/);
 });
 
+test('the deploy job targets the github-pages environment', () => {
+  const publish = read('.github/workflows/publish-apt.yml');
+  // actions/deploy-pages resolves its artifact through the environment; without this block the
+  // deploy step fails with "No artifacts named github-pages were found for this workflow run"
+  // even though the upload step succeeded.
+  assert.match(publish, /environment:\n {6}name: github-pages\n {6}url: \$\{\{ steps\.deployment\.outputs\.page_url \}\}\n/);
+  assert.match(publish, /id: deployment/);
+  assert.match(publish, /pages: write/);
+  assert.match(publish, /id-token: write/);
+});
+
 test('CI lints the built package and fails on errors', () => {
   const publish = read('.github/workflows/publish-apt.yml');
   assert.match(publish, /dpkg-dev gnupg gpgv/);
