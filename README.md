@@ -73,74 +73,93 @@ cat /usr/share/yousub/yousub-id.txt
 Yousub can keep its unsubscribe history in a JSON file in **your own** Google Drive, and share it
 between devices. Without it the history is not kept at all.
 
-The file is read and written with **your Google account** (OAuth 2.0), using only the
-`https://www.googleapis.com/auth/drive.file` scope: Yousub sees the one file you give it, never the
-rest of your Drive. (Earlier versions used a service account; that is gone, because a service
-account owns no storage and needs the file shared with a robot address.)
+The file is read and written as **you** (OAuth 2.0), using the scope
+`https://www.googleapis.com/auth/drive`. That scope is the full Drive scope: `drive.file` is narrower
+but cannot open `YouTube.json`, because that file is created by you, not by Yousub — Google answers
+404 for it. What limits Yousub is your configuration, not the scope: it only ever touches the one file
+you name there.
+
+### The configuration file (read once, then kept in the browser)
+
+Click the Yousub icon, click **📄** at the right of the *previously unsubscribed channels* row, and
+pick **one** JSON file. Any file name works; what makes it a configuration is the keys:
+
+```json
+{
+  "yousub-file": "https://drive.google.com/file/d/FILE_ID/view?usp=sharing",
+  "client_id": "1234567890-abc.apps.googleusercontent.com",
+  "client_secret": "GOCSPX-…"
+}
+```
+
+| Key | Required | Meaning |
+| --- | --- | --- |
+| `yousub-file` | yes | link to **YouTube.json** in your Drive (right-click the file → Share → Copy link) |
+| `client_id` | yes | the OAuth client from the guide below |
+| `client_secret` | no | the client's secret. **With** it the sync renews itself in the background for months; **without** it Yousub signs in through your Google session in this browser |
+
+The file is read **once**. Its contents are cached in `chrome.storage.local` and used from then on, so
+the file is not needed again — not when the panel opens, and not after the browser is restarted. To
+replace the configuration, pick another file; to keep it, leave it where it is (a file that is moved or
+deleted later changes nothing). A file that fails validation is reported and **never replaces a
+working configuration**.
 
 ### Set up Google once (about 10 minutes)
 
-You need a free Google Cloud project. There is no server, and nothing leaves your devices except the
-requests to Google.
-
-1. **Create a project** — open <https://console.cloud.google.com/projectcreate>, give it any name
-   (for example `Yousub`) and create it.
+1. **Create the project in Personal mode.** Open <https://console.cloud.google.com/auth/overview> and
+   click **Get started** → **Personal mode**. Personal mode is for an app only you use: it needs no
+   verification and no security review, shows no "unverified app" warning, and — unlike an External
+   app in *Testing* — its tokens do **not** expire after 7 days. It can only be chosen for a new
+   project, so if you already made an External app, make a new project instead.
 2. **Enable the Drive API** — open <https://console.cloud.google.com/apis/library/drive.googleapis.com>
    and click **Enable**.
-3. **Configure the consent screen** — open <https://console.cloud.google.com/apis/credentials/consent>.
-   Choose **External**, then fill in the app name (`Yousub`), your e-mail, and the developer contact
-   e-mail. On the scopes step, add `https://www.googleapis.com/auth/drive.file`. Add yourself under
-   **Test users** (Google calls this *audience*) so the app can be used before it is verified.
-   Leave the publishing status on **Testing**: this is a single-user setup, and Google then shows the
-   "unverified app" screen only to the accounts you listed.
-4. **Create the OAuth client** — open <https://console.cloud.google.com/apis/credentials> →
-   **Create credentials** → **OAuth client ID** → Application type **Web application**.
-   - Under **Authorized redirect URIs** add the address the side panel shows next to
-     *OAuth client ID* (click ⚙️ in the side panel to see it). It looks like
-     `https://<extension-id>.chromiumapp.org/` and must match exactly, including the trailing slash.
-     With the package from this repository the extension ID is fixed; the panel prints the exact value,
-     so copy it from there.
-   - Click **Create** and copy the **Client ID** (ends with `.apps.googleusercontent.com`) and the
-     **Client secret**.
-5. **Upload the history file** — in <https://drive.google.com> create a file named `YouTube.json`
-   containing:
+3. **Create the OAuth client** — <https://console.cloud.google.com/apis/credentials> →
+   **Create credentials** → **OAuth client ID** → type **Web application**.
+   Under **Authorized redirect URIs** add exactly:
+
+   ```text
+   https://<extension-id>.chromiumapp.org/
+   ```
+
+   `chrome://extensions` shows the 32-letter extension ID; the trailing slash matters. With the
+   package from this repository the ID is fixed, so this is done once. Copy the **Client ID** and the
+   **Client secret**.
+   Do not choose the *Chrome Extension* application type: Google accepts it only for extensions
+   published in the Chrome Web Store.
+4. **Create YouTube.json** in <https://drive.google.com> with:
 
    ```json
    {"application": "Yousub", "channels": []}
    ```
 
-   Right-click it → **Share** → give the Google account you will sign in with **Editor** access, then
-   **Copy link**.
-6. **Fill in the side panel** — click the Yousub icon, click **⚙️** at the right of the
-   *previously unsubscribed channels* row, and paste the **Client ID**, the **Client secret** and the
-   **file link**. Click **Save and sign in** and approve the Google window.
+   Right-click it → **Share** → **Copy link**.
+5. **Write the configuration file** anywhere on this computer, for example `yousub-config.json`, with
+   the three keys above, then pick it with **📄** in the side panel.
 
-The client secret stays on this device in `chrome.storage.local` and is only used to finish the
-sign-in (Google requires it for this client type). It is not a password for your account: revoking
-the client in Google Cloud Console or signing out in the panel ends the access immediately.
+### After the file is read
 
-### After the sign-in
-
-- The first sync reads the file, merges it with the local history, and writes it back.
-- The access token is stored with the refresh token, so the sync keeps working for months without
-  asking you again. If Google ever asks for a new sign-in, the side panel says so: click ⚙️ →
-  **Save and sign in**.
-- **Sign out** (in the same form) revokes the refresh token at Google and forgets it here. The
-  history file itself stays in your Drive.
+- Yousub asks Google for permission once (a Google window opens) and then syncs by itself.
+- **With `client_secret`**: the access token is renewed from a saved refresh token, so a sync works
+  even when Chrome has been closed for a while, and nothing asks you again.
+- **Without `client_secret`**: the access token lives about an hour and is renewed silently from your
+  Google session. If Google wants to ask, the panel says so and you click **Sign in** once.
+- **Sign out** forgets the token and revokes it at Google. The cached configuration and the Drive file
+  stay as they are.
 
 ### When the sync does not work
 
 | Message in the panel | What to do |
 | --- | --- |
-| `redirect_uri_mismatch` | The redirect address is not registered on the OAuth client. Copy the value shown in the panel into **Authorized redirect URIs** of that client. |
-| `Google requires the OAuth client secret as well` | The **Client secret** field is empty or wrong. Copy it again from Google Cloud Console → Credentials. |
-| `Google does not recognise the OAuth client ID` | The client was deleted, or the ID was copied incompletely. Create or copy it again. |
-| `This Google account cannot edit YouTube.json` | Share the file with the account you signed in as, with **Editor** access. |
+| `"yousub-file" points to a folder` | Copy the link of the **file** (`Share → Copy link`), not of a folder. |
+| `"yousub-file" is not a Google Drive file link` | Use the link from `Share → Copy link` for YouTube.json. |
+| `"client_id" must look like …` | Copy the whole Client ID, which ends with `.apps.googleusercontent.com`. |
+| `Google does not recognise this extension's redirect URL` | Add the exact `https://<extension-id>.chromiumapp.org/` shown in the panel to the client's Authorized redirect URIs. |
+| `This Google account cannot edit YouTube.json` | Make sure the file belongs to the account you signed in with, or was shared with Editor access. |
 | `The Google Drive API is not enabled` | Step 2 above. |
-| `The Google sign-in has expired or was revoked` | Click ⚙️ → **Save and sign in** again. |
+| `The Google sign-in has expired or was revoked` | Click **Sign in** once. With `client_secret` this is rare; without it, it can happen after a long time without using Google in this browser. |
 
-Nothing in the panel asks you to reload the page: opening the side panel reads the saved settings and
-the sync resumes by itself.
+Nothing in the panel asks you to reload the page: the configuration is cached, and the sync resumes by
+itself.
 
 ### When the sync runs
 
@@ -151,11 +170,11 @@ Without any button press, the extension syncs automatically:
 - **On a YouTube page load** — the first page that opens pulls changes, at most once every 2 minutes.
 - **On browser start and on install/update** — settings are re-read, sync runs once (without opening any Google window), and local history that exists without a configuration is cleared.
 
-Only one sync runs at a time. It refreshes the access token if needed, reads `YouTube.json`, merges the most recent event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Failures appear in the side panel instead of retrying in a loop. The background sync never opens a Google window: only a click on **Save and sign in** does.
+Only one sync runs at a time. It refreshes the access token if needed, reads `YouTube.json`, merges the most recent event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Every Google request is bounded to 20 seconds, so a stalled connection cannot leave the panel on "Syncing…". Failures appear in the side panel instead of retrying in a loop. The background sync never opens a Google window: only a click on **Sign in** does.
 
 ### Google Drive row in the side panel
 
-- **⚙️ button** (far right of the unsubscribe row): opens the Google settings form (client ID, client secret, file link, sign in, sign out). There is no status mark and no separate "Google Drive sync" box; the tooltip of the button holds the signed-in account and the file name.
+- **📄 button** (far right of the unsubscribe row): opens the configuration form — **Choose file…** picks the JSON file described above, **Sign out** forgets the Google token. There is no status mark and no separate "Google Drive sync" box; the tooltip of the button holds the file name, the account and how the sign-in renews itself.
 - **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress.
 
 ### Subscribed channel count
@@ -186,13 +205,13 @@ Yousub adds **no keyboard shortcuts or hotkeys** — there is no `commands` entr
 
 - Click the `+` / `−` in a thumbnail corner (the `−` follows the cursor when hovering a subscribed video).
 - Click the `+` / `−` placed to the right of YouTube's own Subscribe button — in cards, and also on a watch page or a channel header, where that button is not part of any video card.
-- Toggle the extension, change modes and colours, or choose the Drive configuration folder in the side panel.
+- Toggle the extension, change modes and colours, or choose the Drive configuration file in the side panel.
 
 YouTube's own shortcuts (space, `k`, `j`, `l`, `f`, `m`, `c`, `shift+n`, etc.) keep working untouched.
 
 ## Privacy and behavior
 
-Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are written to your own Google Drive file with the OAuth access you granted (drive.file scope, one file only). Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists load on first use, when changing accounts, and after detected subscription actions; pressing YouTube's own Subscribe/Unsubscribe button only applies the change YouTube already made, with no extra request or refresh; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; if detection stops working, the extension reloads a page restored from the back/forward cache and retries a failed list refresh by itself.
+Subscription data is stored in browser extension storage. YouTube requests use your current browser session. If configured, unsubscribe history and channel names/URLs are written to your own Google Drive file with the OAuth access you granted (Drive scope, one file only: the one named in your configuration). Sorting may automatically load additional YouTube results; choose Off, 100, 250 (default), or 500 in Settings. Subscription lists load on first use, when changing accounts, and after detected subscription actions; pressing YouTube's own Subscribe/Unsubscribe button only applies the change YouTube already made, with no extra request or refresh; there is no periodic subscription-list refresh. Drive history sync remains separate. This project uses YouTube page internals that may change; if detection stops working, the extension reloads a page restored from the back/forward cache and retries a failed list refresh by itself.
 
 ## Building and development
 

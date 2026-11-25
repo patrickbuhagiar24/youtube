@@ -188,6 +188,7 @@
 
   /* ---------------- unsubscribe history ---------------- */
   const isLeft = (id) => unsubs[id]?.s === 'unsub' && !subs.ids.has(id);
+  // The cached configuration file decides: a client id and the YouTube.json link.
   const driveConfigured = (cfg) => !!(String(cfg?.link || '').trim() && String(cfg?.clientId || '').trim());
   const readDriveConfigured = async () => {
     const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);

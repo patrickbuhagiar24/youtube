@@ -108,64 +108,67 @@ async function renderDrive() {
   const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {}, [EMAIL_KEY]: tokens = {} } =
     await chrome.storage.local.get(keys);
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
-  const configured = !!(String(cfg.clientId || '').trim() && String(cfg.link || '').trim());
+  const configured = YousubConfigFile.usable(cfg);
   $('driveStatus').textContent = !configured
     ? 'Unsubscribe history is kept only while Google Drive sync is configured'
-    : !tokens.refresh && !d.email ? '⚙️ Click the button to sign in to Google'
-      : d.syncing ? '⏳ Syncing with Google Drive…'
-        : d.lastError ? '⚠️ ' + d.lastError
-          : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
-  // The settings button reports the state (⚙️ opens the form) and its tooltip holds the details.
+    : d.syncing ? '⏳ Syncing with Google Drive…'
+      : d.lastError ? '⚠️ ' + d.lastError
+        : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
+  // The button reports the state (📄 opens the file picker) and its tooltip holds the details.
   const setup = $('driveSetupBtn');
-  const setupLabel = configured ? 'Google settings' : 'Set up Google Drive sync';
-  setup.textContent = '⚙️';
   setup.title = !configured
-    ? `${setupLabel}: add your OAuth client and the ${YOUSUB.DRIVE_FILE} link`
-    : [setupLabel, d.email || tokens.email || '', cfg.folder ? `folder ${cfg.folder}` : '',
-      cfg.files ? `found ${cfg.files.client} and ${cfg.files.drive}` : '',
-      d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName ? d.fileName : '']
-      .filter(Boolean).join(' · ');
-  setup.setAttribute('aria-label', setupLabel);
+    ? 'Choose the configuration file (yousub-file and client_id)'
+    : ['Configuration file', cfg.file || '', d.email || tokens.email || '',
+      d.mode === 'refresh token' ? 'renews in the background' : 'renews while the browser is open',
+      d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName || ''].filter(Boolean).join(' · ');
+  setup.setAttribute('aria-label', 'Choose the configuration file');
   setup.classList.toggle('configured', configured);
+  // The form says which file is in use and whether a secret is cached.
+  $('configInfo').textContent = configured
+    ? `Using ${cfg.file || 'the saved configuration'}${cfg.clientSecret ? ' · client secret stored' : ' · no client secret (Google session mode)'}.`
+    : 'No configuration file has been read yet.';
 }
 
-/* ---------------- Google settings form ---------------- */
+/* ---------------- Configuration file ---------------- */
 
 function showSetupStatus(text) { $('setupStatus').textContent = text; }
 
-async function fillSetup() {
-  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
-  $('clientId').value = cfg.clientId || '';
-  $('clientSecret').value = cfg.keyText || '';
-  $('driveLink').value = cfg.link || '';
-  $('redirectUri').textContent = Drive.redirectUri();
+/** Read the chosen file, validate it, and cache it. A rejected file leaves the cache untouched. */
+async function loadConfigFile(file) {
+  showSetupStatus('Reading this file…');
+  const config = await YousubConfigFile.read(file); // Throws every problem at once
+  // Only now, with a validated configuration in hand, is the cached one replaced.
+  await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
+  showSetupStatus(`Using ${config.file}. Signing in to Google…`);
+  // A file that carries a secret can renew itself, so try straight away; otherwise the user clicks.
+  const result = await chrome.runtime.sendMessage({ type: 'driveSync', signIn: true }).catch((e) => ({ ok: false, error: e.message }));
+  showSetupStatus(result?.ok
+    ? `✅ Saved. ${config.clientSecret ? 'Google Drive sync runs in the background.' : 'The Google session in this browser keeps the sync signed in.'}`
+    : `⚠️ ${result?.error || 'The sign-in did not finish.'}`);
+  await renderDrive();
 }
 
 $('driveSetupBtn').addEventListener('click', async () => {
-  const box = $('googleSetup');
-  box.open = true;
-  await fillSetup();
-  box.scrollIntoView?.({ block: 'nearest' });
+  $('googleSetup').open = true;
+  await renderDrive();
+  $('googleSetup').scrollIntoView?.({ block: 'nearest' });
 });
 
-// Save the three fields, then sign in (the click below is the user gesture the OAuth window needs).
-$('saveSetupBtn').addEventListener('click', async () => {
+$('chooseFileBtn').addEventListener('click', async () => {
+  if (!window.showOpenFilePicker) {
+    showSetupStatus('⚠️ This browser cannot open a file picker (Chrome 86 or newer is required).');
+    return;
+  }
   try {
-    const clientId = Drive.clientIdOf($('clientId').value);
-    const keyText = $('clientSecret').value.trim();
-    const link = $('driveLink').value.trim();
-    if (!clientId) throw new Error('Paste the OAuth client ID (it ends with .apps.googleusercontent.com).');
-    if (!keyText) throw new Error('Paste the OAuth client secret (Google Cloud Console → Credentials → your client → Client secrets).');
-    const fileId = Drive.fileIdOf(link, 'the YouTube.json link field');
-    if (!fileId) throw new Error('Paste the link of the YouTube.json file you shared with this Google account.');
-    const config = { clientId, keyText, link, folder: '', files: { client: 'client secret', drive: 'file link' } };
-    await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
-    showSetupStatus('Signing in to Google…');
-    const result = await chrome.runtime.sendMessage({ type: 'driveSync', signIn: true });
-    showSetupStatus(result?.ok ? '✅ Signed in. The history file is being kept up to date.'
-      : `⚠️ ${result?.error || 'The sign-in did not finish.'}`);
-    await renderDrive();
+    // The picker must start inside the click gesture.
+    const [handle] = await window.showOpenFilePicker({
+      id: 'yousub-config',
+      multiple: false,
+      types: [{ description: 'Yousub configuration', accept: { 'application/json': ['.json'] } }]
+    });
+    await loadConfigFile(await handle.getFile());
   } catch (e) {
+    if (e.name === 'AbortError') { showSetupStatus(''); return; } // The picker was closed
     showSetupStatus('⚠️ ' + (e.message || String(e)));
   }
 });
@@ -173,8 +176,13 @@ $('saveSetupBtn').addEventListener('click', async () => {
 $('signOutBtn').addEventListener('click', async () => {
   showSetupStatus('Signing out…');
   const result = await chrome.runtime.sendMessage({ type: 'driveSignOut' }).catch((e) => ({ ok: false, error: e.message }));
-  showSetupStatus(result?.ok === false && result.error ? `⚠️ ${result.error}` : 'Signed out of Google on this device.');
+  showSetupStatus(result?.ok === false && result.error ? `⚠️ ${result.error}` : 'Signed out of Google on this device. The configuration file stays cached.');
   await renderDrive();
+});
+
+chrome.storage.onChanged.addListener((c, area) => {
+  if (area === 'local' && (c[EMAIL_KEY] || c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
+  if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
 });
 
 chrome.storage.onChanged.addListener((c, area) => {

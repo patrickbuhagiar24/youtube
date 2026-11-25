@@ -3,19 +3,23 @@
  * account (OAuth 2.0). Loaded by the service worker (background.js).
  *
  * This is a browser-extension-only project: there is no CLI, native messaging host, or
- * configuration file outside the extension. Settings are entered in the side panel and kept in
- * chrome.storage.local.yousubDriveConfig as { clientId, link }.
+ * configuration file outside the extension. The configuration is one JSON file the user picks once
+ * in the side panel (see config-file.js); its contents are cached in
+ * chrome.storage.local.yousubDriveConfig as { clientId, clientSecret, link } and used from there.
  *
- * Authentication: Google's OAuth 2.0 authorization-code flow with PKCE, run through
- * chrome.identity.launchWebAuthFlow with a "Web application" OAuth client. The redirect goes to
- * https://<extension-id>.chromiumapp.org/ (the only redirect a browser catches without a server),
- * which Google only accepts for a Web client. Because such a client also expects its
- * client_secret when redeeming the code, the user pastes the "client secret" next to the client ID
- * once; it stays on this device in local storage. PKCE alone is not enough for Google here: with
- * a bare client_id and no secret the token endpoint answers "client_secret is missing".
+ * Authentication is Google OAuth 2.0 through chrome.identity.launchWebAuthFlow, with a
+ * "Web application" client and the redirect https://<extension-id>.chromiumapp.org/ (the only
+ * redirect a browser catches without a server). Two modes, chosen by whether the configuration
+ * carries a client_secret:
  *
- * Scope is drive.file only: Yousub may read and write the ONE file the user shares with it, never
- * the rest of the Drive.
+ *   - with a secret: authorization code + PKCE, and a refresh token. The sync keeps working in the
+ *     background after the browser (or the Google session) went idle.
+ *   - without one: the implicit flow, and the access token lives in memory for about an hour.
+ *     Google is asked silently first (prompt=none) and only asks the person when it must.
+ *
+ * Scope: the full Drive scope is required. YouTube.json is a file the user created, and the narrow
+ * drive.file scope only sees files the app itself created — an existing file answers 404 there. The
+ * narrowing is the file link in the configuration, not the scope.
  *
  * Only a FILE LINK is used: upload YouTube.json to your own Drive, share it with the OAuth client
  * (the account you signed in with must be able to edit it), and paste its file link.
@@ -32,16 +36,16 @@ var Drive = (() => {
   const API = 'https://www.googleapis.com/drive/v3/files';
   const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
   const USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo';
-  const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const SCOPE = 'https://www.googleapis.com/auth/drive';
   const RESUB_KEEP_MS = 180 * 864e5; // Keep resubscribe events for 180 days so cross-device syncing remains correct
 
   /* ---------------- configuration entered in the popup ---------------- */
-  const SETTINGS = 'the Google settings in the side panel';
+  const SETTINGS = 'The configuration file';
   const RESET =
     'To get a new one: Google Cloud Console → APIs & Services → Credentials → your OAuth client → ' +
-    'Client secrets → Add secret.';
+    'Client secrets.';
 
-  /** Read a direct YouTube.json file link from yousub-google-drive.json. */
+  /** Read a direct YouTube.json file link from a configuration object. */
   function linkFromConfig(text) {
     let value;
     try { value = typeof text === 'string' ? JSON.parse(text) : text; }
@@ -63,7 +67,7 @@ var Drive = (() => {
   }
 
   /** Extract a file ID from a Google Drive file link. '' means no link is configured. */
-  function fileIdOf(v, source = SETTINGS) {
+  function fileIdOf(v, source = 'the configuration file') {
     v = String(v || '').trim();
     if (!v || /^[A-Z]+(?:_[A-Z]+)+$/.test(v)) return '';
     if (/\/folders\//.test(v)) {
@@ -84,19 +88,22 @@ var Drive = (() => {
     return id;
   }
 
-  /** Read the saved settings from local extension storage. Re-read on every sync. */
+  /**
+   * The cached configuration, read from local storage on every sync. It is written once, when the
+   * user picks the configuration file, and survives restarting the browser.
+   */
   async function loadConfig() {
     const { [YOUSUB.CONFIG_KEY]: saved = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
     const link = String(saved.link || '').trim();
     const clientId = String(saved.clientId || '').trim();
-    const keyText = typeof saved.keyText === 'string' ? saved.keyText.trim() : '';
+    const clientSecret = typeof saved.clientSecret === 'string' ? saved.clientSecret.trim() : '';
     if (!link && !clientId) return { disabled: true };
     const fileId = link ? fileIdOf(link) : '';
     // An absent client ID means unconfigured; never start a flow without one.
     if (!clientId) return fileId ? { missingKey: true } : { disabled: true };
     const id = clientIdOf(clientId);
     if (!fileId) return { missingLink: true, clientId: id };
-    return { clientId: id, clientSecret: keyText, fileId };
+    return { clientId: id, clientSecret, fileId };
   }
 
   /* ---------------- authentication: authorization code + PKCE ---------------- */
@@ -240,13 +247,87 @@ var Drive = (() => {
   const TOKENS_KEY = 'yousubOAuthTokens';
   const NO_REFRESH =
     'Google did not issue a refresh token, so the sign-in cannot renew itself. Remove Yousub at ' +
-    'https://myaccount.google.com/permissions, then sign in again with "Force re-consent" below.';
+    'https://myaccount.google.com/permissions, then sign in again.';
+
+  /* ---------------- implicit flow (no client secret) ---------------- */
+
+  /** Tokens from the implicit flow live in memory only: nothing is written to storage. */
+  const memory = new Map(); // clientId -> { access, exp }
+
+  function cachedAccess(clientId) {
+    const entry = memory.get(clientId);
+    if (!entry) return '';
+    if (entry.exp <= Date.now()) { memory.delete(clientId); return ''; }
+    return entry.access;
+  }
+
+  /** Read Google's answer: the token arrives in the fragment, a refusal usually in the query. */
+  function readRedirect(redirectUrl, expectedState) {
+    const url = new URL(redirectUrl);
+    const fragment = new URLSearchParams(url.hash.replace(/^#/, ''));
+    const query = url.searchParams;
+    const state = fragment.get('state') || query.get('state') || '';
+    if (expectedState && state !== expectedState) throw new Error('The sign-in response did not match this request. Try signing in again.');
+    const failure = fragment.get('error') || query.get('error');
+    if (failure) {
+      throw new Error(authError(failure, fragment.get('error_description') || query.get('error_description'), ''));
+    }
+    const access = fragment.get('access_token') || query.get('access_token') || '';
+    if (!access) throw new Error('Google did not return an access token. Try signing in again.');
+    return { access, expiresIn: Number(fragment.get('expires_in') || query.get('expires_in')) || 3600 };
+  }
+
+  /** One trip through Chrome's sign-in window; interactive=false never shows a page. */
+  async function implicitFlow(clientId, interactive) {
+    const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
+    const url = new URL(AUTH_URL);
+    url.search = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri(),
+      response_type: 'token',
+      scope: SCOPE,
+      state,
+      // A silent request only works while the person already granted access, which is exactly
+      // when no page is wanted.
+      prompt: interactive ? 'select_account' : 'none'
+    }).toString();
+    let redirect;
+    try {
+      redirect = await chrome.identity.launchWebAuthFlow({ url: url.toString(), interactive });
+    } catch (e) {
+      throw new Error(interactive
+        ? `The Google sign-in window could not be opened (${e?.message || 'unknown error'}).`
+        : 'Yousub is not signed in to Google in this browser. Open the side panel and click Sign in.');
+    }
+    if (!redirect) {
+      throw new Error(interactive ? 'Google returned no answer.'
+        : 'Yousub is not signed in to Google in this browser. Open the side panel and click Sign in.');
+    }
+    const parsed = readRedirect(redirect, state);
+    memory.set(clientId, { access: parsed.access, exp: Date.now() + Math.max(60, parsed.expiresIn - 60) * 1000 });
+    return parsed.access;
+  }
 
   /**
    * Return a valid access token, signing in only when there is no other way.
    * interactive=false never opens a window: it fails instead, so an alarm cannot surprise the user.
+   * Which flow is used follows the configuration: a client secret allows the code flow with a
+   * refresh token, without one the implicit flow keeps the token in memory.
    */
   async function token(cfg, { interactive = false } = {}) {
+    const coded = !!cfg.clientSecret;
+    if (!coded) {
+      // Implicit: memory first, then a silent request, then (when allowed) the consent page.
+      const cached = cachedAccess(cfg.clientId);
+      if (cached) return cached;
+      try {
+        return await implicitFlow(cfg.clientId, false);
+      } catch (e) {
+        if (!interactive) throw Object.assign(e, { code: 'SIGNED_OUT' });
+        // Google refused silently: fall through to the page, which is what the click asked for.
+      }
+      return implicitFlow(cfg.clientId, true);
+    }
     const { [TOKENS_KEY]: saved = {} } = await chrome.storage.local.get(TOKENS_KEY);
     const mine = saved.clientId === cfg.clientId ? saved : {};
     if (mine.access && Date.now() < (mine.exp || 0)) return mine.access;
@@ -262,10 +343,7 @@ var Drive = (() => {
       }
     }
     if (!interactive) {
-      throw Object.assign(new Error('Google Drive sync is not signed in. Open the side panel and click ⚙️ to sign in.'), { code: 'SIGNED_OUT' });
-    }
-    if (!cfg.clientSecret) {
-      throw new Error(`Google needs the OAuth client secret to finish signing in. Paste it in the "Client secret" field. ${RESET}`);
+      throw Object.assign(new Error('Google Drive sync is not signed in. Open the side panel and click Sign in.'), { code: 'SIGNED_OUT' });
     }
     const code = await authorize(cfg.clientId);
     const next = await exchange(cfg.clientId, cfg.clientSecret, code);
@@ -286,24 +364,51 @@ var Drive = (() => {
   }
 
   /** Forget the tokens and, when possible, revoke them at Google. */
-  async function signOut() {
+  async function signOut(clientId = '') {
     const { [TOKENS_KEY]: saved = {} } = await chrome.storage.local.get(TOKENS_KEY);
-    if (saved.refresh) {
-      await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(saved.refresh)}`, { method: 'POST' }).catch(() => {});
+    const revoke = [saved.refresh, cachedAccess(clientId)].filter(Boolean);
+    for (const value of revoke) {
+      await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(value)}`, { method: 'POST' }).catch(() => {});
     }
+    if (clientId) memory.delete(clientId);
     await saveTokens({});
     await chrome.storage.session.remove(FLOW_KEY);
   }
 
-  /** Whether a sign-in exists on this device (no network call). */
+  /** Whether a sign-in is remembered on this device (no network call). */
   async function signedIn() {
     const { [TOKENS_KEY]: saved = {} } = await chrome.storage.local.get(TOKENS_KEY);
-    return !!(saved.refresh || (saved.access && Date.now() < (saved.exp || 0)));
+    if (saved.refresh || (saved.access && Date.now() < (saved.exp || 0))) return true;
+    return memory.size > 0;
   }
 
   /* ---------------- Drive API ---------------- */
+
+  /**
+   * Bound the response and its body. Some connections otherwise leave the panel on "Syncing…"
+   * for ever; aborting also releases the socket.
+   */
+  async function withTimeout(run, timeoutMs = 20000) {
+    const controller = new AbortController();
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error('Google did not answer within 20 seconds. Check your connection and try again.'));
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([run(controller.signal), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function call(cfg, url, opts = {}) {
-    const res = await fetch(url, { ...opts, headers: { ...opts.headers, Authorization: 'Bearer ' + (await token(cfg)) } });
+    const access = await token(cfg);
+    const res = await withTimeout((signal) => fetch(url, {
+      ...opts, signal, headers: { ...opts.headers, Authorization: 'Bearer ' + access }
+    }));
     if (res.ok) return res;
     const body = await res.text().catch(() => '');
     if (/SERVICE_DISABLED|accessNotConfigured|has not been used/i.test(body)) {
@@ -314,7 +419,7 @@ var Drive = (() => {
     }
     if (res.status === 404) throw Object.assign(new Error('File not found.'), { code: 404 });
     if (res.status === 403) {
-      throw new Error(`This Google account cannot edit ${YOUSUB.DRIVE_FILE}. Share the file with the account you signed in as, with "Editor" access.`);
+      throw new Error(`This Google account cannot edit ${YOUSUB.DRIVE_FILE}. Make sure the file belongs to the account you signed in with, or that it was shared with "Editor" access.`);
     }
     throw new Error(`Google Drive rejected the request (status ${res.status}). Try again later.`);
   }
@@ -326,7 +431,7 @@ var Drive = (() => {
       f = await (await call(cfg, `${API}/${fileId}?fields=${encodeURIComponent('id,name,mimeType,trashed,capabilities(canEdit)')}&supportsAllDrives=true`)).json();
     } catch (e) {
       if (e.code === 404) {
-        throw new Error(`The linked file is not available to this Google account. Share ${YOUSUB.DRIVE_FILE} with the account you signed in as (Editor), or paste the link again.`);
+        throw new Error(`The linked file is not available to this Google account. Open the link in the browser while signed in as that account, check that the file still exists, or paste its link again.`);
       }
       throw e;
     }
@@ -416,15 +521,16 @@ var Drive = (() => {
           return { ok: false, configured: false };
         }
         if (cfg.missingKey || cfg.missingLink) {
-          const msg = cfg.missingKey ? `Paste your Google OAuth client ID and secret into ${SETTINGS}.`
-            : `Paste the ${YOUSUB.DRIVE_FILE} file link into ${SETTINGS} (right-click the file → Share → Copy link).`;
+          const msg = cfg.missingKey ? `${SETTINGS} needs "client_id" of a Google OAuth client.`
+            : `${SETTINGS} needs "yousub-file" with the link to ${YOUSUB.DRIVE_FILE} (right-click the file → Share → Copy link).`;
           await chrome.storage.local.set({ yousubDrive: { configured: true, syncing: false, email: '', lastError: msg } });
           return { ok: false, error: msg };
         }
         const { clientId, clientSecret, fileId: id } = cfg;
         const { yousubDrive: prev = {}, yousubUnsubs = {} } = await chrome.storage.local.get(['yousubDrive', 'yousubUnsubs']);
         const { [TOKENS_KEY]: tok = {} } = await chrome.storage.local.get(TOKENS_KEY);
-        const status = { configured: true, email: tok.email || '', fileId: id, fileName: prev.fileId === id ? prev.fileName || '' : '', checked: false };
+        const status = { configured: true, email: tok.email || '', fileId: id, mode: clientSecret ? 'refresh token' : 'session',
+          fileName: prev.fileId === id ? prev.fileName || '' : '', checked: false };
         try {
           await save({ ...status, syncing: true });
           // Sign-in is only requested when the user asked for it, or when this device already has a
@@ -466,6 +572,7 @@ var Drive = (() => {
 
   return {
     clientIdOf, fileIdOf, linkFromConfig, sync, merge, fromFile, toFile,
-    signIn: (cfg) => token(cfg, { interactive: true }), signOut, signedIn, redirectUri, authError
+    signIn: (cfg, options) => token(cfg, { interactive: true, ...options }), signOut, signedIn,
+    redirectUri, authError, fileIdFrom: fileIdOf
   };
 })();

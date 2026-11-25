@@ -4,7 +4,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 function load(chrome = {}, fetch = async () => ({ ok: false }), cryptoImpl = crypto) {
-  const context = vm.createContext({ chrome, fetch, URL, URLSearchParams, TextEncoder, crypto: cryptoImpl, btoa, atob, console });
+  // AbortController is a Node global; the sandbox needs it for the request timeout.
+  // A browser has these globals; the sandbox is given the Node equivalents the code relies on.
+  const context = vm.createContext({ chrome, fetch, URL, URLSearchParams, TextEncoder, crypto: cryptoImpl, btoa, atob,
+    console, AbortController, setTimeout, clearTimeout });
   vm.runInContext(fs.readFileSync('shared.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('drive.js', 'utf8'), context);
   return context;
@@ -14,7 +17,8 @@ const id = 'UCabcdefghijklmnopqrstuv';
 const now = Date.now();
 const link = 'https://drive.google.com/file/d/abcdefghij1234567890/view';
 const clientId = '1234567890-abcdefg.apps.googleusercontent.com';
-const settings = { clientId, keyText: 'GOCSPX-test-secret', link };
+const secret = 'GOCSPX-test-secret';
+const settings = { clientId, clientSecret: secret, link };
 
 /** Minimal chrome.storage (local + session) and identity implementation for the worker. */
 function storageChrome(store = {}, session = {}, redirect = 'https://abcdefghijklmnop.chromiumapp.org/') {
@@ -113,8 +117,8 @@ test('file links are validated and placeholders remain disabled', () => {
   assert.equal(Drive.fileIdOf('https://drive.google.com/file/d/abcdefghij1234567890/view'), 'abcdefghij1234567890');
   assert.equal(Drive.fileIdOf(''), '');
   assert.equal(Drive.fileIdOf('PASTE_FILE_LINK_HERE'), '');
-  assert.throws(() => Drive.fileIdOf('https://drive.google.com/drive/folders/abc'), /settings in the side panel.*folder/);
-  assert.throws(() => Drive.fileIdOf('not a link'), /settings in the side panel.*not a Google Drive file link/);
+  assert.throws(() => Drive.fileIdOf('https://drive.google.com/drive/folders/abc'), /configuration file.*folder/);
+  assert.throws(() => Drive.fileIdOf('not a link'), /configuration file.*not a Google Drive file link/);
 });
 
 test('yousub-google-drive.json accepts a link object or a bare JSON string', () => {
@@ -148,23 +152,23 @@ test('empty Drive settings disable sync without authentication errors', async ()
 });
 
 test('a missing link points the user to the popup', async () => {
-  const store = { yousubDriveConfig: { link: '', clientId, keyText: 'secret' } };
+  const store = { yousubDriveConfig: { link: '', clientId, clientSecret: secret } };
   const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /Paste the YouTube\.json file link into .*side panel/);
+  assert.match(result.error, /"yousub-file" with the link to YouTube\.json/);
 });
 
 test('a missing key with a configured link produces an English error', async () => {
-  const store = { yousubDriveConfig: { link, clientId: '', keyText: '' } };
+  const store = { yousubDriveConfig: { link, clientId: '', clientSecret: '' } };
   const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
-  assert.match(result.error, /Paste your Google OAuth client ID and secret into .*side panel/);
+  assert.match(result.error, /"client_id" of a Google OAuth client/);
 });
 
 test('an invalid client ID is reported without network access', async () => {
-  const store = { yousubDriveConfig: { link, clientId: 'nope', keyText: 'secret' } };
+  const store = { yousubDriveConfig: { link, clientId: 'nope', clientSecret: secret } };
   const { Drive } = load(storageChrome(store));
   const result = await Drive.sync();
   assert.equal(result.ok, false);
@@ -180,7 +184,7 @@ test('a sync without a sign-in never opens a window and says how to sign in', as
   const result = await Drive.sync();
   assert.equal(result.ok, false);
   assert.match(result.error, /not signed in/i);
-  assert.match(result.error, /⚙️/);
+  assert.match(result.error, /click Sign in/);
 });
 
 test('an expired access token is renewed with the saved refresh token', async () => {
@@ -204,10 +208,10 @@ test('a later sync re-reads settings from storage after an unconfigured result',
   const store = {};
   const { Drive } = load(storageChrome(store));
   assert.deepEqual(plain(await Drive.sync()), { ok: false, configured: false });
-  store.yousubDriveConfig = { link, clientId: '', keyText: '' };
+  store.yousubDriveConfig = { link, clientId: '', clientSecret: '' };
   const second = await Drive.sync();
   assert.equal(second.ok, false);
-  assert.match(second.error, /Paste your Google OAuth client ID and secret/);
+  assert.match(second.error, /"client_id" of a Google OAuth client/);
 });
 
 test('a full sync preserves newer local events and writes English data', async () => {

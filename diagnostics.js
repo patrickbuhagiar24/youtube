@@ -104,7 +104,7 @@
       add('12. ext_display_mode', yousubSettings.mode || 'highlight (default)');
       add('13. ext_subscription_list', `${subs.list?.length || 0} channels, ts=${subs.ts || 0}${subs.ts ? '' : ' — never loaded'}`);
       add('14. ext_list_status', subs.stats?.status || '(none)');
-      add('15. ext_drive_configured', !!(local.yousubDriveConfig?.link && local.yousubDriveConfig?.keyText));
+      add('15. ext_drive_configured', !!(local.yousubDriveConfig?.link && local.yousubDriveConfig?.clientId));
     } catch (error) {
       add('10. ext_storage', `${bad} — ${error.message}`);
     }

@@ -25,36 +25,26 @@
     <div id="error" class="err hidden" role="alert"></div>
   </section>
 
-  <!-- Unsubscribe history row: count, status, and the Google settings button -->
+  <!-- Unsubscribe history row: count, status, and the configuration file button -->
   <section class="card drive">
     <span class="dotl"></span>
     <div class="grow">
       <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
       <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
     </div>
-    <button id="driveSetupBtn" class="icon" title="Google settings" aria-label="Google settings">⚙️</button>
+    <button id="driveSetupBtn" class="icon" title="Choose the configuration file" aria-label="Choose the configuration file">📄</button>
   </section>
 
-  <!-- Google settings, collapsed until the button above is used -->
+  <!-- Google settings: one configuration file, plus sign in / sign out -->
   <details id="googleSetup" class="card setup-card">
-    <summary>Google account and Drive file</summary>
-    <p class="hint">Create an OAuth client of type <b>Web application</b> in Google Cloud Console and add
-      <code id="redirectUri">https://&lt;extension-id&gt;.chromiumapp.org/</code> as an authorized redirect URI.
-      The step-by-step guide is in the project README.</p>
-    <label class="field">
-      <span>OAuth client ID</span>
-      <input type="text" id="clientId" spellcheck="false" autocomplete="off" placeholder="1234567890-abc.apps.googleusercontent.com">
-    </label>
-    <label class="field">
-      <span>Client secret (kept on this device)</span>
-      <input type="password" id="clientSecret" spellcheck="false" autocomplete="off" placeholder="GOCSPX-…">
-    </label>
-    <label class="field">
-      <span>YouTube.json file link</span>
-      <input type="text" id="driveLink" spellcheck="false" autocomplete="off" placeholder="https://drive.google.com/file/d/…/view">
-    </label>
+    <summary>Configuration file and Google account</summary>
+    <p class="hint">Pick one JSON file with <code>"yousub-file"</code> (the link to YouTube.json),
+      <code>"client_id"</code> and optionally <code>"client_secret"</code>. It is read once and then
+      kept in this browser, so it is never needed again — not even after a restart. The guide is in
+      the project README.</p>
+    <small id="configInfo" class="muted">No configuration file has been read yet.</small>
     <div class="links setup-links">
-      <button id="saveSetupBtn" class="secondary">Save and sign in</button>
+      <button id="chooseFileBtn" class="secondary">Choose file…</button>
       <button id="signOutBtn" class="secondary">Sign out</button>
     </div>
     <small id="setupStatus" class="muted" aria-live="polite"></small>
@@ -98,6 +88,7 @@
   <footer>Version <span id="ver"></span></footer>
   <script src="../shared.js"></script>
   <script src="../drive.js"></script>
+  <script src="../config-file.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

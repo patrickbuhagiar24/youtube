@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.6.0');
+  assert.equal(manifest.version, '2.7.0');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -134,35 +134,42 @@ test('the side panel has no manual refresh or Drive sync buttons', () => {
 test('the Drive row reports the configuration and the settings button opens the form', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
-  // The settings button lives in the unsubscribe row, at its far right, and no status mark is drawn.
+  // The button lives in the unsubscribe row, at its far right, and no status mark is drawn.
   const row = html.slice(html.indexOf('<!-- Unsubscribe history row'), html.indexOf('<!-- Google settings'));
   assert.match(row, /id="unsubCount"/);
   assert.match(row, /id="driveSetupBtn"/);
   assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button sits at the right');
   assert.doesNotMatch(html + js, /id="driveConfig"|class="mark"|mark\.textContent/);
-  // The separate "Google Drive sync" box is gone.
+  // One Drive box only: there is no separate "Google Drive sync" row.
   assert.equal((html.match(/class="card drive"/g) || []).length, 1);
   assert.doesNotMatch(html, /<div>Google Drive sync<\/div>/);
-  // The form holds the three settings, the redirect URL to register, and the sign-out button.
-  for (const id of ['clientId', 'clientSecret', 'driveLink', 'saveSetupBtn', 'signOutBtn', 'redirectUri']) {
+  // The form picks a file and offers sign out; the three settings are inside the file, not in fields.
+  for (const id of ['chooseFileBtn', 'signOutBtn', 'configInfo', 'setupStatus', 'googleSetup']) {
     assert.match(html, new RegExp(`id="${id}"`), `${id} is in the form`);
   }
-  assert.match(js, /Drive\.clientIdOf/);
-  assert.match(js, /Drive\.fileIdOf/);
-  assert.match(js, /Drive\.redirectUri\(\)/);
+  assert.doesNotMatch(html, /id="clientId"|id="clientSecret"|id="driveLink"|id="saveSetupBtn"|id="redirectUri"/);
+  assert.match(js, /showOpenFilePicker/);
+  assert.match(js, /YousubConfigFile\.read/);
   assert.match(js, /type: 'driveSync', signIn: true/);
-  // The details live in the button's tooltip.
   assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
 });
 
-test('Google Drive setup is OAuth, not a folder or a manifest', () => {
+test('configuration is one cached file, not a folder scan', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
+  // No folder picker and no folder scanner remain anywhere in the extension.
   assert.doesNotMatch(html + js, /showDirectoryPicker|YousubFolder|folder-config/);
-  // A folder left over from 2.5.x is no longer part of the panel, and the file is not shipped.
+  assert.equal(fs.existsSync('folder-config.js'), false);
+  assert.ok(fs.existsSync('config-file.js'), 'the file loader exists');
   const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
+  assert.match(build, /config-file\.js/);
   assert.doesNotMatch(build, /folder-config\.js/);
-  assert.match(js, /apps\.googleusercontent\.com|clientIdOf/);
+  const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  assert.match(ci, /config-file\.js/);
+  // The file format has its own guard.
+  const loader = fs.readFileSync('config-file.js', 'utf8');
+  for (const key of ['yousub-file', 'client_id', 'client_secret']) assert.match(loader, new RegExp(`'${key.replace('_', '_')}'`));
+  assert.match(loader, /version: VERSION/);
 });
 
 test('the APT repository workflow is signed and deployed through Pages', () => {

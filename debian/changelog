@@ -1,3 +1,20 @@
+yousub (2.7.0) stable; urgency=medium
+
+  * Configuration is one JSON file picked once in the side panel
+    ({"yousub-file", "client_id", "client_secret"}) instead of a folder that was
+    scanned for several files; its contents are cached in the extension storage
+    and are never read again, not even after the browser restarts.
+  * The Drive scope is now the full auth/drive scope: drive.file cannot open a
+    YouTube.json the user created, which Google answers with 404.
+  * A client_secret in the configuration keeps a refresh token so the sync runs in
+    the background; without one the implicit flow keeps the token in memory and
+    renews it silently from the Google session.
+  * Every problem in the configuration file is reported at once, and a file that
+    fails validation never replaces a working configuration.
+  * Every Google request is bounded to 20 seconds.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.6.0) stable; urgency=medium
 
   * Sign in to Google with your own account (OAuth 2.0) instead of a service
