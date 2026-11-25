@@ -23,10 +23,10 @@ chrome.runtime.onStartup.addListener(() => { setupAlarm(); clearHistoryWhenUncon
 function setupAlarm() { chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 15 }); }
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === SYNC_ALARM) { clearHistoryWhenUnconfigured(); Drive.sync(); } });
 
-// Local unsubscribe history exists only while Drive sync is configured.
+// Local unsubscribe history exists only while Drive sync is configured (OAuth client + link).
 async function clearHistoryWhenUnconfigured() {
   const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
-  const configured = !!(String(cfg.link || '').trim() && String(cfg.keyText || '').trim());
+  const configured = !!(String(cfg.clientId || '').trim() && String(cfg.link || '').trim());
   if (!configured) await chrome.storage.local.remove('yousubUnsubs');
 }
 
@@ -47,7 +47,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (Date.now() - lastPull > 120e3) { lastPull = Date.now(); Drive.sync(); }
       return;
     case 'driveSync':
-      Drive.sync().then(sendResponse);
+      // Only a click in the panel may open the Google sign-in window.
+      Drive.sync({ signIn: msg.signIn === true }).then(sendResponse);
+      return true;
+    case 'driveSignOut':
+      Drive.signOut().then(() => Drive.sync()).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
   }
 });

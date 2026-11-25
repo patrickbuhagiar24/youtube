@@ -1,4 +1,0 @@
-# Override file for dpkg-scanpackages (merged into the Packages index).
-# Section "web" is the official Debian section for web browsers and browser add-ons;
-# Priority "optional" is the default for every non-essential package.
-yousub  optional  web

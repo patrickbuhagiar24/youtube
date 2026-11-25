@@ -29,7 +29,8 @@ var YOUSUB = Object.freeze({
   // Local storage keys in use (other keys are removed on update)
   STORE_KEYS: Object.freeze(['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig']),
 
-  // Drive settings entered in the popup: { link, keyText } (stored locally, never synced)
+  // Google settings entered in the side panel: { clientId, keyText (client secret), link }
+  // (stored locally on this device, never synced)
   CONFIG_KEY: 'yousubDriveConfig',
 
   // Google Drive file for the user-confirmed unsubscribe history

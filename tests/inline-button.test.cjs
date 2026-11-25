@@ -105,7 +105,7 @@ function harness({ subbed = false, left = false, stacked = false, clip = false }
           yousubSubs: { list: subbed ? [{ id: 'UCabcdefghijklmnopqrstuv', title: 'Chan' }] : [], ts: 1 },
           // The yellow state needs Drive sync configured, matching the extension's behavior.
           yousubUnsubs: left ? { UCabcdefghijklmnopqrstuv: { s: 'unsub', at: 2, title: 'Chan', url: '/channel/UCabcdefghijklmnopqrstuv' } } : {},
-          yousubDriveConfig: left ? { link: 'https://drive.google.com/file/d/x/view', keyText: '{}' } : {}
+          yousubDriveConfig: left ? { link: 'https://drive.google.com/file/d/x/view', clientId: '1234567890-abc.apps.googleusercontent.com' } : {}
         }),
         set: async () => {}
       },

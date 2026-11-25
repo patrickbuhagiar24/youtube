@@ -7,31 +7,50 @@ const test = require('node:test');
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 
-test('the package version comes from the manifest only', () => {
+test('one source of truth per control field', () => {
   const control = read('debian/control');
+  assert.match(control, /^Source: yousub$/m);
+  assert.match(control, /^Section: web$/m); // Official Debian section for browser add-ons
+  assert.match(control, /^Priority: optional$/m); // Default for non-essential packages
   assert.match(control, /^Package: yousub$/m);
   assert.match(control, /^Architecture: all$/m);
-  // No Version, Section or Priority in the built control: they are filled in at build time
-  // (version from manifest.json) or by the archive override (section and priority).
+  // The version lives in manifest.json / debian/changelog only, never in debian/control.
   assert.doesNotMatch(control, /^Version:/m);
-  assert.doesNotMatch(control, /^Section:/m);
-  assert.doesNotMatch(control, /^Priority:/m);
+  assert.ok(fs.existsSync('debian/source/format'), 'a native source format is declared');
+  assert.equal(read('debian/source/format').trim(), '3.0 (native)');
   const build = read('.github/workflows/build-extension.yml');
-  assert.match(build, /sed -i "s\/\^Version: \.\*\/Version: \$VERSION\/"/);
-  // Installed-Size is computed per file the way dpkg counts it.
-  assert.match(build, /installed_size=\$\(cd "\$deb" && find usr -type f -printf '%s\\n'/);
-  assert.match(build, /Installed-Size: \$installed_size/);
+  // dpkg-gencontrol derives Version, Installed-Size, Section, Priority and Description-md5.
+  assert.match(build, /dpkg-gencontrol -v"\$VERSION" -pyousub -P"\$deb" -O > "\$deb\/DEBIAN\/control"/);
+  assert.match(build, /grep -qx "Version: \$VERSION"/);
+  assert.match(build, /grep -q "\^Installed-Size: "/);
+  // No hand-rolled replacements of generated fields.
+  assert.doesNotMatch(build, /sed -i "s\/\^Version:/);
+  assert.doesNotMatch(build, /installed_size=/);
 });
 
-test('the archive files the package through an override file', () => {
-  const override = read('debian/control.override');
-  const line = override.split('\n').find((row) => row.startsWith('yousub'));
-  assert.ok(line, 'yousub is listed in the override file');
-  // dpkg-scanpackages reads "package priority section" (not "package section priority").
-  assert.deepEqual(line.trim().split(/\s+/), ['yousub', 'optional', 'web']);
+test('the archive is filed by the package and adds no override file', () => {
+  assert.equal(fs.existsSync('debian/control.override'), false, 'Section/Priority come from the package');
   const publish = read('.github/workflows/publish-apt.yml');
-  assert.match(publish, /dpkg-scanpackages --arch all pool control\.override/);
-  assert.doesNotMatch(publish, /dpkg-scanpackages --arch all pool \/dev\/null > dists/);
+  assert.match(publish, /dpkg-scanpackages --arch all pool \/dev\/null/);
+});
+
+test('the archive can be fetched by hash and expires its indices', () => {
+  const publish = read('.github/workflows/publish-apt.yml');
+  assert.match(publish, /'Acquire-By-Hash: yes'/);
+  assert.match(publish, /'Valid-Until: ' \+ format_datetime/);
+  // Every published index is copied under by-hash/<ALGO>/<digest> for SHA256 and SHA512.
+  assert.match(publish, /root \/ 'by-hash' \/ algorithm\.upper\(\)/);
+  assert.match(publish, /if algorithm in \('sha256', 'sha512'\)/);
+  // One suite only.
+  assert.doesNotMatch(read('README.md') + publish, /stonking/);
+  assert.match(publish, /for suite in \('stable',\):/);
+  assert.match(publish, /lintian --fail-on error/);
+});
+
+test('CI lints the built package and fails on errors', () => {
+  const publish = read('.github/workflows/publish-apt.yml');
+  assert.match(publish, /dpkg-dev gnupg gpgv/);
+  assert.match(publish, /lintian --fail-on error/);
 });
 
 test('the changelog suite matches the published suite', () => {
@@ -45,5 +64,5 @@ test('the changelog suite matches the published suite', () => {
   for (const [, , entrySuite] of versions) assert.equal(entrySuite, 'stable', 'no entry uses an unpublished suite');
   const publish = read('.github/workflows/publish-apt.yml');
   assert.match(publish, /Suites: stable/);
-  assert.match(publish, /for suite in \('stable', 'stonking'\)/);
+  assert.doesNotMatch(publish, /stonking/);
 });

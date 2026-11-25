@@ -31,7 +31,17 @@ jobs:
       - name: Install repository tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv
+          sudo apt-get install -y --no-install-recommends dpkg-dev gnupg gpgv lintian
+
+      - name: Lint the built package
+        run: |
+          set -euo pipefail
+          mkdir -p lint
+          gh run download "${{ needs.build.outputs.run_id || github.run_id }}" --name yousub-extension --dir lint
+          deb=$(find lint -name 'yousub_*.deb' -print -quit)
+          test -n "$deb"
+          # Errors fail the run; warnings are printed for review.
+          lintian --fail-on error --display-info "$deb"
 
       - name: Download the signed package from this run
         env:
@@ -77,18 +87,14 @@ jobs:
         if: steps.version.outputs.already != 'true'
         run: |
           set -euo pipefail
-          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all site/dists/stonking/main/binary-all
+          mkdir -p site/pool/main/y/yousub site/dists/stable/main/binary-all/by-hash
           cp release/yousub-id.txt site/extension-id.txt
           cp release/yousub_*.deb site/pool/main/y/yousub/
           cd site
-          # The archive, not the package, files the package: the copy of the override file is the
-          # second argument and supplies Section and Priority for the Packages index.
-          cp ../debian/control.override control.override
-          dpkg-scanpackages --arch all pool control.override 2>/dev/null \
+          # Section, Priority and Description-md5 come from the package itself (dpkg-gencontrol).
+          dpkg-scanpackages --arch all pool /dev/null 2>/dev/null \
             > dists/stable/main/binary-all/Packages
           gzip -9 -n -c dists/stable/main/binary-all/Packages > dists/stable/main/binary-all/Packages.gz
-          cp dists/stable/main/binary-all/Packages dists/stonking/main/binary-all/Packages
-          cp dists/stable/main/binary-all/Packages.gz dists/stonking/main/binary-all/Packages.gz
           cat > yousub.sources <<'EOF'
           Types: deb
           URIs: https://patrickbuhagiar24.github.io/youtube/
@@ -113,11 +119,11 @@ jobs:
           python3 - <<'PY'
           import gzip
           import hashlib
-          from datetime import datetime, timezone
+          from datetime import datetime, timedelta, timezone
           from email.utils import format_datetime
           from pathlib import Path
 
-          for suite in ('stable', 'stonking'):
+          for suite in ('stable',):
               root = Path('dists') / suite
               files = sorted(p for p in root.rglob('*') if p.is_file())
               if not files:
@@ -131,7 +137,10 @@ jobs:
                   'Architectures: all',
                   'Components: main',
                   'Description: Signed Yousub Chrome extension packages',
-                  'Acquire-By-Hash: no',
+                  'Acquire-By-Hash: yes',
+                  # Advisory date: apt only fails on it when the user sets
+                  # Acquire::Check-Valid-Until, which is not the default for this repository.
+                  'Valid-Until: ' + format_datetime(datetime.now(timezone.utc) + timedelta(days=30), usegmt=True),
               ]
               for label, algorithm in (('MD5Sum', 'md5'), ('SHA1', 'sha1'), ('SHA256', 'sha256'), ('SHA512', 'sha512')):
                   fields.append(label + ':')
@@ -139,6 +148,14 @@ jobs:
                       data = path.read_bytes()
                       digest = hashlib.new(algorithm, data).hexdigest()
                       fields.append(f' {digest} {len(data):16d} {path.relative_to(root).as_posix()}')
+                  # Acquire-By-Hash: apt may fetch an index by its digest instead of its name, which
+                  # keeps working when a CDN still serves the previous Release file.
+                  if algorithm in ('sha256', 'sha512'):
+                      for path in files:
+                          data = path.read_bytes()
+                          target = root / 'by-hash' / algorithm.upper() / hashlib.new(algorithm, data).hexdigest()
+                          target.parent.mkdir(parents=True, exist_ok=True)
+                          target.write_bytes(data)
               (root / 'Release').write_text('\n'.join(fields) + '\n', encoding='utf-8')
           PY
 
@@ -165,7 +182,7 @@ jobs:
           printf '%s\n' "$fingerprint" > site/archive-keyring.fingerprint.txt
           gpg --batch --yes --armor --export "$fingerprint" > site/archive-keyring.asc
           gpg --batch --yes --export "$fingerprint" > site/archive-keyring.gpg
-          for suite in stable stonking; do
+          for suite in stable; do
             gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
               --local-user "$fingerprint" --armor --detach-sign \
               --output "site/dists/$suite/Release.gpg" "site/dists/$suite/Release"

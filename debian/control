@@ -1,8 +1,13 @@
+Source: yousub
+Section: web
+Priority: optional
+Maintainer: Patrick Buhagiar <arobidsh@proton.me>
+Homepage: https://github.com/patrickbuhagiar24/youtube
+Build-Depends: debhelper-compat (= 13)
+
 Package: yousub
 Architecture: all
 Recommends: google-chrome-stable | chromium
-Maintainer: Patrick Buhagiar <arobidsh@proton.me>
-Homepage: https://github.com/patrickbuhagiar24/youtube
 Description: Yousub YouTube subscription marker Chrome extension
  Registers the signed Yousub Chrome extension built with the repository
  CRX signing key. The extension marks YouTube channels you are not

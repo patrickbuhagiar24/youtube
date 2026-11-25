@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.5.4');
+  assert.equal(manifest.version, '2.6.0');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -131,11 +131,11 @@ test('the side panel has no manual refresh or Drive sync buttons', () => {
   assert.match(fs.readFileSync('background.js', 'utf8'), /Drive\.sync\(\)/);
 });
 
-test('the Drive row reports the configuration and the picker replaces it once configured', () => {
+test('the Drive row reports the configuration and the settings button opens the form', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
-  // The folder button lives in the unsubscribe row, at its far right, and no status mark is drawn.
-  const row = html.slice(html.indexOf('<!-- Unsubscribe history row'), html.indexOf('<!-- Collapsible settings'));
+  // The settings button lives in the unsubscribe row, at its far right, and no status mark is drawn.
+  const row = html.slice(html.indexOf('<!-- Unsubscribe history row'), html.indexOf('<!-- Google settings'));
   assert.match(row, /id="unsubCount"/);
   assert.match(row, /id="driveSetupBtn"/);
   assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button sits at the right');
@@ -143,48 +143,37 @@ test('the Drive row reports the configuration and the picker replaces it once co
   // The separate "Google Drive sync" box is gone.
   assert.equal((html.match(/class="card drive"/g) || []).length, 1);
   assert.doesNotMatch(html, /<div>Google Drive sync<\/div>/);
-  // The button reports the state (📁/🔁) and carries the details in its tooltip.
-  assert.doesNotMatch(js, /✅ Configured · /);
-  // Unconfigured: setup with 📁. Configured: the same button replaces the configuration.
-  assert.match(js, /'Choose the configuration folder'/);
-  assert.match(js, /'Choose another configuration folder'/);
-  assert.match(js, /setup\.textContent = configured \? '🔁' : '📁'/);
+  // The form holds the three settings, the redirect URL to register, and the sign-out button.
+  for (const id of ['clientId', 'clientSecret', 'driveLink', 'saveSetupBtn', 'signOutBtn', 'redirectUri']) {
+    assert.match(html, new RegExp(`id="${id}"`), `${id} is in the form`);
+  }
+  assert.match(js, /Drive\.clientIdOf/);
+  assert.match(js, /Drive\.fileIdOf/);
+  assert.match(js, /Drive\.redirectUri\(\)/);
+  assert.match(js, /type: 'driveSync', signIn: true/);
+  // The details live in the button's tooltip.
   assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
 });
 
-test('Google Drive setup picks a folder, not a manifest file', () => {
-  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-  assert.ok(manifest.permissions.includes('sidePanel'));
-  assert.equal(manifest.side_panel.default_path, 'popup/popup.html');
-  const js = fs.readFileSync('popup/popup.js', 'utf8');
-  // One folder choice; the files inside are found by their content.
-  assert.match(js, /showDirectoryPicker/);
-  assert.match(js, /YousubFolder\.read/);
-  assert.match(js, /YousubFolder\.remember/);
-  // The cached configuration is used as it is: opening the panel never reads the folder again,
-  // so the browser cannot ask for permission outside a user gesture.
-  assert.doesNotMatch(js, /YousubFolder\.usable|refreshFromFolder|requestPermission/);
-  const lib = fs.readFileSync('folder-config.js', 'utf8');
-  assert.doesNotMatch(lib, /requestPermission\(/);
-  assert.match(lib, /queryPermission\(\{ mode: 'read' \}\)/);
-  assert.match(js, /chrome\.storage\.local\.set/);
-  // A manifest file with links is gone: no file picker, no manifest loader, no shipped loader.
-  assert.doesNotMatch(js, /showOpenFilePicker|YousubManifest/);
-  assert.equal(fs.existsSync('config-manifest.js'), false);
+test('Google Drive setup is OAuth, not a folder or a manifest', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
-  assert.match(html, /folder-config\.js/);
-  assert.doesNotMatch(html, /config-manifest\.js/);
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  assert.doesNotMatch(html + js, /showDirectoryPicker|YousubFolder|folder-config/);
+  // A folder left over from 2.5.x is no longer part of the panel, and the file is not shipped.
+  const build = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
+  assert.doesNotMatch(build, /folder-config\.js/);
+  assert.match(js, /apps\.googleusercontent\.com|clientIdOf/);
 });
-
-
 
 test('the APT repository workflow is signed and deployed through Pages', () => {
   const text = fs.readFileSync('.github/workflows/publish-apt.yml', 'utf8');
   assert.match(text, /GPG_PRIVATE_KEY: \$\{\{ secrets\.GPG_PRIVATE_KEY \}\}/);
   assert.match(text, /GPG_PASSPHRASE: \$\{\{ secrets\.GPG_PASSPHRASE \}\}/);
   assert.match(text, /Suites: stable/);
-  assert.match(text, /for suite in \('stable', 'stonking'\)/);
-  assert.match(text, /for suite in stable stonking; do/);
+  // One suite only: "stonking" was an alias and is gone.
+  assert.match(text, /for suite in \('stable',\):/);
+  assert.match(text, /for suite in stable; do/);
+  assert.doesNotMatch(text, /stonking/);
   assert.match(text, /Signed-By: \/etc\/apt\/keyrings\/yousub\.gpg/);
   assert.match(text, /actions\/deploy-pages/);
   assert.match(text, /gpgv --keyring/);
