@@ -15,11 +15,18 @@ yousub (2.7.1) stable; urgency=medium
     sign-in record is no longer labelled as an email key.
   * The manifest asks only for the hosts the extension contacts: the Drive
     page and *.googleusercontent.com were never requested by the code.
-  * Install debian/copyright as /usr/share/doc/yousub/copyright. Policy
-    requires it, and the first build of 2.7.1 failed lintian on
-    no-copyright-file before anything was published.
+  * Install debian/copyright as /usr/share/doc/yousub/copyright and keep
+    the build's md5sums complete; Policy requires the first, and the publish
+    job refuses a package lintian rejects (no-copyright-file,
+    file-missing-in-md5sums, extra-license-file).
+  * Stop writing to /etc/opt, which the FHS reserves for add-on software, and
+    declare the Chromium registration in /etc as a configuration file
+    (dir-or-file-in-etc-opt, file-in-etc-not-marked-as-conffile).
+  * Give the 2.7.1 entry its own date and shorten the synopsis so it no
+    longer starts with the package name (latest-changelog-entry-without-new-date,
+    description-starts-with-package-name).
 
- -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+ -- Patrick Buhagiar <arobidsh@proton.me>  Wed, 25 Nov 2026 22:00:00 +0000
 
 yousub (2.7.0) stable; urgency=medium
 
