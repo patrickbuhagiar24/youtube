@@ -7,7 +7,7 @@ base=/usr/share/yousub
 extension=$(cat "$base/yousub-id.txt")
 
 for directory in /usr/share/google-chrome/extensions /opt/google/chrome/extensions \
-  /etc/opt/chrome/extensions /usr/share/chromium/extensions /etc/chromium/extensions; do
+  /usr/share/chromium/extensions /etc/chromium/extensions; do
   [ -z "$extension" ] || rm -f "$directory/$extension.json"
 done
 

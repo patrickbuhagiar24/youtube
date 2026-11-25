@@ -47,6 +47,31 @@ test('the source stanza declares Standards-Version and Rules-Requires-Root', () 
   assert.doesNotMatch(binary, /Standards-Version|Rules-Requires-Root/, 'the fields stay out of the binary stanza');
 });
 
+test('the package passes the lint rules the publish job enforces', () => {
+  const build = read('.github/workflows/build-extension.yml');
+  const control = read('debian/control');
+  const changelog = read('debian/changelog');
+  // dir-or-file-in-etc-opt: /etc/opt is reserved for add-on software.
+  assert.doesNotMatch(build, /etc\/opt\//, 'no file is installed under /etc/opt');
+  for (const script of [read('debian/postinst'), read('debian/postrm')]) {
+    assert.doesNotMatch(script, /\/etc\/opt\//, 'the maintainer scripts do not create it either');
+  }
+  // file-in-etc-not-marked-as-conffile: the registration in /etc is a configuration file.
+  assert.match(build, /printf '\/etc\/chromium\/extensions\/%s\.json\\n' "\$EXTENSION_ID" > "\$deb\/DEBIAN\/conffiles"/);
+  // file-missing-in-md5sums: every installed file is listed, DEBIAN excluded.
+  assert.match(build, /find \. -path \.\/DEBIAN -prune -o -type f -print0/);
+  // extra-license-file: MIT in full lives in debian/copyright, so no second LICENSE in /usr/share/doc.
+  assert.doesNotMatch(build, /cp README\.md LICENSE/);
+  // description-starts-with-package-name: the synopsis must not begin with "Yousub".
+  assert.doesNotMatch(control, /^Description: Yousub\b/m);
+  assert.match(control, /^Description: YouTube subscription marker for Chrome$/m);
+  // latest-changelog-entry-without-new-date: the newest entry is dated after the one below it.
+  const dates = [...changelog.matchAll(/^ -- .*? {2}(.+)$/gm)].map((m) => Date.parse(m[1]));
+  assert.ok(dates.length >= 10);
+  assert.ok(dates[0] > dates[1], 'the newest changelog entry has its own, newer date');
+  for (let i = 1; i < dates.length; i += 1) assert.ok(dates[i] <= dates[i - 1], 'entries stay in order');
+});
+
 test('the archive is filed by the package and adds no override file', () => {
   assert.equal(fs.existsSync('debian/control.override'), false, 'Section/Priority come from the package');
   const publish = read('.github/workflows/publish-apt.yml');

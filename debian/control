@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: yousub
 Architecture: all
 Recommends: google-chrome-stable | chromium
-Description: Yousub YouTube subscription marker Chrome extension
+Description: YouTube subscription marker for Chrome
  Registers the signed Yousub Chrome extension built with the repository
  CRX signing key. The extension marks YouTube channels you are not
  subscribed to and can sync unsubscribe history to your own Google Drive.
