@@ -1,3 +1,23 @@
+yousub (2.7.1) stable; urgency=medium
+
+  * Keep the saved Google sign-in across extension updates: yousubOAuthTokens
+    was missing from the list of storage keys the service worker keeps, so
+    every update deleted the refresh token and stopped the background sync
+    until the person signed in again. A copy kept in the browser session area
+    also restores a sign-in that an earlier build deleted.
+  * Error messages point at controls that exist: the side panel has no
+    "Sign in" button and no "Client secret" field, so the messages now say
+    to click the configuration-file button and choose the file again, and the
+    consent text no longer quotes the narrower drive.file permission.
+  * A token that Google rejects is discarded before the message asks for a
+    new sign-in, so the same dead token is not replayed on every sync.
+  * The panel listens to storage changes once instead of three times, and its
+    sign-in record is no longer labelled as an email key.
+  * The manifest asks only for the hosts the extension contacts: the Drive
+    page and *.googleusercontent.com were never requested by the code.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
+
 yousub (2.7.0) stable; urgency=medium
 
   * Configuration is one JSON file picked once in the side panel

@@ -36,7 +36,7 @@ function storageChrome(store = {}, session = {}, redirect = 'https://abcdefghijk
       session: {
         get: async (k) => (k in session ? { [k]: session[k] } : {}),
         set: async (patch) => Object.assign(session, patch),
-        remove: async (k) => { delete session[k]; },
+        remove: async (keys) => { for (const k of [].concat(keys)) delete session[k]; },
       },
     },
     identity: { getRedirectURL: () => redirect },
@@ -184,7 +184,9 @@ test('a sync without a sign-in never opens a window and says how to sign in', as
   const result = await Drive.sync();
   assert.equal(result.ok, false);
   assert.match(result.error, /not signed in/i);
-  assert.match(result.error, /click Sign in/);
+  // The advice names a control the panel really has: 📄, then the file, which is what signs in.
+  assert.match(result.error, /click 📄/);
+  assert.match(result.error, /choose the configuration file again/);
 });
 
 test('an expired access token is renewed with the saved refresh token', async () => {
@@ -238,4 +240,57 @@ test('a full sync preserves newer local events and writes English data', async (
   assert.equal(store.yousubUnsubs[secondId].s, 'unsub');
   assert.equal(store.yousubDrive.lastError, '');
   assert.equal(store.yousubDrive.syncing, false);
+});
+
+test('the sign-in record is mirrored into the session area', async () => {
+  const store = { yousubDriveConfig: settings };
+  const session = {};
+  const chrome = storageChrome(store, session);
+  chrome.identity.launchWebAuthFlow = async () => 'https://abcdefghijklmnop.chromiumapp.org/?code=abc&state=' + session.yousubOAuthFlow.state;
+  const { fetch } = oauthFetch();
+  const { Drive } = load(chrome, fetch);
+  assert.deepEqual(plain(await Drive.sync({ signIn: true })), { ok: true });
+  assert.equal(store.yousubOAuthTokens.refresh, 'refresh-1');
+  // Written by saveTokens: local is the record of record, session is what an update can restore.
+  assert.equal(session.yousubOAuthTokensBackup.refresh, 'refresh-1');
+});
+
+test('a sign-in deleted by an extension update is restored from the session mirror', async () => {
+  const record = { clientId, email: 'someone@example.invalid', refresh: 'refresh-1', access: 'old', exp: 1 };
+  // Yousub 2.7.0 and earlier deleted yousubOAuthTokens in onInstalled, so the mirror is all that is
+  // left; 2.7.1 must put the record back instead of asking for a new sign-in.
+  const store = { yousubDriveConfig: settings };
+  const session = { yousubOAuthTokensBackup: record };
+  const { Drive } = load(storageChrome(store, session));
+  assert.equal(await Drive.restoreSignIn(), true);
+  assert.deepEqual(plain(store.yousubOAuthTokens), record);
+  // Nothing to restore: a record already present is left alone, and an empty mirror restores nothing.
+  assert.equal(await Drive.restoreSignIn(), false);
+  const empty = {};
+  assert.equal(await load(storageChrome({}, empty)).Drive.restoreSignIn(), false);
+});
+
+test('sign out clears the session mirror as well', async () => {
+  const store = { yousubDriveConfig: settings, yousubOAuthTokens: { clientId, refresh: 'refresh-1', access: 'a', exp: Date.now() + 3600e3 } };
+  const session = { yousubOAuthTokensBackup: { refresh: 'refresh-1' }, yousubOAuthFlow: { verifier: 'v', state: 's' } };
+  const chrome = storageChrome(store, session);
+  const { fetch } = oauthFetch();
+  const { Drive } = load(chrome, fetch);
+  await Drive.signOut(clientId);
+  assert.deepEqual(plain(store.yousubOAuthTokens), {});
+  assert.deepEqual(plain(session), {}, 'no token survives in the session area');
+});
+
+test('a rejected saved token is forgotten so the next attempt can sign in', async () => {
+  const store = {
+    yousubDriveConfig: settings,
+    yousubOAuthTokens: { clientId, refresh: 'refresh-1', access: 'stale', exp: Date.now() + 3600e3 },
+  };
+  const chrome = storageChrome(store);
+  const fetch = async (url) => (url.includes('alt=media') ? { ok: false, status: 401, text: async () => '' } : { ok: false, status: 401, text: async () => '', json: async () => ({}) });
+  const { Drive } = load(chrome, fetch);
+  const result = await Drive.sync();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /rejected the saved sign-in/);
+  assert.deepEqual(plain(store.yousubOAuthTokens), {}, 'the dead token is gone, not replayed for ever');
 });

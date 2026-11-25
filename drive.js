@@ -41,9 +41,15 @@ var Drive = (() => {
 
   /* ---------------- configuration entered in the popup ---------------- */
   const SETTINGS = 'The configuration file';
+  // The panel has two controls that matter here: the 📄 button, which opens the form, and
+  // Choose file… inside it, which is also what starts a sign-in. Messages point at those, never at a
+  // field that no longer exists — the client ID and secret live in the configuration file now.
+  const OPEN_FORM = 'Open the side panel and click 📄.';
+  const SIGN_IN = 'Open the side panel, click 📄, then choose the configuration file again to sign in.';
   const RESET =
     'To get a new one: Google Cloud Console → APIs & Services → Credentials → your OAuth client → ' +
     'Client secrets.';
+  const REPLACE_FILE = 'Put it in the configuration file, then choose that file again with Choose file….';
 
   /** Read a direct YouTube.json file link from a configuration object. */
   function linkFromConfig(text) {
@@ -172,7 +178,9 @@ var Drive = (() => {
       case 'unauthorized_client':
         return 'This OAuth client is not allowed to use this sign-in method. The client type must be "Web application".';
       case 'access_denied':
-        return 'The Google account did not grant access. Yousub needs the "See, edit, create and delete only the specific Google Drive files you use with this app" permission to read and write the history file.';
+        return 'The Google account did not grant access. Yousub needs permission to see, edit, create ' +
+          'and delete your Google Drive files — it only touches the one file named in the configuration. ' +
+          'Grant it on the consent screen, or remove Yousub at https://myaccount.google.com/permissions and sign in again.';
       default:
         return `Google refused the sign-in (${code}${description ? `: ${description}` : ''}).`;
     }
@@ -182,7 +190,7 @@ var Drive = (() => {
   async function exchange(clientId, clientSecret, code) {
     const { [FLOW_KEY]: flow } = await chrome.storage.session.get(FLOW_KEY);
     await chrome.storage.session.remove(FLOW_KEY);
-    if (!flow?.verifier) throw new Error('The sign-in attempt expired. Click ⚙️ and sign in again.');
+    if (!flow?.verifier) throw new Error(`The sign-in attempt expired. ${SIGN_IN}`);
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -202,13 +210,13 @@ var Drive = (() => {
     if (!res.ok || !j.access_token) {
       const detail = String(j.error_description || j.error || '');
       if (/client_secret is missing/i.test(detail)) {
-        throw new Error(`Google requires the OAuth client secret as well. Paste it in the "Client secret" field (Google Cloud Console → Credentials → your OAuth client). ${RESET}`);
+        throw new Error(`Google requires the OAuth client secret as well. Add "client_secret" in the configuration file (Google Cloud Console → Credentials → your OAuth client). ${RESET} ${REPLACE_FILE}`);
       }
       if (/invalid_client|unauthorized_client/i.test(detail)) {
         throw new Error(`The OAuth client ID or secret is wrong or has been deleted. ${RESET}`);
       }
       if (/invalid_grant/i.test(detail)) {
-        throw new Error('The sign-in code expired or was already used. Sign in again.');
+        throw new Error(`The sign-in code expired or was already used. ${SIGN_IN}`);
       }
       throw new Error(`Google did not return an access token (${detail || res.status}). Try again.`);
     }
@@ -236,7 +244,7 @@ var Drive = (() => {
     if (!res.ok || !j.access_token) {
       const detail = String(j.error_description || j.error || '');
       if (/invalid_grant|expired|revoked/i.test(detail)) {
-        throw Object.assign(new Error('The Google sign-in has expired or was revoked. Click ⚙️ and sign in again.'), { code: 'SIGNED_OUT' });
+        throw Object.assign(new Error(`The Google sign-in has expired or was revoked. ${SIGN_IN}`), { code: 'SIGNED_OUT' });
       }
       throw new Error(`Google would not renew the sign-in (${detail || res.status}). Try again later.`);
     }
@@ -245,6 +253,9 @@ var Drive = (() => {
 
   const FLOW_KEY = 'yousubOAuthFlow';
   const TOKENS_KEY = 'yousubOAuthTokens';
+  // The sign-in record is written to disk through TOKENS_KEY; this is the short-lived mirror that
+  // lets onInstalled put back a record that an earlier build deleted (see restoreSignIn below).
+  const TOKENS_BACKUP_KEY = 'yousubOAuthTokensBackup';
   const NO_REFRESH =
     'Google did not issue a refresh token, so the sign-in cannot renew itself. Remove Yousub at ' +
     'https://myaccount.google.com/permissions, then sign in again.';
@@ -297,11 +308,11 @@ var Drive = (() => {
     } catch (e) {
       throw new Error(interactive
         ? `The Google sign-in window could not be opened (${e?.message || 'unknown error'}).`
-        : 'Yousub is not signed in to Google in this browser. Open the side panel and click Sign in.');
+        : `Yousub is not signed in to Google in this browser. ${SIGN_IN}`);
     }
     if (!redirect) {
       throw new Error(interactive ? 'Google returned no answer.'
-        : 'Yousub is not signed in to Google in this browser. Open the side panel and click Sign in.');
+        : `Yousub is not signed in to Google in this browser. ${SIGN_IN}`);
     }
     const parsed = readRedirect(redirect, state);
     memory.set(clientId, { access: parsed.access, exp: Date.now() + Math.max(60, parsed.expiresIn - 60) * 1000 });
@@ -343,7 +354,7 @@ var Drive = (() => {
       }
     }
     if (!interactive) {
-      throw Object.assign(new Error('Google Drive sync is not signed in. Open the side panel and click Sign in.'), { code: 'SIGNED_OUT' });
+      throw Object.assign(new Error(`Google Drive sync is not signed in. ${SIGN_IN}`), { code: 'SIGNED_OUT' });
     }
     const code = await authorize(cfg.clientId);
     const next = await exchange(cfg.clientId, cfg.clientSecret, code);
@@ -353,7 +364,42 @@ var Drive = (() => {
     return next.access;
   }
 
-  const saveTokens = (patch) => chrome.storage.local.set({ [TOKENS_KEY]: patch });
+  /**
+   * Write the sign-in record. It is mirrored into chrome.storage.session, which survives a service
+   * worker restart (and an extension update) but not a browser restart: onInstalled runs on every
+   * update and deletes local keys it does not know, so the mirror is what lets restoreSignIn put a
+   * sign-in back. Nothing new is exposed: chrome.storage.session is readable by this extension only
+   * (content scripts included, which is why the record holds tokens and nothing else).
+   */
+  async function saveTokens(record) {
+    await chrome.storage.local.set({ [TOKENS_KEY]: record });
+    try {
+      // An empty record is a sign-out: there is nothing worth restoring, so no mirror is left.
+      if (record.refresh || record.access) await chrome.storage.session.set({ [TOKENS_BACKUP_KEY]: record });
+      else await chrome.storage.session.remove(TOKENS_BACKUP_KEY);
+    } catch {
+      // A browser without chrome.storage.session (before Chrome 102) still syncs; it only loses
+      // the ability to repair a record deleted by an update.
+    }
+  }
+
+  /**
+   * Put the sign-in record back after an extension update. A build before 2.7.1 listed neither
+   * yousubOAuthTokens in YOUSUB.STORE_KEYS nor a mirror, so the record is often already gone; this
+   * makes the recovery automatic when the mirror is still there.
+   */
+  async function restoreSignIn() {
+    try {
+      const { [TOKENS_KEY]: saved } = await chrome.storage.local.get(TOKENS_KEY);
+      if (saved && (saved.refresh || saved.access)) return false;
+      const { [TOKENS_BACKUP_KEY]: backup } = await chrome.storage.session.get(TOKENS_BACKUP_KEY);
+      if (!backup || !(backup.refresh || backup.access)) return false;
+      await chrome.storage.local.set({ [TOKENS_KEY]: backup });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   /** The signed-in account's address, for the panel. Best effort: the sync works without it. */
   async function accountEmail(access) {
@@ -372,7 +418,7 @@ var Drive = (() => {
     }
     if (clientId) memory.delete(clientId);
     await saveTokens({});
-    await chrome.storage.session.remove(FLOW_KEY);
+    await chrome.storage.session.remove([FLOW_KEY, TOKENS_BACKUP_KEY]);
   }
 
   /** Whether a sign-in is remembered on this device (no network call). */
@@ -415,7 +461,10 @@ var Drive = (() => {
       throw new Error('The Google Drive API is not enabled. Open Google Cloud Console → APIs & Services and enable "Google Drive API".');
     }
     if (res.status === 401) {
-      throw Object.assign(new Error('Google rejected the saved sign-in. Click ⚙️ and sign in again.'), { code: 'SIGNED_OUT' });
+      // Drop the rejected token: keeping it would replay the same request on every sync and the
+      // advice in the message below would never work.
+      await saveTokens({});
+      throw Object.assign(new Error(`Google rejected the saved sign-in. ${SIGN_IN}`), { code: 'SIGNED_OUT' });
     }
     if (res.status === 404) throw Object.assign(new Error('File not found.'), { code: 404 });
     if (res.status === 403) {
@@ -521,8 +570,8 @@ var Drive = (() => {
           return { ok: false, configured: false };
         }
         if (cfg.missingKey || cfg.missingLink) {
-          const msg = cfg.missingKey ? `${SETTINGS} needs "client_id" of a Google OAuth client.`
-            : `${SETTINGS} needs "yousub-file" with the link to ${YOUSUB.DRIVE_FILE} (right-click the file → Share → Copy link).`;
+          const msg = cfg.missingKey ? `${SETTINGS} needs "client_id" of a Google OAuth client. ${OPEN_FORM}`
+            : `${SETTINGS} needs "yousub-file" with the link to ${YOUSUB.DRIVE_FILE} (right-click the file → Share → Copy link). ${OPEN_FORM}`;
           await chrome.storage.local.set({ yousubDrive: { configured: true, syncing: false, email: '', lastError: msg } });
           return { ok: false, error: msg };
         }
@@ -573,6 +622,6 @@ var Drive = (() => {
   return {
     clientIdOf, fileIdOf, linkFromConfig, sync, merge, fromFile, toFile,
     signIn: (cfg, options) => token(cfg, { interactive: true, ...options }), signOut, signedIn,
-    redirectUri, authError, fileIdFrom: fileIdOf
+    restoreSignIn, redirectUri, authError, fileIdFrom: fileIdOf
   };
 })();

@@ -78,7 +78,7 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.7.0');
+  assert.equal(manifest.version, '2.7.1');
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
@@ -152,6 +152,58 @@ test('the Drive row reports the configuration and the settings button opens the 
   assert.match(js, /YousubConfigFile\.read/);
   assert.match(js, /type: 'driveSync', signIn: true/);
   assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
+});
+
+test('every message points at a control the panel really has', () => {
+  const drive = fs.readFileSync('drive.js', 'utf8');
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+  // The panel has no "Sign in" button and no "Client secret" field any more: the secret lives in
+  // the configuration file. A message that names them sends the reader looking for nothing.
+  assert.doesNotMatch(drive, /click Sign in\./);
+  assert.doesNotMatch(drive, /"Client secret" field/);
+  assert.doesNotMatch(drive, /Click ⚙️/);
+  // The two controls that do exist.
+  assert.ok(ids.has('driveSetupBtn'), 'the 📄 button opens the form');
+  assert.ok(ids.has('chooseFileBtn'), 'Choose file… is also what signs in');
+  assert.match(drive, /const OPEN_FORM = 'Open the side panel and click 📄\.'/);
+  assert.match(drive, /const SIGN_IN = 'Open the side panel, click 📄, then choose the configuration file again to sign in\.'/);
+  // The consent screen for auth/drive does not read like the narrow drive.file one.
+  assert.doesNotMatch(drive, /See, edit, create and delete only the specific Google Drive files/);
+  assert.match(drive, /only touches the one file named in the configuration/);
+});
+
+test('the sign-in record is a stored key, so an update cannot delete it', () => {
+  const shared = fs.readFileSync('shared.js', 'utf8');
+  const keys = JSON.parse(shared.match(/STORE_KEYS: Object\.freeze\((\[[^\]]*\])\)/)[1].replace(/'/g, '"'));
+  // onInstalled runs on every extension update and deletes local keys missing from this list;
+  // dropping the token key silently stops the background sync until the person signs in again.
+  assert.ok(keys.includes('yousubOAuthTokens'), 'the refresh token survives an update');
+  for (const key of ['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig']) assert.ok(keys.includes(key), key);
+  assert.match(fs.readFileSync('background.js', 'utf8'), /await Drive\.restoreSignIn\(\)/);
+  // The flow record and its mirror live in chrome.storage.session, which the onInstalled sweep
+  // never touches because it only reads chrome.storage.local.
+  assert.doesNotMatch(shared, /yousubOAuthFlow/);
+});
+
+test('the panel redraws from one storage listener, not three', () => {
+  const js = fs.readFileSync('popup/popup.js', 'utf8');
+  assert.equal((js.match(/chrome\.storage\.onChanged\.addListener/g) || []).length, 1);
+  assert.doesNotMatch(js, /EMAIL_KEY/, 'the sign-in record is not an email key');
+  assert.match(js, /const TOKENS_KEY = 'yousubOAuthTokens';/);
+});
+
+test('the manifest asks only for the hosts the code contacts', () => {
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.deepEqual(manifest.host_permissions, [
+    'https://www.youtube.com/*',
+    'https://oauth2.googleapis.com/*',
+    'https://www.googleapis.com/*'
+  ]);
+  // A Drive file link is a value in the configuration, never a page the extension requests.
+  for (const gone of ['https://drive.google.com/*', 'https://*.googleusercontent.com/*']) {
+    assert.ok(!manifest.host_permissions.includes(gone), `${gone} is not contacted`);
+  }
 });
 
 test('configuration is one cached file, not a folder scan', () => {

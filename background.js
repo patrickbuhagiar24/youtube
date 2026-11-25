@@ -14,6 +14,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   const all = await chrome.storage.local.get(null);
   const stale = Object.keys(all).filter((k) => !YOUSUB.STORE_KEYS.includes(k));
   if (stale.length) await chrome.storage.local.remove(stale);
+  // The key check above is unchanged since 2.7.0, which lacked the sign-in record; make sure a
+  // refresh token written before this build is back when a device has any sign-in to restore.
+  await Drive.restoreSignIn();
   setupAlarm();
   clearHistoryWhenUnconfigured();
   Drive.sync(); // Read the Drive settings saved in the popup after installation or reload

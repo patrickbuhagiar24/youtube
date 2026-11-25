@@ -26,8 +26,11 @@ var YOUSUB = Object.freeze({
   // Autoload before sorting (Home, Search, watch sidebar): stop at this count or when no more items arrive
   AUTOLOAD: Object.freeze({ stallMs: 15000 }),
 
-  // Local storage keys in use (other keys are removed on update)
-  STORE_KEYS: Object.freeze(['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig']),
+  // Local storage keys in use (other keys are removed on update).
+  // The sign-in record must be listed: onInstalled also runs on every extension update, so a key
+  // missing here is deleted then — and a deleted refresh token stops the background sync until the
+  // person signs in again.
+  STORE_KEYS: Object.freeze(['yousubSubs', 'yousubUnsubs', 'yousubDrive', 'yousubDriveConfig', 'yousubOAuthTokens']),
 
   // Configuration cached from the JSON file the user picked once:
   // { clientId, clientSecret (optional), link, file, savedAt, version } (local, never synced)

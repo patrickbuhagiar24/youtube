@@ -101,11 +101,13 @@ $('exportBtn').addEventListener('click', async (e) => {
 $('openFeedBtn').addEventListener('click', (e) => e.preventDefault() || chrome.tabs.create({ url: 'https://www.youtube.com/feed/channels' }));
 
 /* ---------------- Google Drive ---------------- */
-const EMAIL_KEY = 'yousubOAuthTokens';
+// The sign-in record: { clientId, email, refresh, access, exp }. It holds tokens, not just the
+// address, so the panel only ever reads `email` and `mode` out of it.
+const TOKENS_KEY = 'yousubOAuthTokens';
 
 async function renderDrive() {
-  const keys = ['yousubDrive', 'yousubUnsubs', YOUSUB.CONFIG_KEY, EMAIL_KEY];
-  const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {}, [EMAIL_KEY]: tokens = {} } =
+  const keys = ['yousubDrive', 'yousubUnsubs', YOUSUB.CONFIG_KEY, TOKENS_KEY];
+  const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {}, [TOKENS_KEY]: tokens = {} } =
     await chrome.storage.local.get(keys);
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = YousubConfigFile.usable(cfg);
@@ -180,19 +182,11 @@ $('signOutBtn').addEventListener('click', async () => {
   await renderDrive();
 });
 
+// One listener for the whole panel: one storage change redraws one row, once.
 chrome.storage.onChanged.addListener((c, area) => {
-  if (area === 'local' && (c[EMAIL_KEY] || c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
-  if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
-});
-
-chrome.storage.onChanged.addListener((c, area) => {
-  if (area === 'local' && (c[EMAIL_KEY] || c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
-  if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
-});
-
-chrome.storage.onChanged.addListener((c, area) => {
-  if (area === 'local' && (c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY])) renderDrive();
-  if (area === 'local' && c.yousubSubs && tabId === null) renderFromStorage();
+  if (area !== 'local') return;
+  if (c[TOKENS_KEY] || c.yousubDrive || c.yousubUnsubs || c[YOUSUB.CONFIG_KEY]) renderDrive();
+  if (c.yousubSubs && tabId === null) renderFromStorage();
 });
 
 // The active YouTube tab pushes changes instead of being polled continuously.

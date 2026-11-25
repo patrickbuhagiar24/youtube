@@ -142,9 +142,12 @@ working configuration**.
 - **With `client_secret`**: the access token is renewed from a saved refresh token, so a sync works
   even when Chrome has been closed for a while, and nothing asks you again.
 - **Without `client_secret`**: the access token lives about an hour and is renewed silently from your
-  Google session. If Google wants to ask, the panel says so and you click **Sign in** once.
+  Google session. If Google wants to ask, the panel says so: click 📄 and choose the configuration
+  file again — that starts one sign-in and needs no other step.
 - **Sign out** forgets the token and revokes it at Google. The cached configuration and the Drive file
   stay as they are.
+- The saved sign-in survives an extension update: `yousubOAuthTokens` is one of the extension's own
+  storage keys, and a copy kept in the browser session area restores it if an older build removed it.
 
 ### When the sync does not work
 
@@ -156,7 +159,8 @@ working configuration**.
 | `Google does not recognise this extension's redirect URL` | Add the exact `https://<extension-id>.chromiumapp.org/` shown in the panel to the client's Authorized redirect URIs. |
 | `This Google account cannot edit YouTube.json` | Make sure the file belongs to the account you signed in with, or was shared with Editor access. |
 | `The Google Drive API is not enabled` | Step 2 above. |
-| `The Google sign-in has expired or was revoked` | Click **Sign in** once. With `client_secret` this is rare; without it, it can happen after a long time without using Google in this browser. |
+| `The Google sign-in has expired or was revoked` | Click 📄 and choose the configuration file again to sign in once more. With `client_secret` this is rare; without it, it can happen after a long time without using Google in this browser. |
+| `Google rejected the saved sign-in` | Same as above: the rejected token is discarded first, so choosing the file again really does start a new sign-in. |
 
 Nothing in the panel asks you to reload the page: the configuration is cached, and the sync resumes by
 itself.
@@ -170,7 +174,7 @@ Without any button press, the extension syncs automatically:
 - **On a YouTube page load** — the first page that opens pulls changes, at most once every 2 minutes.
 - **On browser start and on install/update** — settings are re-read, sync runs once (without opening any Google window), and local history that exists without a configuration is cleared.
 
-Only one sync runs at a time. It refreshes the access token if needed, reads `YouTube.json`, merges the most recent event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Every Google request is bounded to 20 seconds, so a stalled connection cannot leave the panel on "Syncing…". Failures appear in the side panel instead of retrying in a loop. The background sync never opens a Google window: only a click on **Sign in** does.
+Only one sync runs at a time. It refreshes the access token if needed, reads `YouTube.json`, merges the most recent event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Every Google request is bounded to 20 seconds, so a stalled connection cannot leave the panel on "Syncing…". Failures appear in the side panel instead of retrying in a loop. The background sync never opens a Google window: only choosing the configuration file in the panel does.
 
 ### Google Drive row in the side panel
 

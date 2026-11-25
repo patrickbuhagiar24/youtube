@@ -56,7 +56,7 @@ function fakeChrome({ storage = {}, onMessage } = {}) {
   });
   const chrome = {
     runtime: {
-      getManifest: () => ({ version: '2.7.0' }),
+      getManifest: () => ({ version: '2.7.1' }),
       // Messages cross the jsdom realm boundary; keep Node copies so assertions can compare them.
       sendMessage: async (message) => {
         const copy = JSON.parse(JSON.stringify(message));
