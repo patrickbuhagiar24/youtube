@@ -15,6 +15,9 @@ yousub (2.7.1) stable; urgency=medium
     sign-in record is no longer labelled as an email key.
   * The manifest asks only for the hosts the extension contacts: the Drive
     page and *.googleusercontent.com were never requested by the code.
+  * Install debian/copyright as /usr/share/doc/yousub/copyright. Policy
+    requires it, and the first build of 2.7.1 failed lintian on
+    no-copyright-file before anything was published.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
