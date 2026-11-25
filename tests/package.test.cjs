@@ -23,6 +23,10 @@ test('one source of truth per control field', () => {
   assert.match(build, /dpkg-gencontrol -v"\$VERSION" -pyousub -P"\$deb" -O > "\$deb\/DEBIAN\/control"/);
   assert.match(build, /grep -qx "Version: \$VERSION"/);
   assert.match(build, /grep -q "\^Installed-Size: "/);
+  // Policy 12.5: the package must install /usr/share/doc/yousub/copyright, and lintian reports a
+  // missing one as an error, which fails the publish job.
+  assert.match(build, /install -m 0644 debian\/copyright "\$deb\/usr\/share\/doc\/yousub\/copyright"/);
+  assert.ok(fs.existsSync('debian/copyright'), 'the copyright file exists');
   // No hand-rolled replacements of generated fields.
   assert.doesNotMatch(build, /sed -i "s\/\^Version:/);
   assert.doesNotMatch(build, /installed_size=/);
