@@ -110,29 +110,16 @@ async function renderDrive() {
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
-  // Configuration mark at the right of the unsubscribe row: one symbol, details in the tooltip.
-  const mark = $('driveConfig');
-  const missing = $('driveConfig').dataset.missing || '';
-  if (missing) {
-    mark.textContent = '⚠️';
-    mark.title = missing;
-    mark.classList.add('warn');
-  } else if (mark.classList.contains('warn') && !missing) {
-    mark.classList.remove('warn');
-  }
-  if (!mark.classList.contains('warn')) mark.textContent = configured ? '✅' : '❌';
-  if (missing) return; // A named missing file stays on screen until the next successful read
-  mark.title = !configured
-    ? 'Not configured: choose the folder that holds service-account.json and yousub-google-drive.json (📁)'
-    : [d.email || 'service account', cfg.folder ? `folder ${cfg.folder}` : '',
-      cfg.files ? `found ${cfg.files.serviceAccount} and ${cfg.files.drive}` : '',
-      d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName ? d.fileName : '']
-      .filter(Boolean).join(' · ');
-  // Once configured, the same picker replaces the saved configuration instead of setting it up.
+  // No status mark: the button itself says whether the configuration exists, and a missing file
+  // is named on the status line above.
   const setup = $('driveSetupBtn');
   const setupLabel = configured ? 'Choose another configuration folder' : 'Choose the configuration folder';
   setup.textContent = configured ? '🔁' : '📁';
-  setup.title = setupLabel;
+  setup.title = !configured ? `${setupLabel}: it must hold service-account.json and yousub-google-drive.json`
+    : [setupLabel, d.email || 'service account', cfg.folder ? `folder ${cfg.folder}` : '',
+      cfg.files ? `found ${cfg.files.serviceAccount} and ${cfg.files.drive}` : '',
+      d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName ? d.fileName : '']
+      .filter(Boolean).join(' · ');
   setup.setAttribute('aria-label', setupLabel);
   setup.classList.toggle('configured', configured);
 }
@@ -173,17 +160,13 @@ $('driveSetupBtn').addEventListener('click', async () => {
   }
 });
 
-/** A missing file is a configuration problem: the mark turns ⚠️ and the line below names the file. */
+/** A missing file is named on the status line of the unsubscribe row; the picker holds the same text. */
 function showConfigWarning(message) {
-  $('driveConfig').dataset.missing = message;
-  $('driveConfig').textContent = '⚠️';
-  $('driveConfig').title = message;
-  $('driveConfig').classList.add('warn');
+  $('driveSetupBtn').title = message;
   $('driveStatus').textContent = message;
 }
 function clearConfigWarning() {
-  delete $('driveConfig').dataset.missing;
-  $('driveConfig').classList.remove('warn');
+  $('driveSetupBtn').removeAttribute('title');
 }
 
 // No folder access when the panel opens: the configuration read from the folder is cached in

@@ -70,7 +70,7 @@ cat /usr/share/yousub/yousub-id.txt
 
 ## Google Drive sync (optional)
 
-Google Drive sync is disabled until you choose a configuration **folder**. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 at the right of the **previously unsubscribed channels** count and choose the folder that holds your JSON files. Only the **top level** of that folder is read (sub-folders are not entered), and the two files are recognised by their content, so their names do not matter. When everything is found the row shows **✅** (hover for the account, the folder name, and which files were used) and the button becomes 🔁 (**Choose another configuration folder**); syncing itself is automatic. If a file is missing the row shows **⚠️** and the line below names it, for example `Missing JSON file: yousub-google-drive.json`.
+Google Drive sync is disabled until you choose a configuration **folder**. Unsubscribe history is kept locally **only while Drive sync is configured**. Click the extension icon to open the side panel, then click 📁 at the right of the **previously unsubscribed channels** count and choose the folder that holds your JSON files. Only the **top level** of that folder is read (sub-folders are not entered), and the two files are recognised by their content, so their names do not matter. When everything is found the button becomes 🔁 (**Choose another configuration folder**) — hover it for the account, the folder name, and which files were used — and syncing itself is automatic. If a file is missing, the line under the count names it, for example `Missing JSON file: yousub-google-drive.json`.
 
 The configuration is read once and then used from the cache in `chrome.storage.local`, so opening the side panel never touches the folder and never asks the browser for permission again. Choose the folder again with 🔁 after changing a file inside it.
 
@@ -99,8 +99,7 @@ Only one sync runs at a time. It signs in with the service account, reads `YouTu
 
 ### Google Drive row in the side panel
 
-- **Configuration mark** (right of the unsubscribe count): `❌` until a folder is read, then `✅`; hover it for the account, the folder and the files found. `⚠️` means a file is missing (named in the line below).
-- **📁 / 🔁 button** (far right of the same row): 📁 opens the folder picker; once configured it becomes 🔁 and replaces the saved configuration with the contents of the newly chosen folder. There is no separate "Google Drive sync" box.
+- **📁 / 🔁 button** (far right of the unsubscribe row): 📁 opens the folder picker; once configured it becomes 🔁 and replaces the saved configuration with the contents of the newly chosen folder. There is no status mark and no separate "Google Drive sync" box; the tooltip of the button holds the account, the folder and the files found.
 - **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress.
 
 ### Subscribed channel count
