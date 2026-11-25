@@ -115,6 +115,9 @@ test('CI runs the side-panel tests in the same Node version', () => {
   assert.match(ci, /npm ci --no-audit --no-fund/);
   assert.match(ci, /node --test tests\/\*\.test\.cjs/);
   const pkg = JSON.parse(read('package.json'));
+  // js-yaml is only here because a workflow file was validated by hand; it must never be a
+  // declared dependency (npm install <pkg> writes one unless --no-save is used).
+  assert.equal(pkg.dependencies, undefined, 'no runtime dependency slipped into package.json');
   assert.equal(pkg.private, true, 'the package is never published');
   assert.ok(pkg.devDependencies.jsdom, 'jsdom is a development dependency');
   assert.equal(pkg.dependencies, undefined, 'the extension itself has no runtime dependencies');
