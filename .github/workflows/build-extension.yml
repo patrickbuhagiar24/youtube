@@ -167,6 +167,24 @@ jobs:
           dpkg-deb --info "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
           dpkg-deb --contents "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
 
+      # The publish job refuses to deploy a package that lintian rejects. Its log is only readable
+      # while signed in, so every finding is also emitted as an annotation here: annotations are
+      # visible on the run page and can be read from the API, which makes a failed lint debuggable.
+      - name: Report what lintian says about the package
+        run: |
+          set -uo pipefail
+          deb=$(ls "$RUNNER_TEMP"/yousub_*.deb)
+          if ! command -v lintian > /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends lintian || true
+          fi
+          if ! command -v lintian > /dev/null; then
+            echo 'lintian is not installed here; the publish job lints the package before deploying.' >&2
+            exit 0
+          fi
+          report=$(lintian --display-info "$deb" 2>&1 || true)
+          printf '%s\n' "$report"
+          printf '%s\n' "$report" | grep -E '^[EWPCIXO]: ' | sed 's/^/::warning::/' || true
+
       - name: Record checksums
         run: |
           cd "$RUNNER_TEMP"
