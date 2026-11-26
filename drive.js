@@ -321,7 +321,8 @@ var Drive = (() => {
 
   /**
    * Return a valid access token, signing in only when there is no other way.
-   * interactive=false never opens a window: it fails instead, so an alarm cannot surprise the user.
+   * interactive=false never opens a window: it fails instead, so no background sync can surprise
+   * the user with a consent page.
    * Which flow is used follows the configuration: a client secret allows the code flow with a
    * refresh token, without one the implicit flow keeps the token in memory.
    */

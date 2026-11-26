@@ -975,7 +975,6 @@
       chrome.storage.sync.get('yousubSettings'), chrome.storage.local.get(['yousubSubs', 'yousubUnsubs', YOUSUB.CONFIG_KEY])
     ]));
     unsubs = driveConfigured(cfg) ? (yousubUnsubs || {}) : {};
-    safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // Pull changes from other devices
     settings = { ...DEFAULTS, ...yousubSettings };
     loadSubs(yousubSubs);
     initialized = true;

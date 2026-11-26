@@ -1,7 +1,7 @@
 // Service worker (Manifest V3): default settings, stale data cleanup, and Google Drive sync.
+// Automatic sync has two triggers only: a local unsubscribe (debounced below) and install/update.
+// There is no timer, no pull on page load, and nothing runs at browser start.
 importScripts('shared.js', 'drive.js');
-
-const SYNC_ALARM = 'yousub-drive-sync';
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
@@ -17,14 +17,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   // The key check above is unchanged since 2.7.0, which lacked the sign-in record; make sure a
   // refresh token written before this build is back when a device has any sign-in to restore.
   await Drive.restoreSignIn();
-  setupAlarm();
   clearHistoryWhenUnconfigured();
   Drive.sync(); // Read the Drive settings saved in the popup after installation or reload
 });
-chrome.runtime.onStartup.addListener(() => { setupAlarm(); clearHistoryWhenUnconfigured(); Drive.sync(); });
-
-function setupAlarm() { chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 15 }); }
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === SYNC_ALARM) { clearHistoryWhenUnconfigured(); Drive.sync(); } });
 
 // Local unsubscribe history exists only while Drive sync is configured (cached file: client + link).
 async function clearHistoryWhenUnconfigured() {
@@ -43,12 +38,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   pushTimer = setTimeout(() => Drive.sync(), 3000);
 });
 
-let lastPull = 0;
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   switch (msg?.type) {
-    case 'drivePull': // A YouTube page opened: pull changes from other devices (at most once every two minutes)
-      if (Date.now() - lastPull > 120e3) { lastPull = Date.now(); Drive.sync(); }
-      return;
     case 'driveSync':
       // Only a click in the panel may open the Google sign-in window.
       Drive.sync({ signIn: msg.signIn === true }).then(sendResponse);

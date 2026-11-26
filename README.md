@@ -168,12 +168,15 @@ itself.
 
 ### When the sync runs
 
-Without any button press, the extension syncs automatically:
+Without any button press, the extension syncs on two occasions only:
 
-- **15-minute alarm** — every 15 minutes in the background.
 - **After a local unsubscribe** — pushed 3 seconds after the last change (rapid changes are batched).
-- **On a YouTube page load** — the first page that opens pulls changes, at most once every 2 minutes.
-- **On browser start and on install/update** — settings are re-read, sync runs once (without opening any Google window), and local history that exists without a configuration is cleared.
+- **On install/update** — settings are re-read, sync runs once (without opening any Google window), and
+  local history that exists without a configuration is cleared.
+
+There is no timer, no pull when a YouTube page opens, and nothing runs at browser start: a browser
+that only reads never contacts Google by itself. Choosing **Configuration file…** is the third way a
+sync starts, and the only one that can ask Google for permission.
 
 Only one sync runs at a time. It refreshes the access token if needed, reads `YouTube.json`, merges the most recent event per channel, writes back only when something changed, and merges once more so local changes made during the sync survive. Every Google request is bounded to 20 seconds, so a stalled connection cannot leave the panel on "Syncing…". Failures appear in the side panel instead of retrying in a loop. The background sync never opens a Google window: only choosing the configuration file in the panel does.
 

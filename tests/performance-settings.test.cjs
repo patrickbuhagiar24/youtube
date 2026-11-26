@@ -30,3 +30,15 @@ test('state messages replace frequent polling while preserving a fallback', () =
   assert.match(content, /!document\.hidden/);
   assert.match(fs.readFileSync('content/main-world.js', 'utf8'), /!document\.hidden/);
 });
+
+test('Drive sync has no timer, no page-load pull, and no run at browser start', () => {
+  const background = fs.readFileSync('background.js', 'utf8');
+  const content = fs.readFileSync('content/content.js', 'utf8');
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert.doesNotMatch(background, /chrome\.alarms|SYNC_ALARM|onStartup|drivePull|lastPull/);
+  assert.doesNotMatch(content, /drivePull/);
+  assert.equal(manifest.permissions.includes('alarms'), false, 'the alarms permission is not requested');
+  // The two triggers that remain: a debounced push after a local change, and install/update.
+  assert.match(background, /pushTimer = setTimeout\(\(\) => Drive\.sync\(\), 3000\)/);
+  assert.match(background, /chrome\.runtime\.onInstalled\.addListener[\s\S]*?Drive\.sync\(\)/);
+});
