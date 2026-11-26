@@ -1,11 +1,20 @@
+yousub (2.7.5) stable; urgency=medium
+
+  * Packaging only: the 2.7.4 changelog entry is rewrapped so that no line
+    exceeds 80 columns (lintian: debian-changelog-line-too-long). The
+    extension and the installed files are identical to 2.7.4.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 08:20:00 +0000
+
 yousub (2.7.4) stable; urgency=medium
 
-  * Packaging only: the extension ID is installed as /usr/share/yousub/extension-id
-    instead of yousub-id.txt. A .txt file under /usr/share/yousub counts as
-    documentation outside /usr/share/doc, which lintian reports as
-    package-contains-documentation-outside-usr-share-doc; the file is data the
-    maintainer scripts read, so it loses the extension. The README points at the
-    new path, and the extension itself is unchanged from 2.7.3.
+  * Packaging only: the extension ID is installed as
+    /usr/share/yousub/extension-id instead of yousub-id.txt. A .txt file under
+    /usr/share/yousub counts as documentation outside /usr/share/doc, which
+    lintian reports as package-contains-documentation-outside-usr-share-doc;
+    the file is data the maintainer scripts read, so it loses the extension.
+    The README points at the new path, and the extension itself is unchanged
+    from 2.7.3.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 08:00:00 +0000
 
