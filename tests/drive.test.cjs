@@ -272,17 +272,6 @@ test('a sign-in deleted by an extension update is restored from the session mirr
   assert.equal(await load(storageChrome({}, empty)).Drive.restoreSignIn(), false);
 });
 
-test('sign out clears the session mirror as well', async () => {
-  const store = { yousubDriveConfig: settings, yousubOAuthTokens: { clientId, refresh: 'refresh-1', access: 'a', exp: Date.now() + 3600e3 } };
-  const session = { yousubOAuthTokensBackup: { refresh: 'refresh-1' }, yousubOAuthFlow: { verifier: 'v', state: 's' } };
-  const chrome = storageChrome(store, session);
-  const { fetch } = oauthFetch();
-  const { Drive } = load(chrome, fetch);
-  await Drive.signOut(clientId);
-  assert.deepEqual(plain(store.yousubOAuthTokens), {});
-  assert.deepEqual(plain(session), {}, 'no token survives in the session area');
-});
-
 test('a rejected saved token is forgotten so the next attempt can sign in', async () => {
   const store = {
     yousubDriveConfig: settings,

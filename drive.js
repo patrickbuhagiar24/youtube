@@ -374,7 +374,7 @@ var Drive = (() => {
   async function saveTokens(record) {
     await chrome.storage.local.set({ [TOKENS_KEY]: record });
     try {
-      // An empty record is a sign-out: there is nothing worth restoring, so no mirror is left.
+      // An empty record means there is no sign-in: nothing worth restoring, so no mirror is left.
       if (record.refresh || record.access) await chrome.storage.session.set({ [TOKENS_BACKUP_KEY]: record });
       else await chrome.storage.session.remove(TOKENS_BACKUP_KEY);
     } catch {
@@ -407,18 +407,6 @@ var Drive = (() => {
     if (!res.ok) return '';
     const j = await res.json().catch(() => ({}));
     return typeof j.email === 'string' ? j.email : '';
-  }
-
-  /** Forget the tokens and, when possible, revoke them at Google. */
-  async function signOut(clientId = '') {
-    const { [TOKENS_KEY]: saved = {} } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
-    const revoke = [saved.refresh, cachedAccess(clientId)].filter(Boolean);
-    for (const value of revoke) {
-      await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(value)}`, { method: 'POST' }).catch(() => {});
-    }
-    if (clientId) memory.delete(clientId);
-    await saveTokens({});
-    await chrome.storage.session.remove([FLOW_KEY, TOKENS_BACKUP_KEY]);
   }
 
   /** Whether a sign-in is remembered on this device (no network call). */
@@ -621,7 +609,7 @@ var Drive = (() => {
 
   return {
     clientIdOf, fileIdOf, linkFromConfig, sync, merge, fromFile, toFile,
-    signIn: (cfg, options) => token(cfg, { interactive: true, ...options }), signOut, signedIn,
+    signIn: (cfg, options) => token(cfg, { interactive: true, ...options }), signedIn,
     restoreSignIn, redirectUri, authError, fileIdFrom: fileIdOf
   };
 })();

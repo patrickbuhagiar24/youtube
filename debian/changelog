@@ -1,10 +1,11 @@
 yousub (2.7.3) stable; urgency=medium
 
-  * The side panel is one box lighter: the collapsible "Configuration file and
-    Google account" box is gone. Configuration file... opens the picker
-    directly, its tooltip holds the file name, the account, the renewal mode
-    and whether a client secret is stored, and Sign out appears only once a
-    configuration has been read.
+  * The side panel is one box and one button lighter: the collapsible
+    "Configuration file and Google account" box and the Sign out button are
+    gone. Configuration file... opens the picker directly and its tooltip
+    holds the file name, the account, the renewal mode and whether a client
+    secret is stored. Access is revoked at myaccount.google.com/permissions,
+    and the extension itself no longer calls Google's revoke endpoint.
   * The panel no longer prints "Open youtube.com" or "Waiting for this YouTube
     tab..." where a status would go; a line with nothing to report stays empty.
   * Accessibility: the panel follows the system light/dark theme, every control

@@ -129,8 +129,6 @@ async function renderDrive() {
       d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName || ''].filter(Boolean).join(' · ');
   setup.setAttribute('aria-label', 'Choose the configuration file');
   setup.classList.toggle('configured', configured);
-  // Signing out only makes sense once a configuration has been read.
-  $('signOutBtn').classList.toggle('hidden', !configured);
 }
 
 /* ---------------- Configuration file ---------------- */
@@ -169,13 +167,6 @@ $('driveSetupBtn').addEventListener('click', async () => {
     if (e.name === 'AbortError') { showSetupStatus(''); return; } // The picker was closed
     showSetupStatus('⚠️ ' + (e.message || String(e)));
   }
-});
-
-$('signOutBtn').addEventListener('click', async () => {
-  showSetupStatus('Signing out…');
-  const result = await chrome.runtime.sendMessage({ type: 'driveSignOut' }).catch((e) => ({ ok: false, error: e.message }));
-  showSetupStatus(result?.ok === false && result.error ? `⚠️ ${result.error}` : 'Signed out of Google on this device. The configuration file stays cached.');
-  await renderDrive();
 });
 
 // One listener for the whole panel: one storage change redraws one row, once.

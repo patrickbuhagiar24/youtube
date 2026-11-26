@@ -144,8 +144,9 @@ working configuration**.
 - **Without `client_secret`**: the access token lives about an hour and is renewed silently from your
   Google session. If Google wants to ask, the panel says so: click **Configuration file…** and pick
   the file again — that starts one sign-in and needs no other step.
-- **Sign out** forgets the token and revokes it at Google. The cached configuration and the Drive file
-  stay as they are.
+- **Signing out** happens at Google, not in the panel: remove Yousub's access at
+  <https://myaccount.google.com/permissions>. The cached configuration and the Drive file are left as
+  they are; picking another configuration file starts a new sign-in.
 - The saved sign-in survives an extension update: `yousubOAuthTokens` is one of the extension's own
   storage keys, and a copy kept in the browser session area restores it if an older build removed it.
 
@@ -179,7 +180,6 @@ Only one sync runs at a time. It refreshes the access token if needed, reads `Yo
 ### Google Drive row in the side panel
 
 - **Configuration file… button** (below the unsubscribe row): opens the file picker directly and reads the JSON file described above. There is no form, no status mark and no separate "Google Drive sync" box; the tooltip of the button holds the file name, the account and how the sign-in renews itself.
-- **Sign out**: appears only once a configuration has been read, and forgets the Google token on this device. The cached configuration and the Drive file stay as they are.
 - **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress. A status line that has nothing to report stays empty — the panel never asks you to open youtube.com.
 
 ### Appearance and accessibility

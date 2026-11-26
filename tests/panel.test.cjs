@@ -122,7 +122,6 @@ test('a fresh panel offers one configuration button and no sign-out', async () =
   assert.equal(panel.$('setupStatus').textContent, '');
   assert.match(panel.$('driveStatus').textContent, /only while Google Drive sync is configured/);
   assert.equal(panel.$('driveSetupBtn').classList.contains('configured'), false);
-  assert.equal(panel.$('signOutBtn').classList.contains('hidden'), true, 'nothing to sign out of');
   // The panel no longer tells the reader to open YouTube.
   assert.doesNotMatch(panel.$('status').textContent, /Open youtube\.com|Waiting for this YouTube tab/);
   assert.deepEqual(Object.keys(panel.fake.local), [], 'nothing is written before a file is picked');
@@ -182,7 +181,6 @@ test('reopening the panel reads the cache and never asks for the file again', as
   });
   assert.equal(pickers, 0, 'the picker is not opened');
   assert.match(second.$('driveSetupBtn').title, /yousub-config\.json/);
-  assert.equal(second.$('signOutBtn').classList.contains('hidden'), false, 'sign out is offered again');
   assert.deepEqual(second.fake.local[CONFIG_KEY], cached, 'the cache is left byte for byte as it was');
   assert.deepEqual(second.fake.sent, [], 'reopening does not sign in again');
   assert.equal(second.$('driveSetupBtn').classList.contains('configured'), true);
@@ -215,13 +213,4 @@ test('a browser without a file picker says so instead of failing silently', asyn
   assert.equal(panel.window.showOpenFilePicker, undefined);
   await panel.click('driveSetupBtn');
   assert.match(panel.$('setupStatus').textContent, /cannot open a file picker/);
-});
-
-test('sign out asks the worker and keeps the cached configuration', async () => {
-  const cached = { ...validConfig, clientId: validConfig.client_id, clientSecret: '', file: 'x.json', version: 1, savedAt: '2026-11-01T00:00:00.000Z' };
-  const panel = await openPanel({ storage: { [CONFIG_KEY]: cached }, onMessage: () => ({ ok: true }) });
-  await panel.click('signOutBtn');
-  assert.deepEqual(panel.fake.sent, [{ type: 'driveSignOut' }]);
-  assert.match(panel.$('setupStatus').textContent, /Signed out of Google on this device\. The configuration file stays cached\./);
-  assert.deepEqual(panel.fake.local[CONFIG_KEY], cached);
 });

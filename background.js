@@ -53,13 +53,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       // Only a click in the panel may open the Google sign-in window.
       Drive.sync({ signIn: msg.signIn === true }).then(sendResponse);
       return true;
-    case 'driveSignOut':
-      // Revoke the token of the configured client, then report the result of a fresh sync.
-      chrome.storage.local.get(YOUSUB.CONFIG_KEY)
-        .then((saved) => Drive.signOut(/** @type {any} */ (saved)[YOUSUB.CONFIG_KEY]?.clientId || ''))
-        .then(() => Drive.sync())
-        .then(sendResponse)
-        .catch((e) => sendResponse({ ok: false, error: e.message }));
-      return true;
   }
 });

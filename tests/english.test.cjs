@@ -142,8 +142,11 @@ test('the Drive row has one configuration button and no form', () => {
   // The button opens the picker itself and names the file it reads.
   assert.match(row, /id="driveSetupBtn"[^>]*>Configuration file…</);
   assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button follows the status');
-  assert.match(row, /id="signOutBtn" class="secondary hidden"/);
   assert.match(row, /id="setupStatus"/);
+  // One button only: there is no sign-out action left, in the panel or in the worker.
+  assert.doesNotMatch(html, /signOutBtn|Sign out/);
+  assert.doesNotMatch(js + fs.readFileSync('background.js', 'utf8'), /driveSignOut|Drive\.signOut/);
+  assert.doesNotMatch(fs.readFileSync('drive.js', 'utf8'), /function signOut/);
   // The collapsible "Configuration file and Google account" box is gone, with its controls.
   for (const id of ['googleSetup', 'chooseFileBtn', 'configInfo']) {
     assert.doesNotMatch(html, new RegExp(`id="${id}"`), `${id} is gone`);
