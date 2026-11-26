@@ -2,7 +2,7 @@
  * Shared constants. Loaded by the content scripts (MAIN and isolated worlds),
  * the popup, and the service worker.
  */
-// eslint-disable-next-line no-unused-vars, no-var
+// eslint-disable-next-line no-unused-vars
 var YOUSUB = Object.freeze({
   DEFAULTS: Object.freeze({
     enabled: true,

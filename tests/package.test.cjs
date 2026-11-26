@@ -108,13 +108,18 @@ test('CI lints the built package and fails on errors', () => {
   assert.match(publish, /lintian --fail-on error/);
 });
 
-test('CI runs the side-panel tests in the same Node version', () => {
+test('CI runs the tests, the linter and the type-check in the same Node version', () => {
   const ci = read('.github/workflows/ci.yml');
   // The panel tests need jsdom; without an install step they would be skipped, not failed.
   assert.match(ci, /container: node:22\n/);
   assert.match(ci, /npm ci --no-audit --no-fund/);
-  assert.match(ci, /node --test tests\/\*\.test\.cjs/);
+  assert.match(ci, /npm run lint/);
+  assert.match(ci, /npm run typecheck/);
+  // Coverage thresholds only matter if the run that measures them is the one CI uses.
+  assert.match(ci, /npm run coverage/);
   const pkg = JSON.parse(read('package.json'));
+  assert.match(pkg.scripts.coverage, /--test-coverage-include=/);
+  assert.match(pkg.scripts.coverage, /--test-coverage-lines=\d+/);
   // js-yaml is only here because a workflow file was validated by hand; it must never be a
   // declared dependency (npm install <pkg> writes one unless --no-save is used).
   assert.equal(pkg.dependencies, undefined, 'no runtime dependency slipped into package.json');
@@ -124,9 +129,10 @@ test('CI runs the side-panel tests in the same Node version', () => {
   assert.ok(fs.existsSync('package-lock.json'), 'npm ci needs a lock file');
   const lock = JSON.parse(read('package-lock.json'));
   assert.equal(lock.packages['node_modules/jsdom'].version, pkg.devDependencies.jsdom);
-  // jsdom is test-only: it must never be shipped in the CRX or the ZIP.
+  // The development tooling is not shipped: the build copies named files only.
   const build = read('.github/workflows/build-extension.yml');
   assert.doesNotMatch(build, /node_modules|package\.json/);
+  assert.doesNotMatch(build, /jsconfig|tsconfig|eslint|types\/yousub/);
 });
 
 test('the changelog suite matches the published suite', () => {

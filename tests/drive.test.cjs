@@ -2,14 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 
 function load(chrome = {}, fetch = async () => ({ ok: false }), cryptoImpl = crypto) {
   // AbortController is a Node global; the sandbox needs it for the request timeout.
   // A browser has these globals; the sandbox is given the Node equivalents the code relies on.
   const context = vm.createContext({ chrome, fetch, URL, URLSearchParams, TextEncoder, crypto: cryptoImpl, btoa, atob,
     console, AbortController, setTimeout, clearTimeout });
-  vm.runInContext(fs.readFileSync('shared.js', 'utf8'), context);
-  vm.runInContext(fs.readFileSync('drive.js', 'utf8'), context);
+  // The filename lets the test runner attribute V8 coverage to the real files.
+  vm.runInContext(fs.readFileSync('shared.js', 'utf8'), context, { filename: path.resolve('shared.js') });
+  vm.runInContext(fs.readFileSync('drive.js', 'utf8'), context, { filename: path.resolve('drive.js') });
   return context;
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));

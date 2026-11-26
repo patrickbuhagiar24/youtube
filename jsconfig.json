@@ -1,0 +1,20 @@
+{
+  // Type-check the JavaScript as it is, without a build step. The extension has no runtime
+  // dependencies and ships the same files that are checked here.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "none",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    // Not a strict migration: the goal is to catch misspelled chrome.* APIs, wrong argument
+    // shapes and undefined properties, not to add runtime null checks everywhere.
+    "strict": false,
+    "noImplicitAny": false,
+    "types": ["chrome"],
+    "skipLibCheck": true
+  },
+  "include": ["background.js", "shared.js", "drive.js", "config-file.js", "diagnostics.js", "content/**/*.js", "popup/**/*.js", "types/**/*.d.ts"],
+  "exclude": ["node_modules"]
+}

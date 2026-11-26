@@ -95,8 +95,8 @@
   if (extApi) {
     try {
       const [{ yousubSettings = {} }, local] = await Promise.all([
-        chrome.storage.sync.get('yousubSettings'),
-        chrome.storage.local.get(['yousubSubs', 'yousubDriveConfig'])
+        /** @type {any} */ (chrome.storage.sync.get('yousubSettings')),
+        /** @type {any} */ (chrome.storage.local.get(['yousubSubs', 'yousubDriveConfig']))
       ]);
       const subs = local.yousubSubs || {};
       add('10. ext_setting_enabled', yousubSettings.enabled !== false);

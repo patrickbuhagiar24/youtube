@@ -255,7 +255,7 @@ test('releases are Pages-only: no release tags and no GitHub Releases', () => {
     assert.doesNotMatch(text, /gh release|softprops\/action-gh-release|actions\/create-release/, 'no GitHub Releases');
   }
   // Merging to main publishes; a manual run can target any branch (verified: Pages accepts it).
-  assert.match(publish, /on:\n  push:\n    branches: \[main\]\n  workflow_dispatch:/);
+  assert.match(publish, /on:\n {2}push:\n {4}branches: \[main\]\n {2}workflow_dispatch:/);
   // The version comes from manifest.json, and an unchanged version is not redeployed.
   assert.doesNotMatch(publish, /github\.ref == 'refs\/heads\/main'/);
   assert.match(publish, /uses: \.\/\.github\/workflows\/build-extension\.yml/);
@@ -263,7 +263,7 @@ test('releases are Pages-only: no release tags and no GitHub Releases', () => {
   assert.match(publish, /secrets: inherit/);
   assert.match(publish, /needs: build/);
   assert.match(publish, /already/);
-  assert.match(build, /on:\n  workflow_call:\n  workflow_dispatch:/);
+  assert.match(build, /on:\n {2}workflow_call:\n {2}workflow_dispatch:/);
   // The publish job receives its artifact from the build job of the same run, falling back to
   // this run's id when the reusable workflow does not expose its own.
   assert.match(publish, /run_id="\$\{\{ needs\.build\.outputs\.run_id \|\| github\.run_id \}\}"/);
@@ -275,7 +275,7 @@ test('the build workflow signs the CRX and does not publish a GitHub Release', (
   assert.match(text, /YOUSUB_CRX_PRIVATE_KEY: \$\{\{ secrets\.YOUSUB_CRX_PRIVATE_KEY \}\}/);
   assert.match(text, /'dgst', '-sha256', '-sign'/);
   assert.match(text, /manifest\['key'\] = public_key/);
-  assert.match(text, /on:\n  workflow_call:\n  workflow_dispatch:/);
+  assert.match(text, /on:\n {2}workflow_call:\n {2}workflow_dispatch:/);
   assert.doesNotMatch(text, /echo[^\n]*\$YOUSUB_CRX_PRIVATE_KEY/);
 });
 

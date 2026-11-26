@@ -21,8 +21,13 @@ jobs:
             content/content.js content/main-world.js popup/popup.js; do
             node --check "$file"
           done
-      # jsdom is the only dependency, and only the side-panel tests use it.
-      - name: Install test dependencies
+      # jsdom, ESLint and TypeScript are development dependencies; the extension ships none of them.
+      - name: Install development dependencies
         run: npm ci --no-audit --no-fund
-      - name: Run tests
-        run: node --test tests/*.test.cjs
+      - name: Lint
+        run: npm run lint
+      - name: Type-check the JavaScript
+        run: npm run typecheck
+      # The suite runs with coverage thresholds, so a drop in coverage fails the build too.
+      - name: Run tests with coverage
+        run: npm run coverage

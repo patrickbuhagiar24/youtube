@@ -9,6 +9,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const { test, afterEach } = require('node:test');
 const { JSDOM } = jsdomModule();
 
@@ -90,8 +91,12 @@ async function openPanel({ storage, onMessage, filePicker } = {}) {
   // The page scripts run inside the window, so chrome and the picker belong to the window.
   window.chrome = fake.chrome;
   if (filePicker) window.showOpenFilePicker = filePicker;
+  // Run the page scripts in the window's own context, naming each file: the name is what lets the
+  // test runner attribute coverage to the real files instead of an anonymous eval.
+  const pageContext = dom.getInternalVMContext();
   for (const file of ['shared.js', 'drive.js', 'config-file.js', 'popup/popup.js']) {
-    window.eval(fs.readFileSync(path.join(root, file), 'utf8'));
+    const abs = path.join(root, file);
+    vm.runInContext(fs.readFileSync(abs, 'utf8'), pageContext, { filename: abs });
   }
   await settle();
   const $ = (id) => window.document.getElementById(id);

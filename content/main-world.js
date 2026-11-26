@@ -291,6 +291,7 @@
    * 1) channel URL (/@handle, /c/, /user/) via resolve_url, 2) video data (player / next),
    * 3) channel page, 4) name search (only if exactly one name matches).
    */
+  /** @param {{ url?: string, vid?: string, name?: string }} [hint] */
   async function resolveChannelId({ url, vid, name } = {}) {
     const href = url && !/^\/?$/.test(url) ? new URL(url, ORIGIN).href : '';
     const firstUC = (root) => { let id = ''; walk(root, (o) => { const b = o.browseEndpoint?.browseId; if (isUC(b)) id = b; return !!id; }, null, 20000); return id; };
@@ -329,6 +330,7 @@
    * Fill in what the caller did not send: on a watch page the video identifies the channel through
    * the usual resolution (player / next), on a channel page the address bar does.
    */
+  /** @param {{ url?: string, vid?: string }} [hint] */
   function pageHint(hint = {}) {
     const out = { ...hint };
     const path = location.pathname;
@@ -453,7 +455,7 @@
     }
     const path = location.pathname;
     if (/^\/(@|channel\/|c\/|user\/)/.test(path)) {
-      const html = document.querySelector('link[rel="canonical"]')?.href || '';
+      const html = /** @type {HTMLLinkElement|null} */ (document.querySelector('link[rel="canonical"]'))?.href || '';
       const id = html.match(/\/channel\/(UC[\w-]{10,})/)?.[1] || '';
       if (isUC(id)) return id;
     }
@@ -657,15 +659,15 @@
 
   function start() {
     // Ignore player-only changes (time, progress bar) that do not affect cards
-    new MutationObserver((muts) => { if (muts.some((m) => !m.target.closest?.('.html5-video-player') && !m.target.closest?.('ytd-page-manager > [hidden]'))) scheduleScan(); })
+    new MutationObserver((muts) => { if (muts.some((m) => !/** @type {Element} */ (m.target).closest?.('.html5-video-player') && !/** @type {Element} */ (m.target).closest?.('ytd-page-manager > [hidden]'))) scheduleScan(); })
       .observe(document.documentElement, { childList: true, subtree: true });
     // Safety-net scan every 10 seconds; normal scans are triggered by DOM changes,
     // navigation, and InnerTube responses. YouTube's own button is never polled.
     setInterval(() => { if (!document.hidden) scan(); }, 10000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleScan(); });
     for (const e of ['yt-navigate-finish', 'yt-page-data-updated', 'yt-action']) document.addEventListener(e, scheduleScan);
-    document.addEventListener('yt-navigate-finish', (e) => safeIndex(e.detail?.response?.response || e.detail?.response));
-    document.addEventListener('yt-page-data-fetched', (e) => safeIndex(e.detail?.pageData?.response));
+    document.addEventListener('yt-navigate-finish', (e) => safeIndex(/** @type {CustomEvent} */ (e).detail?.response?.response || /** @type {CustomEvent} */ (e).detail?.response));
+    document.addEventListener('yt-page-data-fetched', (e) => safeIndex(/** @type {CustomEvent} */ (e).detail?.pageData?.response));
     safeIndex(window.ytInitialData);
     scan();
   }
@@ -701,7 +703,7 @@
 
   window.fetch = async function (input, init) {
     let url = '';
-    try { url = typeof input === 'string' ? input : input?.url || String(input); } catch { /* */ }
+    try { url = typeof input === 'string' ? input : /** @type {Request} */ (input)?.url || String(input); } catch { /* */ }
     const sub = SUB_URL.test(url);
     let body = null;
     if (sub) {

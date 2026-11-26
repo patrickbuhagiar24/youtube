@@ -4,10 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
+const path = require('node:path');
 
 function load() {
   const context = vm.createContext({ JSON, Date });
-  vm.runInContext(fs.readFileSync('config-file.js', 'utf8'), context);
+  // The filename lets the test runner attribute V8 coverage to the real file.
+  vm.runInContext(fs.readFileSync('config-file.js', 'utf8'), context, { filename: path.resolve('config-file.js') });
   return context.YousubConfigFile;
 }
 

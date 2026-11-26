@@ -19,7 +19,7 @@
  * Any file name works (`yousub-config.json`, `drive.json`, …): what makes a file a configuration is
  * these keys. The name is only reported back, so the panel can say which file is in use.
  */
-// eslint-disable-next-line no-unused-vars, no-var
+// eslint-disable-next-line no-unused-vars
 var YousubConfigFile = (() => {
   const LIMIT = 256 * 1024; // Maximum size of the configuration file
   const LINK_KEY = 'yousub-file';

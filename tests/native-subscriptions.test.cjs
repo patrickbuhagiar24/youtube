@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 
 /**
  * The extension only observes the subscription requests YouTube itself sends.
@@ -20,7 +21,8 @@ function harness() {
   const window = { fetch: async () => ({ ok: true, clone: () => ({ json: async () => result }) }), postMessage: (data) => messages.push(data), addEventListener() {} };
   const document = { readyState: 'loading', addEventListener: (name, fn) => { listeners[name] = fn; } };
   const context = vm.createContext({ window, document, location: { origin: 'https://www.youtube.com' }, YOUSUB: { CARD_SEL: '' }, XMLHttpRequest: XHR, Request, URL, setTimeout, clearTimeout, setInterval });
-  vm.runInContext(fs.readFileSync('content/main-world.js', 'utf8'), context);
+  // The filename lets the test runner attribute V8 coverage to the real file.
+  vm.runInContext(fs.readFileSync('content/main-world.js', 'utf8'), context, { filename: path.resolve('content/main-world.js') });
   return { window, XHR, messages, listeners, setResult: (v) => { result = v; } };
 }
 const id = 'UCabcdefghijklmnopqrstuv';

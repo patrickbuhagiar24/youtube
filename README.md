@@ -222,9 +222,17 @@ Subscription data is stored in browser extension storage. YouTube requests use y
 No build step is required, and the extension has no runtime dependencies. Node.js 22 or newer:
 
 ```bash
-npm install          # once: jsdom, used only by the side-panel tests
+npm install          # once: jsdom, ESLint and TypeScript, all development-only
 npm test             # node --test tests/*.test.cjs
+npm run coverage     # the same suite with line/branch/function minimums
+npm run lint         # ESLint (flat config, eslint.config.js)
+npm run typecheck    # tsc --noEmit over the real sources (jsconfig.json)
+npm run check        # lint + type-check + tests
 ```
+
+The coverage run measures the shipped files, not just the tests: each harness loads the product script with `vm.runInContext(code, context, { filename })`, and the side panel runs inside jsdom's own VM context, so V8 attributes every executed line to `content/content.js`, `drive.js` and the rest. A harness that evaluates a file without a `filename` (or through `window.eval`) silently reports nothing for it, which is why `npm run coverage` passed at 100% while measuring only the test files before this was fixed. The thresholds in `package.json` sit just below today's numbers — a ratchet, not a target; raise them as tests are added.
+
+`eslint.config.js` parses the product files as classic scripts with browser and service-worker globals plus the three globals the scripts share (declared in `shared.js`, `config-file.js` and `drive.js`), so `no-undef` still catches a typo in a cross-file global. `types/yousub.d.ts` is type-only: it names the element properties the content scripts attach (such as `__yousubCh`) and the page globals (`ytcfg`, `ytInitialData`) that TypeScript's DOM library does not know. `jsconfig.json` includes only the extension sources; the build copies named files, so neither the config, the types nor the development dependencies ever reach the CRX, the ZIP or the `.deb`.
 
 `tests/panel.test.cjs` loads the real `popup/popup.html` with the real `popup.js`, `shared.js`, `drive.js` and `config-file.js` inside jsdom and drives the panel the way a person does — clicking 📄, picking a file, reopening the panel — with an in-memory `chrome.storage` and a recorded `chrome.runtime.sendMessage`. It is the guard for the two promises that are otherwise invisible until release: the configuration file is read once and cached forever, and a file that fails validation never replaces a working configuration.
 

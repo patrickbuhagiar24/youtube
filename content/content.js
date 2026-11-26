@@ -290,7 +290,7 @@
     for (const b of document.querySelectorAll('.yousub-subbtn, .yousub-inlinebtn')) {
       const card = b.__yousubCard || b.closest('[data-yousub-state]');
       const on = busy.has(card?.__yousubCh?.key);
-      b.disabled = on;
+      /** @type {HTMLButtonElement} */ (b).disabled = on;
       b.textContent = on ? '⏳' : b.classList.contains('yousub-unsubbtn') ? '−' : '+';
       b.setAttribute('aria-busy', on ? 'true' : 'false');
     }
@@ -562,7 +562,7 @@
     // Without page data, infer from the label YouTube renders ("Subscribe" vs "Subscribed").
     const label = (el?.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
     if (!label) return false;
-    return !/^(subscribe|subscri|abon|s\'abonner|inscri|登録|구독|订阅|訂閱|suscrib|iscriv|assinar|abone|inscreva)/.test(label);
+    return !/^(subscribe|subscri|abon|s'abonner|inscri|登録|구독|订阅|訂閱|suscrib|iscriv|assinar|abone|inscreva)/.test(label);
   }
 
   /** True when both buttons sit on one text line and neither is clipped by the row it lives in. */
@@ -970,9 +970,10 @@
 
   /* ---------------- init ---------------- */
   async function init() {
-    const [{ yousubSettings }, { yousubSubs, yousubUnsubs, [YOUSUB.CONFIG_KEY]: cfg = {} }] = await Promise.all([
+    // chrome.storage keeps untyped JSON; @types/chrome reads it as `unknown`.
+    const [{ yousubSettings }, { yousubSubs, yousubUnsubs, [YOUSUB.CONFIG_KEY]: cfg = {} }] = /** @type {any} */ (await Promise.all([
       chrome.storage.sync.get('yousubSettings'), chrome.storage.local.get(['yousubSubs', 'yousubUnsubs', YOUSUB.CONFIG_KEY])
-    ]);
+    ]));
     unsubs = driveConfigured(cfg) ? (yousubUnsubs || {}) : {};
     safe(() => chrome.runtime.sendMessage({ type: 'drivePull' }).catch(() => {}))(); // Pull changes from other devices
     settings = { ...DEFAULTS, ...yousubSettings };
@@ -987,7 +988,7 @@
 
     new MutationObserver((muts) => {
       if (muts.some((m) => (m.type === 'attributes' || m.addedNodes.length) && !inPlayer(m.target) &&
-        (m.attributeName === 'hidden' || !m.target.closest?.('ytd-page-manager > [hidden]')))) scheduleScan();
+        (m.attributeName === 'hidden' || !/** @type {Element} */ (m.target).closest?.('ytd-page-manager > [hidden]')))) scheduleScan();
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-yousub-v', 'hidden'] });
     // Fallback every 10 seconds (4 ticks of 2.5 s), every tick during autoload. Runs in hidden
     // tabs too, so a background-opened page is already marked when it is shown.

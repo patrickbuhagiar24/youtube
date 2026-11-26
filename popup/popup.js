@@ -1,4 +1,6 @@
 const { DEFAULTS, STATUS } = YOUSUB;
+/** The markup's element ids are the source of truth for each control's type. */
+/** @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 const YT_URL = /^https:\/\/www\.youtube\.com\//;
@@ -9,6 +11,7 @@ $('ver').textContent = chrome.runtime.getManifest().version;
 
 /* ---------------- settings ---------------- */
 // Element ID -> [setting key, element property, converter]
+/** @type {Record<string, [string, string, ((v: any) => any)?]>} */
 const FIELDS = {
   enabled: ['enabled', 'checked'],
   mode: ['mode', 'value'],
@@ -20,7 +23,7 @@ const FIELDS = {
 };
 
 async function loadSettings() {
-  const { yousubSettings } = await chrome.storage.sync.get('yousubSettings');
+  const { yousubSettings } = /** @type {any} */ (await chrome.storage.sync.get('yousubSettings'));
   settings = { ...DEFAULTS, ...yousubSettings };
   for (const [id, [key, prop]] of Object.entries(FIELDS)) $(id)[prop] = prop === 'checked' ? !!settings[key] : String(settings[key]);
   applyColors();
@@ -55,7 +58,7 @@ function renderSummary({ subsCount, stats, ts }) {
 
 async function renderFromStorage() {
   // Keep showing the count even when the active tab is not YouTube
-  const { yousubSubs } = await chrome.storage.local.get('yousubSubs');
+  const { yousubSubs } = /** @type {any} */ (await chrome.storage.local.get('yousubSubs'));
   renderSummary({ subsCount: yousubSubs?.list?.length || 0, stats: yousubSubs?.stats, ts: yousubSubs?.ts });
 }
 
@@ -84,7 +87,7 @@ const getState = () => (tabId === null ? null : chrome.tabs.sendMessage(tabId, {
 /* ---------------- buttons ---------------- */
 $('exportBtn').addEventListener('click', async (e) => {
   e.preventDefault();
-  const { yousubSubs } = await chrome.storage.local.get('yousubSubs');
+  const { yousubSubs } = /** @type {any} */ (await chrome.storage.local.get('yousubSubs'));
   const list = yousubSubs?.list || [];
   if (!list.length) { alert('No list yet. Open youtube.com and sign in; the list loads automatically.'); return; }
   const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
@@ -98,7 +101,10 @@ $('exportBtn').addEventListener('click', async (e) => {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
 
-$('openFeedBtn').addEventListener('click', (e) => e.preventDefault() || chrome.tabs.create({ url: 'https://www.youtube.com/feed/channels' }));
+$('openFeedBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: 'https://www.youtube.com/feed/channels' });
+});
 
 /* ---------------- Google Drive ---------------- */
 // The sign-in record: { clientId, email, refresh, access, exp }. It holds tokens, not just the
@@ -108,7 +114,7 @@ const TOKENS_KEY = 'yousubOAuthTokens';
 async function renderDrive() {
   const keys = ['yousubDrive', 'yousubUnsubs', YOUSUB.CONFIG_KEY, TOKENS_KEY];
   const { yousubDrive: d = {}, yousubUnsubs = {}, [YOUSUB.CONFIG_KEY]: cfg = {}, [TOKENS_KEY]: tokens = {} } =
-    await chrome.storage.local.get(keys);
+    /** @type {any} */ (await chrome.storage.local.get(keys));
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = YousubConfigFile.usable(cfg);
   $('driveStatus').textContent = !configured

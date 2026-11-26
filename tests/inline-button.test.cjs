@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 
 /**
  * Run the isolated-world content script inside a DOM built from a plain object tree,
@@ -135,7 +136,8 @@ function harness({ subbed = false, left = false, stacked = false, clip = false }
     },
     console
   });
-  vm.runInContext(fs.readFileSync('content/content.js', 'utf8'), context);
+  // The filename lets the test runner attribute V8 coverage to the real file.
+  vm.runInContext(fs.readFileSync('content/content.js', 'utf8'), context, { filename: path.resolve('content/content.js') });
   const flush = () => { for (const { fn } of pending.values()) fn(); pending.clear(); };
   /** Let storage promises resolve and run every scheduled scan. */
   const run = async (rounds = 4) => {

@@ -6,7 +6,7 @@ const SYNC_ALARM = 'yousub-drive-sync';
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const { yousubSettings } = await chrome.storage.sync.get('yousubSettings');
+  const { yousubSettings } = /** @type {{ [key: string]: any }} */ (await chrome.storage.sync.get('yousubSettings'));
   const s = { ...YOUSUB.DEFAULTS };
   for (const k of Object.keys(s)) if (yousubSettings && k in yousubSettings) s[k] = yousubSettings[k];
   await chrome.storage.sync.set({ yousubSettings: s }); // Keep only supported keys
@@ -28,7 +28,7 @@ chrome.alarms.onAlarm.addListener((a) => { if (a.name === SYNC_ALARM) { clearHis
 
 // Local unsubscribe history exists only while Drive sync is configured (cached file: client + link).
 async function clearHistoryWhenUnconfigured() {
-  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
+  const { [YOUSUB.CONFIG_KEY]: cfg = {} } = /** @type {{ [key: string]: any }} */ (await chrome.storage.local.get(YOUSUB.CONFIG_KEY));
   const configured = !!(String(cfg.clientId || '').trim() && String(cfg.link || '').trim());
   if (!configured) await chrome.storage.local.remove('yousubUnsubs');
 }
@@ -56,7 +56,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case 'driveSignOut':
       // Revoke the token of the configured client, then report the result of a fresh sync.
       chrome.storage.local.get(YOUSUB.CONFIG_KEY)
-        .then(({ [YOUSUB.CONFIG_KEY]: cfg = {} }) => Drive.signOut(cfg.clientId || ''))
+        .then((saved) => Drive.signOut(/** @type {any} */ (saved)[YOUSUB.CONFIG_KEY]?.clientId || ''))
         .then(() => Drive.sync())
         .then(sendResponse)
         .catch((e) => sendResponse({ ok: false, error: e.message }));

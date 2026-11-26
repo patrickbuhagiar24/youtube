@@ -2,10 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 
 test('periodic list refresh setting is removed and autoload has a bounded default', () => {
   const shared = fs.readFileSync('shared.js', 'utf8');
-  const context = vm.createContext({}); vm.runInContext(shared, context);
+  const context = vm.createContext({});
+  vm.runInContext(shared, context, { filename: path.resolve('shared.js') });
   assert.equal(context.YOUSUB.DEFAULTS.autoloadLimit, 250);
   assert.equal('autoSyncHours' in context.YOUSUB.DEFAULTS, false);
   const ui = fs.readFileSync('popup/popup.html', 'utf8');

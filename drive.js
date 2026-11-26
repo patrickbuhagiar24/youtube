@@ -29,7 +29,7 @@
  * Cross-device merge: the most recent event wins for each channel.
  * Only the English Drive file format is read and written.
  */
-// eslint-disable-next-line no-unused-vars, no-var
+// eslint-disable-next-line no-unused-vars
 var Drive = (() => {
   const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
   const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -99,7 +99,7 @@ var Drive = (() => {
    * user picks the configuration file, and survives restarting the browser.
    */
   async function loadConfig() {
-    const { [YOUSUB.CONFIG_KEY]: saved = {} } = await chrome.storage.local.get(YOUSUB.CONFIG_KEY);
+    const { [YOUSUB.CONFIG_KEY]: saved = {} } = /** @type {any} */ (await chrome.storage.local.get(YOUSUB.CONFIG_KEY));
     const link = String(saved.link || '').trim();
     const clientId = String(saved.clientId || '').trim();
     const clientSecret = typeof saved.clientSecret === 'string' ? saved.clientSecret.trim() : '';
@@ -157,7 +157,7 @@ var Drive = (() => {
     } catch (e) {
       throw new Error(/did not approve|canceled|cancelled|closed/i.test(e?.message || '')
         ? 'Sign-in was cancelled. Nothing was changed.'
-        : `The Google sign-in window could not be opened (${e?.message || 'unknown error'}). Check your internet connection.`);
+        : `The Google sign-in window could not be opened (${e?.message || 'unknown error'}). Check your internet connection.`, { cause: e });
     }
     const params = new URL(redirect).searchParams;
     const error = params.get('error');
@@ -188,7 +188,7 @@ var Drive = (() => {
 
   /** Exchange the code (with the PKCE verifier and the client secret) for tokens. */
   async function exchange(clientId, clientSecret, code) {
-    const { [FLOW_KEY]: flow } = await chrome.storage.session.get(FLOW_KEY);
+    const { [FLOW_KEY]: flow } = /** @type {any} */ (await chrome.storage.session.get(FLOW_KEY));
     await chrome.storage.session.remove(FLOW_KEY);
     if (!flow?.verifier) throw new Error(`The sign-in attempt expired. ${SIGN_IN}`);
     const body = new URLSearchParams({
@@ -308,7 +308,7 @@ var Drive = (() => {
     } catch (e) {
       throw new Error(interactive
         ? `The Google sign-in window could not be opened (${e?.message || 'unknown error'}).`
-        : `Yousub is not signed in to Google in this browser. ${SIGN_IN}`);
+        : `Yousub is not signed in to Google in this browser. ${SIGN_IN}`, { cause: e });
     }
     if (!redirect) {
       throw new Error(interactive ? 'Google returned no answer.'
@@ -339,7 +339,7 @@ var Drive = (() => {
       }
       return implicitFlow(cfg.clientId, true);
     }
-    const { [TOKENS_KEY]: saved = {} } = await chrome.storage.local.get(TOKENS_KEY);
+    const { [TOKENS_KEY]: saved = {} } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
     const mine = saved.clientId === cfg.clientId ? saved : {};
     if (mine.access && Date.now() < (mine.exp || 0)) return mine.access;
     if (mine.refresh) {
@@ -390,9 +390,9 @@ var Drive = (() => {
    */
   async function restoreSignIn() {
     try {
-      const { [TOKENS_KEY]: saved } = await chrome.storage.local.get(TOKENS_KEY);
+      const { [TOKENS_KEY]: saved } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
       if (saved && (saved.refresh || saved.access)) return false;
-      const { [TOKENS_BACKUP_KEY]: backup } = await chrome.storage.session.get(TOKENS_BACKUP_KEY);
+      const { [TOKENS_BACKUP_KEY]: backup } = /** @type {any} */ (await chrome.storage.session.get(TOKENS_BACKUP_KEY));
       if (!backup || !(backup.refresh || backup.access)) return false;
       await chrome.storage.local.set({ [TOKENS_KEY]: backup });
       return true;
@@ -411,7 +411,7 @@ var Drive = (() => {
 
   /** Forget the tokens and, when possible, revoke them at Google. */
   async function signOut(clientId = '') {
-    const { [TOKENS_KEY]: saved = {} } = await chrome.storage.local.get(TOKENS_KEY);
+    const { [TOKENS_KEY]: saved = {} } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
     const revoke = [saved.refresh, cachedAccess(clientId)].filter(Boolean);
     for (const value of revoke) {
       await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(value)}`, { method: 'POST' }).catch(() => {});
@@ -423,7 +423,7 @@ var Drive = (() => {
 
   /** Whether a sign-in is remembered on this device (no network call). */
   async function signedIn() {
-    const { [TOKENS_KEY]: saved = {} } = await chrome.storage.local.get(TOKENS_KEY);
+    const { [TOKENS_KEY]: saved = {} } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
     if (saved.refresh || (saved.access && Date.now() < (saved.exp || 0))) return true;
     return memory.size > 0;
   }
@@ -480,7 +480,7 @@ var Drive = (() => {
       f = await (await call(cfg, `${API}/${fileId}?fields=${encodeURIComponent('id,name,mimeType,trashed,capabilities(canEdit)')}&supportsAllDrives=true`)).json();
     } catch (e) {
       if (e.code === 404) {
-        throw new Error(`The linked file is not available to this Google account. Open the link in the browser while signed in as that account, check that the file still exists, or paste its link again.`);
+        throw new Error(`The linked file is not available to this Google account. Open the link in the browser while signed in as that account, check that the file still exists, or paste its link again.`, { cause: e });
       }
       throw e;
     }
@@ -549,7 +549,7 @@ var Drive = (() => {
   /* ---------------- synchronization ---------------- */
   let running = null;
   const save = async (patch) => {
-    const { yousubDrive: cur = {} } = await chrome.storage.local.get('yousubDrive');
+    const { yousubDrive: cur = {} } = /** @type {any} */ (await chrome.storage.local.get('yousubDrive'));
     await chrome.storage.local.set({ yousubDrive: { ...cur, ...patch } });
   };
 
@@ -576,8 +576,8 @@ var Drive = (() => {
           return { ok: false, error: msg };
         }
         const { clientId, clientSecret, fileId: id } = cfg;
-        const { yousubDrive: prev = {}, yousubUnsubs = {} } = await chrome.storage.local.get(['yousubDrive', 'yousubUnsubs']);
-        const { [TOKENS_KEY]: tok = {} } = await chrome.storage.local.get(TOKENS_KEY);
+        const { yousubDrive: prev = {}, yousubUnsubs = {} } = /** @type {any} */ (await chrome.storage.local.get(['yousubDrive', 'yousubUnsubs']));
+        const { [TOKENS_KEY]: tok = {} } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
         const status = { configured: true, email: tok.email || '', fileId: id, mode: clientSecret ? 'refresh token' : 'session',
           fileName: prev.fileId === id ? prev.fileName || '' : '', checked: false };
         try {
@@ -585,7 +585,7 @@ var Drive = (() => {
           // Sign-in is only requested when the user asked for it, or when this device already has a
           // saved sign-in that simply needs renewing.
           await token({ clientId, clientSecret }, { interactive: signIn && !(await signedIn()) });
-          const { [TOKENS_KEY]: now = {} } = await chrome.storage.local.get(TOKENS_KEY);
+          const { [TOKENS_KEY]: now = {} } = /** @type {any} */ (await chrome.storage.local.get(TOKENS_KEY));
           status.email = now.email || status.email;
           // Validate once per link (or after a failure); subsequent syncs read and write directly
           if (prev.fileId !== id || prev.email !== status.email || !prev.checked || prev.lastError) {
@@ -600,7 +600,7 @@ var Drive = (() => {
           const remote = fromFile(text);
           const merged = merge(remote, yousubUnsubs);
           if (!same(merged, remote) || !/"channels"/.test(text)) await writeFile(cfg, id, toFile(merged));
-          const latest = (await chrome.storage.local.get('yousubUnsubs')).yousubUnsubs || {};
+          const latest = (/** @type {any} */ (await chrome.storage.local.get('yousubUnsubs'))).yousubUnsubs || {};
           const finalMap = merge(merged, latest); // Preserve local changes made while the sync was running
           if (!same(finalMap, latest)) await chrome.storage.local.set({ yousubUnsubs: finalMap });
           Object.assign(status, { lastSync: Date.now(), lastError: '', count: Object.values(finalMap).filter((e) => e.s === 'unsub').length });
