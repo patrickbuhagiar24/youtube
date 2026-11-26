@@ -1,3 +1,21 @@
+yousub (2.7.2) stable; urgency=medium
+
+  * Development tooling only: the extension behaves exactly as 2.7.1. The
+    build ships the same files; this release adds the checks around them.
+  * Coverage now measures the shipped scripts instead of only the test files.
+    Every test harness names the file it loads, so V8 attributes executed
+    lines to drive.js, content/content.js, popup/popup.js and the rest, and
+    npm run coverage enforces line, branch and function minimums.
+  * ESLint (flat config) and tsc --noEmit with checkJs run in CI, so an
+    undefined cross-file global, a misspelled chrome.* API or a property that
+    does not exist fails the build. types/yousub.d.ts is type-only and never
+    reaches the CRX, the ZIP or the .deb.
+  * Fixes found by the new checks: a thrown error keeps its original cause,
+    an unnecessary escape was removed from the subscribe-label regex, and a
+    click handler no longer depends on short-circuit evaluation.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 06:30:00 +0000
+
 yousub (2.7.1) stable; urgency=medium
 
   * Keep the saved Google sign-in across extension updates: yousubOAuthTokens

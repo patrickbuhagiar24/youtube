@@ -78,7 +78,9 @@ test('manifest describes the Chrome extension and declares every asset', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, 'Yousub');
   assert.equal(manifest.short_name, 'Yousub');
-  assert.equal(manifest.version, '2.7.1');
+  // A plain semantic version; package.test.cjs ties it to the newest changelog entry, so no
+  // literal here has to be edited on every release.
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.ok(manifest.minimum_chrome_version);
   assert.ok(!manifest.permissions.includes('nativeMessaging'));
   assert.match(manifest.description, /Marks videos and channels/);
