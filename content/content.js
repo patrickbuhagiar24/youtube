@@ -270,7 +270,7 @@
       if (names.length) lockKey = k; // Prevent double clicks: do not immediately show the new button under the cursor
       safe(scan)();
       const missed = targets.length - names.length;
-      toast((sub ? '✅ You are now subscribed to' : '✅ You unsubscribed from') + ` <b>${names.map(esc).join(', ')}</b>` +
+      toast((sub ? '✅ Subscribed:' : '✅ Unsubscribed:') + ` <b>${names.map(esc).join(', ')}</b>` +
         (missed > 0 ? `<br>⚠️ ${missed} other channel(s) failed. Try again later.` : ''));
       return true;
     } catch (e) {
@@ -458,8 +458,8 @@
    *  cls  'yousub-inlinebtn' -> button placed to the right of YouTube's own Subscribe/Unsubscribe button
    */
   const BTN = {
-    sub: { cls: 'yousub-subbtn', inlineCls: 'yousub-inlinebtn', text: '+', label: 'Subscribe to this channel' },
-    unsub: { cls: 'yousub-subbtn yousub-unsubbtn', inlineCls: 'yousub-inlinebtn yousub-unsubbtn', text: '−', label: 'Unsubscribe from this channel' }
+    sub: { cls: 'yousub-subbtn', inlineCls: 'yousub-inlinebtn', text: '+', label: 'Subscribe' },
+    unsub: { cls: 'yousub-subbtn yousub-unsubbtn', inlineCls: 'yousub-inlinebtn yousub-unsubbtn', text: '−', label: 'Unsubscribe' }
   };
   /** Thumbnail cards hide their button when YouTube already offers its own; that button gets the inline copy instead. */
   const buttonAllowed = (card, native = nativeSubButton(card)) => settings.showSubButton &&

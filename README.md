@@ -81,8 +81,8 @@ you name there.
 
 ### The configuration file (read once, then kept in the browser)
 
-Click the Yousub icon, click **Configuration file…** in the *previously unsubscribed channels* row,
-and pick **one** JSON file. Any file name works; what makes it a configuration is the keys:
+Click the Yousub icon, click **Configuration file…** in the *unsubscribed* row, and pick **one** JSON
+file. Any file name works; what makes it a configuration is the keys:
 
 ```json
 {
@@ -205,12 +205,12 @@ Drive files use `application`, `description`, `updatedAt`, `unsubscribeCount`, a
 
 ## Sorting, autoload, and how videos are marked
 
-`Unsubscribed channels first & hide duplicate videos` uses CSS `order`, so YouTube elements are never moved. On Home, Search, and watch-page sidebars the extension keeps YouTube's own continuation loader inside a 2 px invisible box, so YouTube fetches the next pages without you scrolling. Fetching stops at the limit chosen under `Automatically load videos for sorting` (Off, 100, 250, or 500 marked videos), after 15 seconds without new items, or when the list is exhausted; normal scrolling then resumes. The setting only applies while sorting is on.
+`Unsubscribed first & hide duplicates` uses CSS `order`, so YouTube elements are never moved. On Home, Search, and watch-page sidebars the extension keeps YouTube's own continuation loader inside a 2 px invisible box, so YouTube fetches the next pages without you scrolling. Fetching stops at the limit chosen under `Auto-load for sorting` (Off, 100, 250, or 500 marked videos), after 15 seconds without new items, or when the list is exhausted; normal scrolling then resumes. The setting only applies while sorting is on.
 
 Marking is controlled by `Display mode` and the two colours:
 
-- **Not subscribed** (`unsub`, default red `#ff3d00`): coloured outline plus a `+` button in the thumbnail corner, and the same `+` to the right of YouTube's own Subscribe button.
-- **Previously unsubscribed** (`left`, default yellow `#ffd400`): a channel in the unsubscribe history that is no longer in your subscription list. It gets the yellow outline only — no `+`, `−`, or inline button — and sorts after subscribed channels.
+- **Not subscribed** (`unsub`, default red `#ff3d00`, labelled *unsubscribed* in the panel): coloured outline plus a `+` button in the thumbnail corner, and the same `+` to the right of YouTube's own Subscribe button.
+- **Previously unsubscribed** (`left`, default yellow `#ffd400`, labelled *history* in the panel): a channel in the unsubscribe history that is no longer in your subscription list. It gets the yellow outline only — no `+`, `−`, or inline button — and sorts after subscribed channels.
 - **Subscribed** (`sub`): no outline in `highlight` mode; dimmed in `dim` mode and hidden in `only-unsub` mode.
 
 ## If markers do not appear

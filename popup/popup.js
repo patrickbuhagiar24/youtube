@@ -66,8 +66,8 @@ function render(state) {
   // No page state: keep the summary from storage instead of asking the reader to open YouTube.
   if (!state) return;
   renderSummary(state);
-  if (state.syncing) $('status').textContent = `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) + ' channels' : ''}`;
-  else if (state.loggedIn === false) $('status').textContent = '🔒 Sign in to YouTube first';
+  if (state.syncing) $('status').textContent = `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) : ''}`;
+  else if (state.loggedIn === false) $('status').textContent = '🔒 Sign in to YouTube';
 
   $('error').classList.toggle('hidden', !state.lastError);
   $('error').textContent = state.lastError || '';
@@ -75,7 +75,7 @@ function render(state) {
   const cp = $('channelPage');
   cp.className = state.channelPage ? 'chan ' + (state.channelPage.subscribed ? 'ok' : 'no') : 'chan hidden';
   if (state.channelPage) {
-    cp.textContent = `${state.channelPage.subscribed ? '✅' : '❌'} ${state.channelPage.name}: ${state.channelPage.subscribed ? 'subscribed' : 'not subscribed'}`;
+    cp.textContent = `${state.channelPage.subscribed ? '✅' : '❌'} ${state.channelPage.name}: ${state.channelPage.subscribed ? 'subscribed' : 'unsubscribed'}`;
   }
 }
 
@@ -86,7 +86,7 @@ $('exportBtn').addEventListener('click', async (e) => {
   e.preventDefault();
   const { yousubSubs } = /** @type {any} */ (await chrome.storage.local.get('yousubSubs'));
   const list = yousubSubs?.list || [];
-  if (!list.length) { alert('No list yet. Open youtube.com and sign in; the list loads automatically.'); return; }
+  if (!list.length) { alert('No list yet. Open YouTube and sign in.'); return; }
   const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const rows = [['No.', 'Channel name', 'Handle', 'URL', 'Channel ID'].map(q).join(',')];
   [...list].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'en'))
@@ -115,17 +115,16 @@ async function renderDrive() {
   $('unsubCount').textContent = fmt(Object.values(yousubUnsubs).filter((e) => e.s === 'unsub').length);
   const configured = YousubConfigFile.usable(cfg);
   $('driveStatus').textContent = !configured
-    ? 'Unsubscribe history is kept only while Google Drive sync is configured'
-    : d.syncing ? '⏳ Syncing with Google Drive…'
+    ? 'Needs Google Drive sync'
+    : d.syncing ? '⏳ Syncing…'
       : d.lastError ? '⚠️ ' + d.lastError
-        : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
+        : d.lastSync ? `☁️ Saved · ${fmtTime(d.lastSync)}` : '⏳ Preparing…';
   // One button opens the picker; its tooltip holds the details, so the row needs no form.
   const setup = $('driveSetupBtn');
   setup.title = !configured
     ? 'Choose the configuration file (yousub-file and client_id)'
     : ['Configuration file', cfg.file || '', d.email || tokens.email || '',
-      cfg.clientSecret ? 'client secret stored' : 'Google session mode',
-      d.mode === 'refresh token' ? 'renews in the background' : 'renews while the browser is open',
+      cfg.clientSecret ? 'auto-renews' : 'session only',
       d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName || ''].filter(Boolean).join(' · ');
   setup.setAttribute('aria-label', 'Choose the configuration file');
   setup.classList.toggle('configured', configured);
@@ -141,18 +140,18 @@ async function loadConfigFile(file) {
   const config = await YousubConfigFile.read(file); // Throws every problem at once
   // Only now, with a validated configuration in hand, is the cached one replaced.
   await chrome.storage.local.set({ [YOUSUB.CONFIG_KEY]: config });
-  showSetupStatus(`Using ${config.file}. Signing in to Google…`);
+  showSetupStatus(`Using ${config.file}. Signing in…`);
   // A file that carries a secret can renew itself, so try straight away; otherwise the user clicks.
   const result = await chrome.runtime.sendMessage({ type: 'driveSync', signIn: true }).catch((e) => ({ ok: false, error: e.message }));
   showSetupStatus(result?.ok
-    ? `✅ Saved. ${config.clientSecret ? 'Google Drive sync runs in the background.' : 'The Google session in this browser keeps the sync signed in.'}`
+    ? `✅ Saved. ${config.clientSecret ? 'Syncs in the background.' : 'Uses your Google session.'}`
     : `⚠️ ${result?.error || 'The sign-in did not finish.'}`);
   await renderDrive();
 }
 
 $('driveSetupBtn').addEventListener('click', async () => {
   if (!window.showOpenFilePicker) {
-    showSetupStatus('⚠️ This browser cannot open a file picker (Chrome 116 or newer is required).');
+    showSetupStatus('⚠️ No file picker in this browser (Chrome 116+).');
     return;
   }
   try {

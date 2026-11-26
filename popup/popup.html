@@ -9,8 +9,8 @@
   <header>
     <img src="../icons/icon48.png" alt="" width="28" height="28">
     <h1>Yousub</h1>
-    <label class="switch" title="Enable or disable the extension" aria-label="Enable or disable the extension">
-      <input type="checkbox" id="enabled" aria-label="Enable or disable the extension">
+    <label class="switch" title="Enable Yousub" aria-label="Enable Yousub">
+      <input type="checkbox" id="enabled" aria-label="Enable Yousub">
       <span></span>
     </label>
   </header>
@@ -18,7 +18,7 @@
   <!-- Summary -->
   <section class="card">
     <div class="stat">
-      <div><b id="total">–</b><small>subscribed channels</small></div>
+      <div><b id="total">–</b><small>subscribed</small></div>
     </div>
     <em id="status" class="muted" aria-live="polite"></em>
     <div id="channelPage" class="chan hidden"></div>
@@ -29,8 +29,8 @@
   <section class="card drive">
     <span class="dotl" aria-hidden="true"></span>
     <div class="grow">
-      <div><b id="unsubCount">0</b> previously unsubscribed channels</div>
-      <small id="driveStatus" class="muted" aria-live="polite">Unsubscribe history is kept only while Google Drive sync is configured</small>
+      <div><b id="unsubCount">0</b> unsubscribed</div>
+      <small id="driveStatus" class="muted" aria-live="polite">Needs Google Drive sync</small>
       <small id="setupStatus" class="muted" aria-live="polite"></small>
     </div>
     <div class="drive-actions">
@@ -44,32 +44,32 @@
     <label class="field">
       <span>Display mode</span>
       <select id="mode">
-        <option value="highlight">Colored outline + subscribe button (recommended)</option>
-        <option value="badge">Subscribe button only</option>
-        <option value="dim">Dim subscribed channels</option>
-        <option value="only-unsub">Show unsubscribed channels only</option>
-        <option value="hide-unsub">Hide unsubscribed channels</option>
+        <option value="highlight">Outline + button (recommended)</option>
+        <option value="badge">Button only</option>
+        <option value="dim">Dim subscribed</option>
+        <option value="only-unsub">Unsubscribed only</option>
+        <option value="hide-unsub">Hide unsubscribed</option>
       </select>
     </label>
     <div class="field inline">
       <span>Colors</span>
       <span class="colors">
-        <label title="Not subscribed"><input type="color" id="color" aria-label="Not subscribed color"> not subscribed</label>
-        <label title="Previously unsubscribed"><input type="color" id="leftColor" aria-label="Previously unsubscribed color"> previously left</label>
+        <label title="Not subscribed"><input type="color" id="color" aria-label="Unsubscribed color"> unsubscribed</label>
+        <label title="Previously unsubscribed"><input type="color" id="leftColor" aria-label="History color"> history</label>
       </span>
     </div>
-    <label class="field inline"><span>Subscribe <b class="plus">+</b> / unsubscribe <b class="plus minus">−</b> buttons on videos, right of YouTube's button</span><input type="checkbox" id="showSubButton"></label>
-    <label class="field inline"><span>Unsubscribed channels first &amp; hide duplicate videos</span><input type="checkbox" id="sortUnsub"></label>
+    <label class="field inline"><span><b class="plus">+</b> / <b class="plus minus">−</b> buttons next to YouTube's</span><input type="checkbox" id="showSubButton"></label>
+    <label class="field inline"><span>Unsubscribed first &amp; hide duplicates</span><input type="checkbox" id="sortUnsub"></label>
     <label class="field inline">
-      <span>Automatically load videos for sorting</span>
+      <span>Auto-load for sorting</span>
       <select id="autoloadLimit">
-        <option value="0">Off</option><option value="100">Up to 100</option>
-        <option value="250">Up to 250</option><option value="500">Up to 500</option>
+        <option value="0">Off</option><option value="100">100</option>
+        <option value="250">250</option><option value="500">500</option>
       </select>
     </label>
     <div class="links">
-      <a id="exportBtn" href="#">⬇️ Export list (CSV)</a>
-      <a id="openFeedBtn" href="#">📋 View on YouTube</a>
+      <a id="exportBtn" href="#">⬇️ Export CSV</a>
+      <a id="openFeedBtn" href="#">📋 YouTube</a>
     </div>
   </details>
 

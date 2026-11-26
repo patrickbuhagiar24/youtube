@@ -12,6 +12,13 @@ yousub (2.7.3) stable; urgency=medium
     shows a keyboard focus ring (the YouTube + and - buttons get a white ring
     with a dark halo), and hover/scale transitions are dropped when the system
     asks for reduced motion.
+  * Shorter panel text: the summary reads "subscribed", the history row reads
+    "unsubscribed", display modes are "Outline + button", "Button only",
+    "Dim subscribed", "Unsubscribed only" and "Hide unsubscribed", the colour
+    labels are "unsubscribed" and "history", sorting is "Unsubscribed first
+    & hide duplicates" with "Auto-load for sorting", and the links are
+    "Export CSV" and "YouTube". The + and - button tooltips say "Subscribe"
+    and "Unsubscribe", and the toast says "Subscribed:" / "Unsubscribed:".
   * Fewer automatic Drive syncs: the 15-minute alarm, the pull on the first
     YouTube page load, and the sync at browser start are gone, and the alarms
     permission is no longer requested. The history is sent 3 seconds after a

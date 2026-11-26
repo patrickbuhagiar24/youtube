@@ -156,7 +156,7 @@ test('the copy is placed directly after YouTube\'s own subscribe button', async 
   assert.equal(host.children.length, 1);
   assert.match(host.children[0].className, /yousub-inlinebtn/);
   assert.match(host.children[0].className, /yousub-(?!unsub)/);
-  assert.equal(host.children[0].getAttribute('aria-label'), 'Subscribe to this channel');
+  assert.equal(host.children[0].getAttribute('aria-label'), 'Subscribe');
 });
 
 test('a subscribed channel gets the blue unsubscribe copy in the same place', async () => {
@@ -165,7 +165,7 @@ test('a subscribed channel gets the blue unsubscribe copy in the same place', as
   const host = h.row.children.find((el) => el.className === 'yousub-inline-host');
   assert.ok(host);
   assert.match(host.children[0].className, /yousub-unsubbtn/);
-  assert.equal(host.children[0].getAttribute('aria-label'), 'Unsubscribe from this channel');
+  assert.equal(host.children[0].getAttribute('aria-label'), 'Unsubscribe');
 });
 
 test('clicks on the copy never reach YouTube, so the video does not open', async () => {

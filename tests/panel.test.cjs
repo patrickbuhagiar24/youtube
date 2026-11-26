@@ -120,7 +120,7 @@ test('a fresh panel offers one configuration button and no sign-out', async () =
   const panel = await openPanel();
   assert.equal(panel.$('googleSetup'), null, 'the form is gone');
   assert.equal(panel.$('setupStatus').textContent, '');
-  assert.match(panel.$('driveStatus').textContent, /only while Google Drive sync is configured/);
+  assert.match(panel.$('driveStatus').textContent, /^Needs Google Drive sync$/);
   assert.equal(panel.$('driveSetupBtn').classList.contains('configured'), false);
   // The panel no longer tells the reader to open YouTube.
   assert.doesNotMatch(panel.$('status').textContent, /Open youtube\.com|Waiting for this YouTube tab/);
@@ -155,7 +155,7 @@ test('a picked file is validated, cached, and used to ask the worker to sign in'
   assert.match(panel.$('setupStatus').textContent, /^✅ Saved\./);
   // The details live in the tooltip of the one button that remains.
   assert.match(panel.$('driveSetupBtn').title, /yousub-config\.json/);
-  assert.match(panel.$('driveSetupBtn').title, /Google session mode/);
+  assert.match(panel.$('driveSetupBtn').title, /session only/);
   assert.equal(panel.$('driveSetupBtn').classList.contains('configured'), true);
 });
 
@@ -165,8 +165,8 @@ test('a file with no secret keeps the token out of the panel path, a file with o
   await panel.click('driveSetupBtn');
   assert.equal(panel.fake.local[CONFIG_KEY].clientSecret, 'GOCSPX-abcdefghijklmnop');
   assert.match(panel.$('driveSetupBtn').title, /drive\.json/);
-  assert.match(panel.$('driveSetupBtn').title, /client secret stored/);
-  assert.match(panel.$('setupStatus').textContent, /Google Drive sync runs in the background/);
+  assert.match(panel.$('driveSetupBtn').title, /auto-renews/);
+  assert.match(panel.$('setupStatus').textContent, /Syncs in the background/);
 });
 
 test('reopening the panel reads the cache and never asks for the file again', async () => {
@@ -212,5 +212,5 @@ test('a browser without a file picker says so instead of failing silently', asyn
   const panel = await openPanel();
   assert.equal(panel.window.showOpenFilePicker, undefined);
   await panel.click('driveSetupBtn');
-  assert.match(panel.$('setupStatus').textContent, /cannot open a file picker/);
+  assert.match(panel.$('setupStatus').textContent, /No file picker in this browser/);
 });
