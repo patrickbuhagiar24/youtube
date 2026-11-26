@@ -116,25 +116,25 @@ const validConfig = {
   client_id: '1234567890-abc123.apps.googleusercontent.com'
 };
 
-test('a fresh panel is unconfigured and keeps the Google form closed', async () => {
+test('a fresh panel offers one configuration button and no sign-out', async () => {
   const panel = await openPanel();
-  assert.equal(panel.$('googleSetup').open, false, 'the form does not open by itself');
-  assert.equal(panel.$('configInfo').textContent, 'No configuration file has been read yet.');
+  assert.equal(panel.$('googleSetup'), null, 'the form is gone');
+  assert.equal(panel.$('setupStatus').textContent, '');
   assert.match(panel.$('driveStatus').textContent, /only while Google Drive sync is configured/);
   assert.equal(panel.$('driveSetupBtn').classList.contains('configured'), false);
+  assert.equal(panel.$('signOutBtn').classList.contains('hidden'), true, 'nothing to sign out of');
+  // The panel no longer tells the reader to open YouTube.
+  assert.doesNotMatch(panel.$('status').textContent, /Open youtube\.com|Waiting for this YouTube tab/);
   assert.deepEqual(Object.keys(panel.fake.local), [], 'nothing is written before a file is picked');
   assert.deepEqual(panel.fake.sent, [], 'no Google message is sent before a file is picked');
 });
 
-test('the 📄 button opens the Google form without spending a picker', async () => {
+test('the Configuration file button opens the picker directly', async () => {
   let pickers = 0;
   const panel = await openPanel({ filePicker: async () => { pickers += 1; throw Object.assign(new Error('closed'), { name: 'AbortError' }); } });
   await panel.click('driveSetupBtn');
-  assert.equal(panel.$('googleSetup').open, true);
-  assert.equal(pickers, 0, 'opening the form is not picking a file');
+  assert.equal(pickers, 1, 'one click, one picker: no form in between');
   // Closing the picker is not an error and leaves no message behind.
-  await panel.click('chooseFileBtn');
-  assert.equal(pickers, 1);
   assert.equal(panel.$('setupStatus').textContent, '');
 });
 
@@ -143,7 +143,7 @@ test('a picked file is validated, cached, and used to ask the worker to sign in'
     filePicker: async () => [configFile(validConfig)],
     onMessage: (message) => ({ ok: true, mode: message.signIn ? 'refresh token' : '' })
   });
-  await panel.click('chooseFileBtn');
+  await panel.click('driveSetupBtn');
   const cached = panel.fake.local[CONFIG_KEY];
   assert.ok(cached, 'the configuration is cached');
   assert.equal(cached.clientId, validConfig.client_id);
@@ -154,22 +154,25 @@ test('a picked file is validated, cached, and used to ask the worker to sign in'
   assert.equal(cached.savedAt.length > 0, true);
   assert.deepEqual(panel.fake.sent, [{ type: 'driveSync', signIn: true }], 'one sign-in request, no polling');
   assert.match(panel.$('setupStatus').textContent, /^✅ Saved\./);
-  assert.match(panel.$('configInfo').textContent, /Using yousub-config\.json · no client secret \(Google session mode\)/);
+  // The details live in the tooltip of the one button that remains.
+  assert.match(panel.$('driveSetupBtn').title, /yousub-config\.json/);
+  assert.match(panel.$('driveSetupBtn').title, /Google session mode/);
   assert.equal(panel.$('driveSetupBtn').classList.contains('configured'), true);
 });
 
 test('a file with no secret keeps the token out of the panel path, a file with one is marked as such', async () => {
   const withSecret = { ...validConfig, client_secret: 'GOCSPX-abcdefghijklmnop' };
   const panel = await openPanel({ filePicker: async () => [configFile(withSecret, 'drive.json')] });
-  await panel.click('chooseFileBtn');
+  await panel.click('driveSetupBtn');
   assert.equal(panel.fake.local[CONFIG_KEY].clientSecret, 'GOCSPX-abcdefghijklmnop');
-  assert.match(panel.$('configInfo').textContent, /Using drive\.json · client secret stored/);
+  assert.match(panel.$('driveSetupBtn').title, /drive\.json/);
+  assert.match(panel.$('driveSetupBtn').title, /client secret stored/);
   assert.match(panel.$('setupStatus').textContent, /Google Drive sync runs in the background/);
 });
 
 test('reopening the panel reads the cache and never asks for the file again', async () => {
   const first = await openPanel({ filePicker: async () => [configFile(validConfig)] });
-  await first.click('chooseFileBtn');
+  await first.click('driveSetupBtn');
   const cached = structuredClone(first.fake.local[CONFIG_KEY]);
 
   let pickers = 0;
@@ -178,8 +181,8 @@ test('reopening the panel reads the cache and never asks for the file again', as
     filePicker: async () => { pickers += 1; return [configFile(validConfig)]; }
   });
   assert.equal(pickers, 0, 'the picker is not opened');
-  assert.equal(second.$('googleSetup').open, false, 'the form stays closed');
-  assert.match(second.$('configInfo').textContent, /Using yousub-config\.json/);
+  assert.match(second.$('driveSetupBtn').title, /yousub-config\.json/);
+  assert.equal(second.$('signOutBtn').classList.contains('hidden'), false, 'sign out is offered again');
   assert.deepEqual(second.fake.local[CONFIG_KEY], cached, 'the cache is left byte for byte as it was');
   assert.deepEqual(second.fake.sent, [], 'reopening does not sign in again');
   assert.equal(second.$('driveSetupBtn').classList.contains('configured'), true);
@@ -189,7 +192,7 @@ test('a broken file reports every problem at once and never replaces a working c
   const good = { ...validConfig, clientSecret: '', file: 'good.json', savedAt: '2026-11-01T00:00:00.000Z', version: 1 };
   const broken = { 'yousub-file': 'https://drive.google.com/drive/folders/abc', client_id: 'not-a-client' };
   const panel = await openPanel({ storage: { [CONFIG_KEY]: good }, filePicker: async () => [configFile(broken, 'broken.json')] });
-  await panel.click('chooseFileBtn');
+  await panel.click('driveSetupBtn');
   const status = panel.$('setupStatus').textContent;
   assert.match(status, /folder/, 'the folder link is named');
   assert.match(status, /client_id.*apps\.googleusercontent\.com/, 'the client id is named');
@@ -202,7 +205,7 @@ test('a file that is not JSON is reported by name', async () => {
   const panel = await openPanel({
     filePicker: async () => [handle({ name: 'notes.json', size: 9, text: async () => 'not json' })]
   });
-  await panel.click('chooseFileBtn');
+  await panel.click('driveSetupBtn');
   assert.match(panel.$('setupStatus').textContent, /^⚠️ notes\.json is not valid JSON\.$/);
   assert.equal(panel.fake.local[CONFIG_KEY], undefined);
 });
@@ -210,7 +213,7 @@ test('a file that is not JSON is reported by name', async () => {
 test('a browser without a file picker says so instead of failing silently', async () => {
   const panel = await openPanel();
   assert.equal(panel.window.showOpenFilePicker, undefined);
-  await panel.click('chooseFileBtn');
+  await panel.click('driveSetupBtn');
   assert.match(panel.$('setupStatus').textContent, /cannot open a file picker/);
 });
 

@@ -53,7 +53,7 @@ function renderSummary({ subsCount, stats, ts }) {
   $('total').textContent = subsCount ? fmt(subsCount) : '–';
   $('status').textContent = ts
     ? [STATUS[stats?.status], `updated ${fmtTime(ts)}`].filter(Boolean).join(' · ')
-    : 'No data yet — open youtube.com';
+    : '';
 }
 
 async function renderFromStorage() {
@@ -63,11 +63,8 @@ async function renderFromStorage() {
 }
 
 function render(state) {
-  if (!state) {
-    // Keep the stored count, but say what the page state is (the list refreshes by itself).
-    $('status').textContent = tabId === null ? 'Open youtube.com' : 'Waiting for this YouTube tab…';
-    return;
-  }
+  // No page state: keep the summary from storage instead of asking the reader to open YouTube.
+  if (!state) return;
   renderSummary(state);
   if (state.syncing) $('status').textContent = `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) + ' channels' : ''}`;
   else if (state.loggedIn === false) $('status').textContent = '🔒 Sign in to YouTube first';
@@ -122,19 +119,18 @@ async function renderDrive() {
     : d.syncing ? '⏳ Syncing with Google Drive…'
       : d.lastError ? '⚠️ ' + d.lastError
         : d.lastSync ? `☁️ Saved to Google Drive · ${fmtTime(d.lastSync)}` : '⏳ Preparing Google Drive…';
-  // The button reports the state (📄 opens the file picker) and its tooltip holds the details.
+  // One button opens the picker; its tooltip holds the details, so the row needs no form.
   const setup = $('driveSetupBtn');
   setup.title = !configured
     ? 'Choose the configuration file (yousub-file and client_id)'
     : ['Configuration file', cfg.file || '', d.email || tokens.email || '',
+      cfg.clientSecret ? 'client secret stored' : 'Google session mode',
       d.mode === 'refresh token' ? 'renews in the background' : 'renews while the browser is open',
       d.syncing ? 'syncing…' : d.lastError ? 'needs attention' : d.fileName || ''].filter(Boolean).join(' · ');
   setup.setAttribute('aria-label', 'Choose the configuration file');
   setup.classList.toggle('configured', configured);
-  // The form says which file is in use and whether a secret is cached.
-  $('configInfo').textContent = configured
-    ? `Using ${cfg.file || 'the saved configuration'}${cfg.clientSecret ? ' · client secret stored' : ' · no client secret (Google session mode)'}.`
-    : 'No configuration file has been read yet.';
+  // Signing out only makes sense once a configuration has been read.
+  $('signOutBtn').classList.toggle('hidden', !configured);
 }
 
 /* ---------------- Configuration file ---------------- */
@@ -157,14 +153,8 @@ async function loadConfigFile(file) {
 }
 
 $('driveSetupBtn').addEventListener('click', async () => {
-  $('googleSetup').open = true;
-  await renderDrive();
-  $('googleSetup').scrollIntoView?.({ block: 'nearest' });
-});
-
-$('chooseFileBtn').addEventListener('click', async () => {
   if (!window.showOpenFilePicker) {
-    showSetupStatus('⚠️ This browser cannot open a file picker (Chrome 86 or newer is required).');
+    showSetupStatus('⚠️ This browser cannot open a file picker (Chrome 116 or newer is required).');
     return;
   }
   try {

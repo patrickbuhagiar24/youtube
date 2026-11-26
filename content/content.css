@@ -244,3 +244,23 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
 ytd-video-owner-renderer .yousub-inline-host,
 #owner .yousub-inline-host { align-self: center; }
 html:not(.yousub-on) .yousub-inline-host { display: none !important; }
+
+/* Keyboard focus: a white ring with a dark halo, readable over any thumbnail or video surface */
+.yousub-subbtn:focus-visible,
+.yousub-inlinebtn:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(0, 0, 0, .65);
+}
+
+/* Reduced motion: keep the buttons usable without the scale transitions. The progress spinner is
+   left alone: it is the only sign that a click is being processed. */
+@media (prefers-reduced-motion: reduce) {
+  .yousub-subbtn,
+  .yousub-inlinebtn,
+  html.yousub-on.yousub-mode-dim [data-yousub-state="sub"]:not(ytd-video-owner-renderer) { transition: none; }
+  .yousub-subbtn:hover,
+  .yousub-inlinebtn:hover,
+  .yousub-subbtn:active,
+  .yousub-inlinebtn:active { transform: none; }
+}

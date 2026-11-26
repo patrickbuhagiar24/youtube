@@ -1,3 +1,19 @@
+yousub (2.7.3) stable; urgency=medium
+
+  * The side panel is one box lighter: the collapsible "Configuration file and
+    Google account" box is gone. Configuration file... opens the picker
+    directly, its tooltip holds the file name, the account, the renewal mode
+    and whether a client secret is stored, and Sign out appears only once a
+    configuration has been read.
+  * The panel no longer prints "Open youtube.com" or "Waiting for this YouTube
+    tab..." where a status would go; a line with nothing to report stays empty.
+  * Accessibility: the panel follows the system light/dark theme, every control
+    shows a keyboard focus ring (the YouTube + and - buttons get a white ring
+    with a dark halo), and hover/scale transitions are dropped when the system
+    asks for reduced motion.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 07:30:00 +0000
+
 yousub (2.7.2) stable; urgency=medium
 
   * Development tooling only: the extension behaves exactly as 2.7.1. The

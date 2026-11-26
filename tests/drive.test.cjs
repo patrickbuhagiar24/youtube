@@ -186,9 +186,9 @@ test('a sync without a sign-in never opens a window and says how to sign in', as
   const result = await Drive.sync();
   assert.equal(result.ok, false);
   assert.match(result.error, /not signed in/i);
-  // The advice names a control the panel really has: 📄, then the file, which is what signs in.
-  assert.match(result.error, /click 📄/);
-  assert.match(result.error, /choose the configuration file again/);
+  // The advice names a control the panel really has: the button, then the file, which signs in.
+  assert.match(result.error, /click "Configuration file…"/);
+  assert.match(result.error, /pick the file again/);
 });
 
 test('an expired access token is renewed with the saved refresh token', async () => {

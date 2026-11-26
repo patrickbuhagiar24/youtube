@@ -133,22 +133,27 @@ test('the side panel has no manual refresh or Drive sync buttons', () => {
   assert.match(fs.readFileSync('background.js', 'utf8'), /Drive\.sync\(\)/);
 });
 
-test('the Drive row reports the configuration and the settings button opens the form', () => {
+test('the Drive row has one configuration button and no form', () => {
   const html = fs.readFileSync('popup/popup.html', 'utf8');
   const js = fs.readFileSync('popup/popup.js', 'utf8');
-  // The button lives in the unsubscribe row, at its far right, and no status mark is drawn.
-  const row = html.slice(html.indexOf('<!-- Unsubscribe history row'), html.indexOf('<!-- Google settings'));
+  const start = html.indexOf('<!-- Unsubscribe history');
+  const row = html.slice(start, html.indexOf('</section>', start));
   assert.match(row, /id="unsubCount"/);
-  assert.match(row, /id="driveSetupBtn"/);
-  assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button sits at the right');
+  // The button opens the picker itself and names the file it reads.
+  assert.match(row, /id="driveSetupBtn"[^>]*>Configuration file…</);
+  assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button follows the status');
+  assert.match(row, /id="signOutBtn" class="secondary hidden"/);
+  assert.match(row, /id="setupStatus"/);
+  // The collapsible "Configuration file and Google account" box is gone, with its controls.
+  for (const id of ['googleSetup', 'chooseFileBtn', 'configInfo']) {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`), `${id} is gone`);
+  }
+  assert.doesNotMatch(html, /Configuration file and Google account/);
+  assert.doesNotMatch(html, /<details[^>]*setup/);
   assert.doesNotMatch(html + js, /id="driveConfig"|class="mark"|mark\.textContent/);
   // One Drive box only: there is no separate "Google Drive sync" row.
   assert.equal((html.match(/class="card drive"/g) || []).length, 1);
   assert.doesNotMatch(html, /<div>Google Drive sync<\/div>/);
-  // The form picks a file and offers sign out; the three settings are inside the file, not in fields.
-  for (const id of ['chooseFileBtn', 'signOutBtn', 'configInfo', 'setupStatus', 'googleSetup']) {
-    assert.match(html, new RegExp(`id="${id}"`), `${id} is in the form`);
-  }
   assert.doesNotMatch(html, /id="clientId"|id="clientSecret"|id="driveLink"|id="saveSetupBtn"|id="redirectUri"/);
   assert.match(js, /showOpenFilePicker/);
   assert.match(js, /YousubConfigFile\.read/);
@@ -165,11 +170,10 @@ test('every message points at a control the panel really has', () => {
   assert.doesNotMatch(drive, /click Sign in\./);
   assert.doesNotMatch(drive, /"Client secret" field/);
   assert.doesNotMatch(drive, /Click ⚙️/);
-  // The two controls that do exist.
-  assert.ok(ids.has('driveSetupBtn'), 'the 📄 button opens the form');
-  assert.ok(ids.has('chooseFileBtn'), 'Choose file… is also what signs in');
-  assert.match(drive, /const OPEN_FORM = 'Open the side panel and click 📄\.'/);
-  assert.match(drive, /const SIGN_IN = 'Open the side panel, click 📄, then choose the configuration file again to sign in\.'/);
+  // The one control that does exist.
+  assert.ok(ids.has('driveSetupBtn'), 'the Configuration file… button opens the picker');
+  assert.match(drive, /const OPEN_FORM = 'Open the side panel and click "Configuration file…"\.'/);
+  assert.match(drive, /const SIGN_IN = 'Open the side panel, click "Configuration file…", and pick the file again to sign in\.'/);
   // The consent screen for auth/drive does not read like the narrow drive.file one.
   assert.doesNotMatch(drive, /See, edit, create and delete only the specific Google Drive files/);
   assert.match(drive, /only touches the one file named in the configuration/);

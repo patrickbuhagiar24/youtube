@@ -81,8 +81,8 @@ you name there.
 
 ### The configuration file (read once, then kept in the browser)
 
-Click the Yousub icon, click **📄** at the right of the *previously unsubscribed channels* row, and
-pick **one** JSON file. Any file name works; what makes it a configuration is the keys:
+Click the Yousub icon, click **Configuration file…** in the *previously unsubscribed channels* row,
+and pick **one** JSON file. Any file name works; what makes it a configuration is the keys:
 
 ```json
 {
@@ -134,7 +134,7 @@ working configuration**.
 
    Right-click it → **Share** → **Copy link**.
 5. **Write the configuration file** anywhere on this computer, for example `yousub-config.json`, with
-   the three keys above, then pick it with **📄** in the side panel.
+   the three keys above, then pick it with **Configuration file…** in the side panel.
 
 ### After the file is read
 
@@ -142,8 +142,8 @@ working configuration**.
 - **With `client_secret`**: the access token is renewed from a saved refresh token, so a sync works
   even when Chrome has been closed for a while, and nothing asks you again.
 - **Without `client_secret`**: the access token lives about an hour and is renewed silently from your
-  Google session. If Google wants to ask, the panel says so: click 📄 and choose the configuration
-  file again — that starts one sign-in and needs no other step.
+  Google session. If Google wants to ask, the panel says so: click **Configuration file…** and pick
+  the file again — that starts one sign-in and needs no other step.
 - **Sign out** forgets the token and revokes it at Google. The cached configuration and the Drive file
   stay as they are.
 - The saved sign-in survives an extension update: `yousubOAuthTokens` is one of the extension's own
@@ -159,7 +159,7 @@ working configuration**.
 | `Google does not recognise this extension's redirect URL` | Add the exact `https://<extension-id>.chromiumapp.org/` shown in the panel to the client's Authorized redirect URIs. |
 | `This Google account cannot edit YouTube.json` | Make sure the file belongs to the account you signed in with, or was shared with Editor access. |
 | `The Google Drive API is not enabled` | Step 2 above. |
-| `The Google sign-in has expired or was revoked` | Click 📄 and choose the configuration file again to sign in once more. With `client_secret` this is rare; without it, it can happen after a long time without using Google in this browser. |
+| `The Google sign-in has expired or was revoked` | Click **Configuration file…** and pick the file again to sign in once more. With `client_secret` this is rare; without it, it can happen after a long time without using Google in this browser. |
 | `Google rejected the saved sign-in` | Same as above: the rejected token is discarded first, so choosing the file again really does start a new sign-in. |
 
 Nothing in the panel asks you to reload the page: the configuration is cached, and the sync resumes by
@@ -178,8 +178,19 @@ Only one sync runs at a time. It refreshes the access token if needed, reads `Yo
 
 ### Google Drive row in the side panel
 
-- **📄 button** (far right of the unsubscribe row): opens the configuration form — **Choose file…** picks the JSON file described above, **Sign out** forgets the Google token. There is no status mark and no separate "Google Drive sync" box; the tooltip of the button holds the file name, the account and how the sign-in renews itself.
-- **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress.
+- **Configuration file… button** (below the unsubscribe row): opens the file picker directly and reads the JSON file described above. There is no form, no status mark and no separate "Google Drive sync" box; the tooltip of the button holds the file name, the account and how the sign-in renews itself.
+- **Sign out**: appears only once a configuration has been read, and forgets the Google token on this device. The cached configuration and the Drive file stay as they are.
+- **No manual sync button**: syncing runs automatically (see above), and the status line reports its progress. A status line that has nothing to report stays empty — the panel never asks you to open youtube.com.
+
+### Appearance and accessibility
+
+The panel follows the system theme (`prefers-color-scheme`) and every colour comes from a variable,
+so light and dark stay in step. Keyboard focus draws a visible ring on every button, select and
+switch. On YouTube, the `+` / `−` buttons get a white ring with a dark halo, which stays visible over
+thumbnails and video. When the system asks for reduced motion (`prefers-reduced-motion`), the hover
+and scale transitions are switched off; the progress spinner stays, because it is the only sign that
+a click is being processed. A status line with nothing to report stays empty — the panel never asks
+you to open youtube.com.
 
 ### Subscribed channel count
 
@@ -234,7 +245,7 @@ The coverage run measures the shipped files, not just the tests: each harness lo
 
 `eslint.config.js` parses the product files as classic scripts with browser and service-worker globals plus the three globals the scripts share (declared in `shared.js`, `config-file.js` and `drive.js`), so `no-undef` still catches a typo in a cross-file global. `types/yousub.d.ts` is type-only: it names the element properties the content scripts attach (such as `__yousubCh`) and the page globals (`ytcfg`, `ytInitialData`) that TypeScript's DOM library does not know. `jsconfig.json` includes only the extension sources; the build copies named files, so neither the config, the types nor the development dependencies ever reach the CRX, the ZIP or the `.deb`.
 
-`tests/panel.test.cjs` loads the real `popup/popup.html` with the real `popup.js`, `shared.js`, `drive.js` and `config-file.js` inside jsdom and drives the panel the way a person does — clicking 📄, picking a file, reopening the panel — with an in-memory `chrome.storage` and a recorded `chrome.runtime.sendMessage`. It is the guard for the two promises that are otherwise invisible until release: the configuration file is read once and cached forever, and a file that fails validation never replaces a working configuration.
+`tests/panel.test.cjs` loads the real `popup/popup.html` with the real `popup.js`, `shared.js`, `drive.js` and `config-file.js` inside jsdom and drives the panel the way a person does — clicking **Configuration file…**, picking a file, reopening the panel — with an in-memory `chrome.storage` and a recorded `chrome.runtime.sendMessage`. It is the guard for the two promises that are otherwise invisible until release: the configuration file is read once and cached forever, and a file that fails validation never replaces a working configuration.
 
 Release workflow — **no version tags and no GitHub Releases**; GitHub Pages is the only channel:
 
