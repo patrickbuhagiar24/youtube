@@ -90,7 +90,8 @@ yousub (2.7.1) stable; urgency=medium
     declare the Chromium registration in /etc as a configuration file
     (dir-or-file-in-etc-opt, file-in-etc-not-marked-as-conffile).
   * Give the 2.7.1 entry its own date and shorten the synopsis so it no
-    longer starts with the package name (latest-changelog-entry-without-new-date,
+    longer starts with the package name
+    (latest-changelog-entry-without-new-date,
     description-starts-with-package-name).
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Wed, 25 Nov 2026 22:00:00 +0000
@@ -103,9 +104,9 @@ yousub (2.7.0) stable; urgency=medium
     and are never read again, not even after the browser restarts.
   * The Drive scope is now the full auth/drive scope: drive.file cannot open a
     YouTube.json the user created, which Google answers with 404.
-  * A client_secret in the configuration keeps a refresh token so the sync runs in
-    the background; without one the implicit flow keeps the token in memory and
-    renews it silently from the Google session.
+  * A client_secret in the configuration keeps a refresh token so the sync runs
+    in the background; without one the implicit flow keeps the token in memory
+    and renews it silently from the Google session.
   * Every problem in the configuration file is reported at once, and a file that
     fails validation never replaces a working configuration.
   * Every Google request is bounded to 20 seconds.
@@ -142,9 +143,9 @@ yousub (2.5.4) stable; urgency=medium
 
 yousub (2.5.3) stable; urgency=medium
 
-  * Remove the configuration status mark from the unsubscribe row: the folder
-    picker already reports the state (📁 not configured, 🔁 configured) and a
-    missing file is named on the line under the count.
+  * Remove the configuration status mark from the unsubscribe row: the
+    folder picker already reports the state (📁 not configured,
+    🔁 configured) and a missing file is named on the line under the count.
 
  -- Patrick Buhagiar <arobidsh@proton.me>  Sun, 22 Nov 2026 00:00:00 +0000
 
