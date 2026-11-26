@@ -148,7 +148,12 @@ jobs:
             "$deb/usr/share/google-chrome/extensions" "$deb/usr/share/chromium/extensions" \
             "$deb/etc/chromium/extensions"
           cp "$RUNNER_TEMP/yousub-$VERSION.crx" "$deb/usr/share/yousub/yousub.crx"
-          cp "$RUNNER_TEMP/yousub-id.txt" "$RUNNER_TEMP/yousub-external.json" "$deb/usr/share/yousub/"
+          cp "$RUNNER_TEMP/yousub-external.json" "$deb/usr/share/yousub/"
+          # The extension ID is data the maintainer scripts read, not documentation. A .txt file
+          # under /usr/share/yousub is reported by lintian as documentation outside
+          # /usr/share/doc (package-contains-documentation-outside-usr-share-doc), so the installed
+          # file drops the extension while the build artifact keeps its name.
+          install -m 0644 "$RUNNER_TEMP/yousub-id.txt" "$deb/usr/share/yousub/extension-id"
           for directory in usr/share/google-chrome/extensions usr/share/chromium/extensions \
             etc/chromium/extensions; do
             install -m 0644 "$RUNNER_TEMP/yousub-external.json" "$deb/$directory/$EXTENSION_ID.json"

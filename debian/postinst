@@ -5,8 +5,8 @@ set -eu
 [ "${1:-}" = configure ] || exit 0
 
 base=/usr/share/yousub
-[ -f "$base/yousub-id.txt" ] || exit 0
-extension=$(cat "$base/yousub-id.txt")
+[ -f "$base/extension-id" ] || exit 0
+extension=$(cat "$base/extension-id")
 [ -n "$extension" ] || exit 0
 
 for directory in /usr/share/google-chrome/extensions /opt/google/chrome/extensions \

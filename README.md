@@ -61,7 +61,7 @@ Chrome reads the registration file **only at browser startup** and only in the C
 
 ```bash
 dpkg -L yousub          # files installed by the package
-cat /usr/share/yousub/yousub-id.txt
+cat /usr/share/yousub/extension-id
 ```
 
 - If `chrome://extensions` lists the extension but it is disabled, enable it there.
@@ -256,7 +256,7 @@ Release workflow — **no version tags and no GitHub Releases**; GitHub Pages is
 - The build signs a CRX3 with the repository secret `YOUSUB_CRX_PRIVATE_KEY`, writes the public key into the manifest of an unpacked ZIP, and builds an extension-only Debian package that registers the CRX. The CRX, ZIP, `.deb`, public PEM, and `checksums.txt` are uploaded as the `yousub-extension` artifact for that run.
 - The version comes from `manifest.json`. If that version is already on Pages, the deploy is skipped, so pushes that do not change the version do not redeploy the repository.
 
-Chrome derives the extension ID from the public signing key, so every build keeps the same ID and existing browser storage. The ID is printed in the build log, stored in `/usr/share/yousub/yousub-id.txt`, and published as <https://patrickbuhagiar24.github.io/youtube/extension-id.txt>. Never reuse the signing key of another extension project: two packages with the same key try to register the same file. Run Chrome with the extension loaded unpacked for local testing (`chrome://extensions` → Developer mode → **Load unpacked** → repository root).
+Chrome derives the extension ID from the public signing key, so every build keeps the same ID and existing browser storage. The ID is printed in the build log, stored in `/usr/share/yousub/extension-id`, and published as <https://patrickbuhagiar24.github.io/youtube/extension-id.txt>. Never reuse the signing key of another extension project: two packages with the same key try to register the same file. Run Chrome with the extension loaded unpacked for local testing (`chrome://extensions` → Developer mode → **Load unpacked** → repository root).
 
 ## License
 

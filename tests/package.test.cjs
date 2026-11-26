@@ -62,6 +62,10 @@ test('the package passes the lint rules the publish job enforces', () => {
   assert.match(build, /find \. -path \.\/DEBIAN -prune -o -type f -print0/);
   // extra-license-file: MIT in full lives in debian/copyright, so no second LICENSE in /usr/share/doc.
   assert.doesNotMatch(build, /cp README\.md LICENSE/);
+  // documentation-outside-usr-share-doc: the extension ID is data the maintainer scripts read, so
+  // the installed file carries no .txt extension. The build artifact keeps its own name.
+  assert.match(build, /install -m 0644 "\$RUNNER_TEMP\/yousub-id\.txt" "\$deb\/usr\/share\/yousub\/extension-id"/);
+  assert.doesNotMatch(build, /cp "\$RUNNER_TEMP\/yousub-id\.txt"[^\n]*usr\/share\/yousub/);
   // description-starts-with-package-name: the synopsis must not begin with "Yousub".
   assert.doesNotMatch(control, /^Description: Yousub\b/m);
   assert.match(control, /^Description: YouTube subscription marker for Chrome$/m);
