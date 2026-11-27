@@ -53,11 +53,18 @@ test('the package passes the lint rules the publish job enforces', () => {
   const changelog = read('debian/changelog');
   // dir-or-file-in-etc-opt: /etc/opt is reserved for add-on software.
   assert.doesNotMatch(build, /etc\/opt\//, 'no file is installed under /etc/opt');
-  for (const script of [read('debian/postinst'), read('debian/postrm')]) {
-    assert.doesNotMatch(script, /\/etc\/opt\//, 'the maintainer scripts do not create it either');
-  }
-  // file-in-etc-not-marked-as-conffile: the registration in /etc is a configuration file.
-  assert.match(build, /printf '\/etc\/chromium\/extensions\/%s\.json\\n' "\$EXTENSION_ID" > "\$deb\/DEBIAN\/conffiles"/);
+  // No maintainer scripts: dpkg installs and removes the registration file by itself, and a script
+  // that is not copied into DEBIAN never runs anyway.
+  assert.equal(fs.existsSync('debian/postinst'), false, 'no postinst is needed');
+  assert.equal(fs.existsSync('debian/postrm'), false, 'no postrm is needed');
+  // Nothing is copied there, and the build fails if a script ever does reach DEBIAN.
+  assert.doesNotMatch(build, /(cp|install)[^\n]*DEBIAN\/post(inst|rm)/);
+  assert.match(build, /A maintainer script reached DEBIAN/);
+  // One registration file, in the directory Chrome reads at startup. Nothing is installed in /etc,
+  // so no conffiles list is needed (an unmarked /etc file would be an error).
+  assert.match(build, /install -m 0644 "\$RUNNER_TEMP\/yousub-external\.json" \\\n\s+"\$deb\/usr\/share\/google-chrome\/extensions\/\$EXTENSION_ID\.json"/);
+  assert.doesNotMatch(build, /DEBIAN\/conffiles/, 'no file in /etc, so no conffiles list');
+  assert.doesNotMatch(build, /(install|cp|mkdir)[^\n]*usr\/share\/chromium/, 'Chromium is not registered');
   // file-missing-in-md5sums: every installed file is listed, DEBIAN excluded.
   assert.match(build, /find \. -path \.\/DEBIAN -prune -o -type f -print0/);
   // extra-license-file: MIT in full lives in debian/copyright, so no second LICENSE in /usr/share/doc.

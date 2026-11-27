@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: yousub
 Architecture: all
-Recommends: google-chrome-stable | chromium
+Recommends: google-chrome-stable
 Description: YouTube subscription marker for Chrome
  Registers the signed Yousub Chrome extension built with the repository
  CRX signing key. The extension marks YouTube channels you are not

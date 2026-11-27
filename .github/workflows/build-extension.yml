@@ -141,27 +141,21 @@ jobs:
               stream.write('\n')
           PY
           deb="$RUNNER_TEMP/deb"
-          # No /etc/opt: FHS reserves /opt for add-on software and lintian reports a package
-          # writing there as an error (dir-or-file-in-etc-opt). Chromium is registered under
-          # /etc/chromium only.
+          # No /etc/opt: the FHS reserves /opt for add-on software and lintian reports a package
+          # writing there as an error (dir-or-file-in-etc-opt).
           mkdir -p "$deb/DEBIAN" "$deb/usr/share/yousub" "$deb/usr/share/doc/yousub" \
-            "$deb/usr/share/google-chrome/extensions" "$deb/usr/share/chromium/extensions" \
-            "$deb/etc/chromium/extensions"
+            "$deb/usr/share/google-chrome/extensions"
           cp "$RUNNER_TEMP/yousub-$VERSION.crx" "$deb/usr/share/yousub/yousub.crx"
-          cp "$RUNNER_TEMP/yousub-external.json" "$deb/usr/share/yousub/"
           # The extension ID is data the maintainer scripts read, not documentation. A .txt file
           # under /usr/share/yousub is reported by lintian as documentation outside
           # /usr/share/doc (package-contains-documentation-outside-usr-share-doc), so the installed
           # file drops the extension while the build artifact keeps its name.
           install -m 0644 "$RUNNER_TEMP/yousub-id.txt" "$deb/usr/share/yousub/extension-id"
-          for directory in usr/share/google-chrome/extensions usr/share/chromium/extensions \
-            etc/chromium/extensions; do
-            install -m 0644 "$RUNNER_TEMP/yousub-external.json" "$deb/$directory/$EXTENSION_ID.json"
-          done
-          # The /etc registration is a configuration file: dpkg must ask before replacing a local
-          # edit, and lintian reports an unmarked one as an error (file-in-etc-not-marked-as-conffile).
-          # dpkg wants an absolute path here, and the file must exist in the package.
-          printf '/etc/chromium/extensions/%s.json\n' "$EXTENSION_ID" > "$deb/DEBIAN/conffiles"
+          # One registration file, in the directory Chrome reads at browser startup. Chromium reads
+          # /usr/share/chromium/extensions and /etc/chromium/extensions instead, and earlier releases
+          # wrote there; dpkg removes those files as obsolete when the package is upgraded.
+          install -m 0644 "$RUNNER_TEMP/yousub-external.json" \
+            "$deb/usr/share/google-chrome/extensions/$EXTENSION_ID.json"
           # Documentation the package must carry: Policy 12.5 requires the machine-readable
           # copyright file, and lintian reports a missing one as an error (no-copyright-file).
           install -d "$deb/usr/share/doc/yousub"
@@ -182,6 +176,13 @@ jobs:
             sed -z 's|^\./||' | xargs -0 md5sum > DEBIAN/md5sums)
           dpkg-deb --root-owner-group --build "$deb" "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
           dpkg-deb --info "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
+          # No maintainer scripts: dpkg installs, replaces and removes the one registration file by
+          # itself, so the package needs no root-time work. A script that is not copied into DEBIAN
+          # never runs, which is why this is checked.
+          if [ -e "$deb/DEBIAN/postinst" ] || [ -e "$deb/DEBIAN/postrm" ]; then
+            echo 'A maintainer script reached DEBIAN; the package must not need one.' >&2
+            exit 1
+          fi
           dpkg-deb --contents "$RUNNER_TEMP/yousub_${VERSION}_all.deb"
 
       # The publish job refuses to deploy a package that lintian rejects. Its log is only readable

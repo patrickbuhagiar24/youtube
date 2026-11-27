@@ -56,20 +56,17 @@ test('the Debian package only registers the signed CRX', () => {
   const control = fs.readFileSync('debian/control', 'utf8');
   assert.match(control, /^Package: yousub$/m);
   assert.doesNotMatch(control, /Depends:.*python/);
-  const postinst = fs.readFileSync('debian/postinst', 'utf8');
-  const postrm = fs.readFileSync('debian/postrm', 'utf8');
-  for (const script of [postinst, postrm]) {
-    assert.doesNotMatch(script, /python3|openssl|native|cli/);
-    assert.match(script, /\/usr\/share\/google-chrome\/extensions/);
-    assert.match(script, /\/etc\/chromium\/extensions/);
-  }
-  assert.match(postinst, /\$base\/extension-id/);
+  // One file, owned and removed by dpkg: the package needs no maintainer scripts, and a script that
+  // the build does not copy into DEBIAN would never run (that was true of the ones removed here).
+  assert.equal(fs.existsSync('debian/postinst'), false);
+  assert.equal(fs.existsSync('debian/postrm'), false);
   const workflow = fs.readFileSync('.github/workflows/build-extension.yml', 'utf8');
   assert.match(workflow, /dpkg-deb --root-owner-group/);
   assert.match(workflow, /yousub_\${VERSION}_all\.deb/);
   assert.match(workflow, /yousub_\*\.deb/);
   assert.match(workflow, /usr\/share\/google-chrome\/extensions/);
-  assert.match(workflow, /usr\/share\/chromium\/extensions/);
+  // The path may be named in a comment; nothing may be installed or created there.
+  assert.doesNotMatch(workflow, /(install|cp|mkdir)[^\n]*usr\/share\/chromium/);
   assert.match(workflow, /usr\/share\/yousub\/extension-id/);
 });
 

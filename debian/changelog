@@ -1,3 +1,18 @@
+yousub (2.7.6) stable; urgency=medium
+
+  * One registration file: Chrome reads the CRX from
+    /usr/share/google-chrome/extensions, and the Chromium directories and the
+    /opt copy are no longer used. Files that 2.7.5 and earlier shipped in those
+    places are removed by dpkg as obsolete on upgrade.
+  * The maintainer scripts are gone. They were never included in the package
+    (the control archive held only control and md5sums), so their /opt
+    registration and cleanup never ran; dpkg installs, replaces and removes the
+    single registration file by itself, and the build now fails if a script
+    ever reaches DEBIAN.
+  * The README is shorter and describes Chrome only.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 09:30:00 +0000
+
 yousub (2.7.5) stable; urgency=medium
 
   * Packaging only: the 2.7.4 changelog entry is rewrapped so that no line
