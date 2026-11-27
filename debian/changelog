@@ -1,3 +1,13 @@
+yousub (2.7.7) stable; urgency=medium
+
+  * The unsubscribe (−) beside YouTube's own button on watch pages and channel
+    headers now looks like the one on the home feed: 34 px, the same border,
+    shadow, strokes and hover, and the same blue. The blue was lost because the
+    rule that protects the copy from YouTube's styles set the "not subscribed"
+    colour with !important and no unsubscribe rule outranked it.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 10:30:00 +0000
+
 yousub (2.7.6) stable; urgency=medium
 
   * One registration file: Chrome reads the CRX from

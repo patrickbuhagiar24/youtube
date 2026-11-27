@@ -365,6 +365,26 @@ test('the stylesheet declares the inline button and its host', () => {
   assert.match(css, /\.yousub-inlinebtn::before,\s*\n\.yousub-inlinebtn::after \{[^}]*position: absolute;/);
   assert.match(css, /background: #fff !important;/);
   assert.match(css, /\.yousub-inlinebtn\.yousub-unsubbtn::after \{ display: none; \}/);
+  // The copy looks like the corner and floating button it replaces on watch and channel pages:
+  // same size, border and shadow, so a − means the same thing wherever it is clicked.
+  const block = (selector) => {
+    const at = css.indexOf(selector + ' {');
+    return css.slice(at, css.indexOf('\n}', at));
+  };
+  const decl = (text, property) => text.match(new RegExp('(?:^|\\n)\\s*' + property + ':\\s*([^;]+);'))?.[1];
+  const corner = block('.yousub-subbtn');
+  const inlineCopy = block('.yousub-inlinebtn');
+  for (const property of ['width', 'height', 'border', 'border-radius', 'box-shadow']) {
+    assert.equal(decl(inlineCopy, property), decl(corner, property), `the copy uses the corner button's ${property}`);
+  }
+  assert.equal(decl(corner, 'width'), '34px');
+  // Same strokes (15 × 3 px) and the same blue for the unsubscribe state.
+  assert.match(css, /\.yousub-inlinebtn::after \{ width: 3px; height: 15px; \}/);
+  const strokesAt = css.indexOf('.yousub-inlinebtn::before');
+  const strokes = css.slice(strokesAt, css.indexOf('\n}', strokesAt));
+  assert.match(strokes, /width: 15px;/);
+  assert.match(strokes, /height: 3px;/);
+  assert.match(css, /\.yousub-inlinebtn\.yousub-unsubbtn \{ background: var\(--yousub-unsub-btn, #1e88e5\) !important; \}/);
 });
 
 test('there are no keyboard shortcuts or hotkeys', () => {

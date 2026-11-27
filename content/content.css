@@ -164,13 +164,13 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   visibility: visible !important;
   opacity: 1 !important;
   box-sizing: border-box;
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  min-height: 30px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   margin: 0;
   padding: 0;
-  border: 2px solid #fff;
+  border: 2.5px solid #fff;
   border-radius: 50%;
   background: var(--yousub-color) !important;
   /* Hide the +/− text and draw the strokes with CSS for exact, font-independent centering */
@@ -179,7 +179,7 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   line-height: 0;
   overflow: hidden;
   cursor: pointer;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .45);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .55), 0 3px 10px rgba(0, 0, 0, .6);
   transition: transform .15s, filter .15s;
 }
 .yousub-inlinebtn::before,
@@ -188,20 +188,20 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 13px;
+  width: 15px;
   height: 3px;
   border-radius: 2px;
   background: #fff !important; /* YouTube's own button styles must not blank the stroke */
   pointer-events: none;
 }
-.yousub-inlinebtn::after { width: 3px; height: 13px; }  /* Vertical stroke turns the bar into a plus */
-.yousub-inlinebtn:hover { transform: scale(1.12); filter: brightness(1.1); }
+.yousub-inlinebtn::after { width: 3px; height: 15px; }  /* Vertical stroke turns the bar into a plus */
+.yousub-inlinebtn:hover { transform: scale(1.15); filter: brightness(1.1); }
 .yousub-inlinebtn:active { transform: scale(.95); }
 /* Processing: a spinner, also exactly centered */
 .yousub-inlinebtn:disabled { cursor: default; transform: none; filter: none; }
 .yousub-inlinebtn:disabled::before {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   background: none;
   border: 2.5px solid rgba(255, 255, 255, .35);
   border-top-color: #fff;
@@ -237,8 +237,10 @@ html:not(.yousub-on) .yousub-subbtn { display: none !important; }
 .yousub-inline-anchor-row { display: flex; align-items: center; }
 /* A wrapper that still hides or clips its children must not hide the copy */
 .yousub-native-row > .yousub-inline-host .yousub-inlinebtn { clip-path: none !important; }
-/* Blue unsubscribe (−) button */
-.yousub-inlinebtn.yousub-unsubbtn { background: var(--yousub-unsub-btn, #1e88e5); }
+/* Blue unsubscribe (−) button, the same colour as the corner and floating button. The base rule
+   above sets the "not subscribed" colour with !important (YouTube's own styles must not win), so
+   this one is !important as well. */
+.yousub-inlinebtn.yousub-unsubbtn { background: var(--yousub-unsub-btn, #1e88e5) !important; }
 .yousub-inlinebtn.yousub-unsubbtn::after { display: none; } /* Horizontal stroke only = minus sign */
 /* On watch pages YouTube's native button sits in a stacked row; keep the copy aligned with it */
 ytd-video-owner-renderer .yousub-inline-host,
