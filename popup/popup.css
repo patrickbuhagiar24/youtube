@@ -106,9 +106,13 @@ select, input[type=color] {
 }
 input[type=color] { width: 30px; height: 24px; padding: 1px; }
 input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+/* The + / − sample sits on one flex line, so its circles are centred with the words beside them
+   at any line height (a baseline nudge drifted as soon as the font or the line height changed). */
+.pair { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.pair .sep { color: var(--muted); }
 .plus {
   position: relative; display: inline-block; box-sizing: border-box; width: 17px; height: 17px; border: 1.5px solid #fff; border-radius: 50%;
-  background: var(--accent); color: transparent; font-size: 0; vertical-align: -3px;
+  background: var(--accent); color: transparent; font-size: 0;
 }
 .plus::before, .plus::after { content: ""; position: absolute; inset: 0; margin: auto; background: #fff; border-radius: 1px; }
 .plus::before { width: 8px; height: 2px; }

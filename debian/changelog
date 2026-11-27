@@ -1,3 +1,11 @@
+yousub (2.7.9) stable; urgency=medium
+
+  * The + / − sample in Settings is drawn on one flex line and aligned with
+    the words beside it, instead of being nudged by a fixed baseline offset.
+    The two circles no longer sit higher or lower than the text after them.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 12:30:00 +0000
+
 yousub (2.7.8) stable; urgency=medium
 
   * The side panel's configuration button sits at the far right of the

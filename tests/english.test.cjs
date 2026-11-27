@@ -167,6 +167,16 @@ test('the Drive row has one configuration button and no form', () => {
   assert.match(js, /setup\.classList\.toggle\('configured', configured\)/);
 });
 
+test('the + / − sample in the settings is level with its text', () => {
+  const html = fs.readFileSync('popup/popup.html', 'utf8');
+  const css = fs.readFileSync('popup/popup.css', 'utf8');
+  // Both badges and the slash live in one flex line, and the line is aligned with the words that
+  // follow it. A baseline nudge (vertical-align: -3px) was what made them look off.
+  assert.match(html, /<span class="pair"><b class="plus">\+<\/b><span class="sep">\/<\/span><b class="plus minus">−<\/b><\/span> buttons next to YouTube's/);
+  assert.match(css, /\.pair \{ display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; \}/);
+  assert.doesNotMatch(css, /vertical-align: -3px/);
+});
+
 test('every message points at a control the panel really has', () => {
   const drive = fs.readFileSync('drive.js', 'utf8');
   const html = fs.readFileSync('popup/popup.html', 'utf8');
