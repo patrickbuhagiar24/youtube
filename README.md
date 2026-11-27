@@ -91,8 +91,8 @@ there.
 
 ### The configuration file
 
-Click the Yousub icon, click **Configuration file…** in the *unsubscribed* row, and pick **one** JSON
-file. Any file name works; the keys make it a configuration:
+Click the Yousub icon, click the 📁 button at the right of the *unsubscribed* row, and pick **one**
+JSON file. Any file name works; the keys make it a configuration:
 
 ```json
 {
@@ -139,7 +139,7 @@ a file that fails validation is reported and never replaces a working one.
 
    Right-click it → **Share** → **Copy link**.
 5. **Write the configuration file** anywhere on this computer, for example `yousub-config.json`, with
-   the three keys above, then pick it with **Configuration file…**.
+   the three keys above, then pick it with the 📁 button.
 
 ### After the file is read
 
@@ -176,8 +176,8 @@ Without a button press, the extension syncs on two occasions:
   local history without a configuration is cleared.
 
 There is no timer, no pull when a page opens, and nothing at browser start: a browser that only reads
-never contacts Google by itself. **Configuration file…** is the third way a sync starts, and the only
-one that can ask for permission.
+never contacts Google by itself. The 📁 button is the third way a sync starts, and the only one that
+can ask for permission.
 
 One sync runs at a time. It refreshes the token if needed, reads `YouTube.json`, keeps the most recent
 event per channel, writes back only when something changed, and merges again so local changes made
@@ -186,10 +186,11 @@ instead of retrying in a loop.
 
 ### The panel
 
-- **Configuration file…** opens the file picker directly. There is no form, no status mark and no
-  separate Drive box; the tooltip holds the file name, the account, and how the sign-in renews.
-- **No manual sync button**: syncs run automatically, and the status line reports progress. A line
-  with nothing to report stays empty.
+- **📁**, at the far right of the *unsubscribed* line, opens the file picker directly. There is no
+  form and no separate Drive box; its tooltip holds the file name, the account, and how the sign-in
+  renews, and the line under the count reports the sync state.
+- **No manual sync button**: syncs run automatically.
+- **The summary is the count alone** — no list-status line, no updated-at time, no refresh progress.
 
 ### Data format
 

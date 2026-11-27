@@ -1,3 +1,16 @@
+yousub (2.7.8) stable; urgency=medium
+
+  * The side panel's configuration button sits at the far right of the
+    "unsubscribed" line, level with the count, and shows a folder icon instead
+    of "Configuration file…". Its title and accessible name still say what it
+    opens, and the Drive messages now point at the folder button.
+  * The summary card is the subscribed count alone. The line under it is gone,
+    with the list status, the updated-at time, the refresh progress and the
+    sign-in hint; the row under the unsubscribed count still reports the sync
+    state and its errors.
+
+ -- Patrick Buhagiar <arobidsh@proton.me>  Thu, 26 Nov 2026 11:30:00 +0000
+
 yousub (2.7.7) stable; urgency=medium
 
   * The unsubscribe (−) beside YouTube's own button on watch pages and channel

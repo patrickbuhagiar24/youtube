@@ -20,7 +20,6 @@
     <div class="stat">
       <div><b id="total">–</b><small>subscribed</small></div>
     </div>
-    <em id="status" class="muted" aria-live="polite"></em>
     <div id="channelPage" class="chan hidden"></div>
     <div id="error" class="err hidden" role="alert"></div>
   </section>
@@ -29,12 +28,12 @@
   <section class="card drive">
     <span class="dotl" aria-hidden="true"></span>
     <div class="grow">
-      <div><b id="unsubCount">0</b> unsubscribed</div>
+      <div class="line">
+        <span><b id="unsubCount">0</b> unsubscribed</span>
+        <button id="driveSetupBtn" class="secondary icon" title="Choose the configuration file" aria-label="Choose the configuration file">📁</button>
+      </div>
       <small id="driveStatus" class="muted" aria-live="polite">Needs Google Drive sync</small>
       <small id="setupStatus" class="muted" aria-live="polite"></small>
-    </div>
-    <div class="drive-actions">
-      <button id="driveSetupBtn" class="secondary" title="Choose the configuration file" aria-label="Choose the configuration file">Configuration file…</button>
     </div>
   </section>
 

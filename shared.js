@@ -37,13 +37,5 @@ var YOUSUB = Object.freeze({
   CONFIG_KEY: 'yousubDriveConfig',
 
   // Google Drive file for the user-confirmed unsubscribe history
-  DRIVE_FILE: 'YouTube.json',
-
-  // Subscription list status in plain English
-  STATUS: Object.freeze({
-    complete: '✅ Complete list',
-    merged: '✅ Complete list',
-    capped: '⚠️ Incomplete list',
-    partial: '⚠️ Incomplete list'
-  })
+  DRIVE_FILE: 'YouTube.json'
 });

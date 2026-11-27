@@ -41,15 +41,15 @@ var Drive = (() => {
 
   /* ---------------- configuration entered in the popup ---------------- */
   const SETTINGS = 'The configuration file';
-  // The panel has one control that matters here: the Configuration file… button, which opens the
+  // The panel has one control that matters here: the folder button, which opens the
   // picker and is also what starts a sign-in. Messages point at it, never at a field that no longer
   // exists — the client ID and secret live in the configuration file.
-  const OPEN_FORM = 'Open the side panel and click "Configuration file…".';
-  const SIGN_IN = 'Open the side panel, click "Configuration file…", and pick the file again to sign in.';
+  const OPEN_FORM = 'Open the side panel and click the folder button.';
+  const SIGN_IN = 'Open the side panel, click the folder button, and pick the file again to sign in.';
   const RESET =
     'To get a new one: Google Cloud Console → APIs & Services → Credentials → your OAuth client → ' +
     'Client secrets.';
-  const REPLACE_FILE = 'Put it in the configuration file, then pick that file again with "Configuration file…".';
+  const REPLACE_FILE = 'Put it in the configuration file, then pick that file again with the folder button.';
 
   /** Read a direct YouTube.json file link from a configuration object. */
   function linkFromConfig(text) {

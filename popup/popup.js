@@ -1,4 +1,4 @@
-const { DEFAULTS, STATUS } = YOUSUB;
+const { DEFAULTS } = YOUSUB;
 /** The markup's element ids are the source of truth for each control's type. */
 /** @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
@@ -49,25 +49,21 @@ function fmtTime(ts) {
   return new Date(ts).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function renderSummary({ subsCount, stats, ts }) {
+function renderSummary({ subsCount }) {
+  // The count is the whole summary: there is no list-status line under it.
   $('total').textContent = subsCount ? fmt(subsCount) : '–';
-  $('status').textContent = ts
-    ? [STATUS[stats?.status], `updated ${fmtTime(ts)}`].filter(Boolean).join(' · ')
-    : '';
 }
 
 async function renderFromStorage() {
   // Keep showing the count even when the active tab is not YouTube
   const { yousubSubs } = /** @type {any} */ (await chrome.storage.local.get('yousubSubs'));
-  renderSummary({ subsCount: yousubSubs?.list?.length || 0, stats: yousubSubs?.stats, ts: yousubSubs?.ts });
+  renderSummary({ subsCount: yousubSubs?.list?.length || 0 });
 }
 
 function render(state) {
   // No page state: keep the summary from storage instead of asking the reader to open YouTube.
   if (!state) return;
   renderSummary(state);
-  if (state.syncing) $('status').textContent = `⏳ Refreshing…${state.syncProgress ? ' ' + fmt(state.syncProgress) : ''}`;
-  else if (state.loggedIn === false) $('status').textContent = '🔒 Sign in to YouTube';
 
   $('error').classList.toggle('hidden', !state.lastError);
   $('error').textContent = state.lastError || '';

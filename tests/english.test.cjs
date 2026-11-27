@@ -136,9 +136,15 @@ test('the Drive row has one configuration button and no form', () => {
   const start = html.indexOf('<!-- Unsubscribe history');
   const row = html.slice(start, html.indexOf('</section>', start));
   assert.match(row, /id="unsubCount"/);
-  // The button opens the picker itself and names the file it reads.
-  assert.match(row, /id="driveSetupBtn"[^>]*>Configuration file…</);
-  assert.ok(row.indexOf('driveStatus') < row.indexOf('driveSetupBtn'), 'the button follows the status');
+  // The button is an icon at the far right of the count line, and opens the picker itself.
+  assert.match(row, /class="line">\s*<span><b id="unsubCount">/);
+  assert.match(row, /id="driveSetupBtn"[^>]*>📁</);
+  assert.ok(row.indexOf('id="unsubCount"') < row.indexOf('id="driveSetupBtn"'), 'the icon follows the count');
+  assert.equal(row.indexOf('driveStatus') > row.indexOf('driveSetupBtn'), true, 'the icon sits on the count line');
+  assert.doesNotMatch(row, /drive-actions|Configuration file…/);
+  // The summary has no status line at all: no list status and no updated-at time.
+  assert.doesNotMatch(html, /id="status"/);
+  assert.doesNotMatch(html + js, /Complete list|Incomplete list|updated \$\{/);
   assert.match(row, /id="setupStatus"/);
   // One button only: there is no sign-out action left, in the panel or in the worker.
   assert.doesNotMatch(html, /signOutBtn|Sign out/);
@@ -172,8 +178,8 @@ test('every message points at a control the panel really has', () => {
   assert.doesNotMatch(drive, /Click ⚙️/);
   // The one control that does exist.
   assert.ok(ids.has('driveSetupBtn'), 'the Configuration file… button opens the picker');
-  assert.match(drive, /const OPEN_FORM = 'Open the side panel and click "Configuration file…"\.'/);
-  assert.match(drive, /const SIGN_IN = 'Open the side panel, click "Configuration file…", and pick the file again to sign in\.'/);
+  assert.match(drive, /const OPEN_FORM = 'Open the side panel and click the folder button\.'/);
+  assert.match(drive, /const SIGN_IN = 'Open the side panel, click the folder button, and pick the file again to sign in\.'/);
   // The consent screen for auth/drive does not read like the narrow drive.file one.
   assert.doesNotMatch(drive, /See, edit, create and delete only the specific Google Drive files/);
   assert.match(drive, /only touches the one file named in the configuration/);

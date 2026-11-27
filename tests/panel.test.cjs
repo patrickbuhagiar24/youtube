@@ -122,8 +122,9 @@ test('a fresh panel offers one configuration button and no sign-out', async () =
   assert.equal(panel.$('setupStatus').textContent, '');
   assert.match(panel.$('driveStatus').textContent, /^Needs Google Drive sync$/);
   assert.equal(panel.$('driveSetupBtn').classList.contains('configured'), false);
-  // The panel no longer tells the reader to open YouTube.
-  assert.doesNotMatch(panel.$('status').textContent, /Open youtube\.com|Waiting for this YouTube tab/);
+  // The summary is the count alone: the list-status line is gone, not merely empty.
+  assert.equal(panel.$('status'), null, 'no list-status line');
+  assert.match(panel.$('total').textContent, /^–$/);
   assert.deepEqual(Object.keys(panel.fake.local), [], 'nothing is written before a file is picked');
   assert.deepEqual(panel.fake.sent, [], 'no Google message is sent before a file is picked');
 });

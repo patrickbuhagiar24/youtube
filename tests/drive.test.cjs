@@ -187,7 +187,7 @@ test('a sync without a sign-in never opens a window and says how to sign in', as
   assert.equal(result.ok, false);
   assert.match(result.error, /not signed in/i);
   // The advice names a control the panel really has: the button, then the file, which signs in.
-  assert.match(result.error, /click "Configuration file…"/);
+  assert.match(result.error, /click the folder button/);
   assert.match(result.error, /pick the file again/);
 });
 
