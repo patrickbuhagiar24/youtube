@@ -50,6 +50,9 @@
   let extAlive = true;
   // Unsubscribe history (synced to Google Drive by the background worker): { [id]: { s: 'unsub'|'resub', at, title, url } }
   let unsubs = {};
+  // Whether unsubscribe history is kept at all: only while Drive sync is configured. Without it a
+  // channel that is unsubscribed is plain "not subscribed", never "previously unsubscribed".
+  let historyOn = false;
   // Increment when subscriptions, unsubscribe history, or settings change to invalidate cached card evaluations
   let gen = 0;
 
@@ -201,7 +204,7 @@
 
   /** Record an unsubscribe, or a resubscribe if the channel was previously left. */
   function recordEvent(id, s, info) {
-    if (!/^UC[\w-]{10,}$/.test(id || '')) return;
+    if (!historyOn || !/^UC[\w-]{10,}$/.test(id || '')) return;
     const cur = unsubs[id];
     if (cur?.s === s || (s === 'resub' && !cur)) return;
     const known = subs.list.find((c) => c.id === id); // Name and URL from the subscription list
@@ -956,6 +959,12 @@
       applySettings();
     }
     if (area !== 'local') return;
+    if (changes[YOUSUB.CONFIG_KEY]) {
+      // Turning the configuration off also drops the history from this page, so no outline is
+      // painted in the colour reserved for channels left earlier.
+      historyOn = driveConfigured(changes[YOUSUB.CONFIG_KEY].newValue);
+      if (!historyOn && Object.keys(unsubs).length) { unsubs = {}; gen++; scheduleScan(); }
+    }
     if (changes.yousubSubs && !syncing) { loadSubs(changes.yousubSubs.newValue); reconcile(); scheduleScan(); }
     if (changes.yousubUnsubs) {
       // Merge with newest-event-wins so pending local records are not overwritten
@@ -974,7 +983,8 @@
     const [{ yousubSettings }, { yousubSubs, yousubUnsubs, [YOUSUB.CONFIG_KEY]: cfg = {} }] = /** @type {any} */ (await Promise.all([
       chrome.storage.sync.get('yousubSettings'), chrome.storage.local.get(['yousubSubs', 'yousubUnsubs', YOUSUB.CONFIG_KEY])
     ]));
-    unsubs = driveConfigured(cfg) ? (yousubUnsubs || {}) : {};
+    historyOn = driveConfigured(cfg);
+    unsubs = historyOn ? (yousubUnsubs || {}) : {};
     settings = { ...DEFAULTS, ...yousubSettings };
     loadSubs(yousubSubs);
     initialized = true;
