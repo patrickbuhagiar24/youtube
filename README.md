@@ -255,7 +255,8 @@ without a `filename` (or one using `window.eval`) reports nothing for that file.
 
 `tests/panel.test.cjs` drives the real panel against an in-memory `chrome.storage`, and
 `tests/live-marking.test.cjs` runs the content script in jsdom to check that a `+` / `−` click repaints
-every card of that channel on the page without a reload.
+every video of that channel without a reload — on the home feed, on a watch page (the copy beside the
+owner row button) and on a channel page (the copy beside the header button).
 
 `types/yousub.d.ts` is type-only, and the build copies named files, so neither the config, the types
 nor the development dependencies reach the CRX, the ZIP or the `.deb`.
